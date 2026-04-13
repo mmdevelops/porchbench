@@ -7,6 +7,9 @@ routing analysis cost model.
 
 from __future__ import annotations
 
+import json
+import platform
+import subprocess
 import time
 from itertools import combinations
 from pathlib import Path
@@ -25,6 +28,97 @@ from ollama_bench.schemas import (
 
 console = Console()
 
+
+def detect_gpu() -> tuple[str, float | None]:
+    """Detect GPU name and total VRAM.
+
+    Returns (gpu_name, vram_total_gb). VRAM may be None if detection fails.
+    Uses platform-specific methods: nvidia-smi, WMI (Windows), lspci (Linux).
+    Note: Windows WMI caps at 4GB for AdapterRAM; VRAM is estimated from
+    Ollama model loading when WMI reports an implausible value.
+    """
+    gpu_name = ""
+    vram_gb = None
+
+    # Try nvidia-smi first (works on NVIDIA GPUs, any OS)
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            parts = r.stdout.strip().split(", ")
+            gpu_name = parts[0]
+            if len(parts) > 1:
+                vram_gb = round(float(parts[1]) / 1024, 1)  # MiB -> GiB
+            return gpu_name, vram_gb
+    except (FileNotFoundError, Exception):
+        pass
+
+    # Try WMI on Windows (gets GPU name; VRAM may be capped at 4GB)
+    if platform.system() == "Windows":
+        try:
+            r = subprocess.run(
+                ["powershell", "-Command",
+                 "Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM | ConvertTo-Json"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                data = json.loads(r.stdout)
+                if isinstance(data, dict):
+                    data = [data]
+                # Pick the discrete GPU (largest AdapterRAM, skip integrated)
+                best = max(data, key=lambda g: g.get("AdapterRAM", 0))
+                gpu_name = best.get("Name", "")
+                ram = best.get("AdapterRAM", 0)
+                reported_gb = ram / (1024 ** 3)
+                # WMI's AdapterRAM is a 32-bit field, caps at ~4GB.
+                # Only trust it if it reports > 4GB (some drivers handle it).
+                if reported_gb > 4.5:
+                    vram_gb = round(reported_gb, 1)
+                # else: leave vram_gb as None, will be estimated from Ollama
+        except (FileNotFoundError, json.JSONDecodeError, Exception):
+            pass
+
+    # Try lspci on Linux
+    if platform.system() == "Linux" and not gpu_name:
+        try:
+            r = subprocess.run(
+                ["lspci"], capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0:
+                for line in r.stdout.splitlines():
+                    if "VGA" in line or "3D" in line:
+                        gpu_name = line.split(": ", 1)[-1] if ": " in line else line
+                        break
+        except (FileNotFoundError, Exception):
+            pass
+
+    return gpu_name, vram_gb
+
+
+def _estimate_vram_total(
+    profiles: dict[str, ModelProfile],
+    host: str | None = None,
+) -> float | None:
+    """Estimate total VRAM from model loading behavior.
+
+    If a model loads fully into VRAM (size_vram == size), we know VRAM >= that.
+    We round up to the nearest common VRAM tier (8, 12, 16, 24, 48, 80 GB).
+    """
+    max_vram = max((mp.vram_gb or 0 for mp in profiles.values()), default=0)
+    if max_vram <= 0:
+        return None
+
+    # Common GPU VRAM tiers
+    tiers = [4, 6, 8, 10, 12, 16, 24, 32, 48, 80]
+    for tier in tiers:
+        if tier >= max_vram * 1.2:  # model uses at most ~80% of a tier
+            return float(tier)
+
+    return round(max_vram * 1.3, 1)  # fallback for very large GPUs
+
+
 # Standard prompt used for inference baseline measurement
 BASELINE_PROMPT = "Explain in one paragraph what a hash table is and why it is useful."
 
@@ -35,8 +129,15 @@ async def profile_system(
 ) -> SystemProfile:
     """Run the full system profiling suite."""
     ollama_version = await client.get_server_version(host)
+    gpu_name, vram_total_gb = detect_gpu()
 
     console.print(f"Ollama version: {ollama_version}")
+    if gpu_name:
+        console.print(f"GPU: {gpu_name}")
+    if vram_total_gb:
+        console.print(f"VRAM: {vram_total_gb} GB")
+    else:
+        console.print("[yellow]VRAM total unknown (will estimate from model loading)[/yellow]")
     console.print(f"Models to profile: {', '.join(models)}")
     console.print()
 
@@ -68,20 +169,28 @@ async def profile_system(
                 swap_times.append(swap_ba)
                 console.print(f"  {model_b} -> {model_a}: {swap_ba.swap_time_s:.1f}s")
 
+    # Estimate total VRAM if not detected
+    if vram_total_gb is None:
+        vram_total_gb = _estimate_vram_total(model_profiles, host)
+        if vram_total_gb:
+            console.print(f"[yellow]Estimated VRAM total: ~{vram_total_gb} GB[/yellow]")
+
     # Phase 3: test co-residency (can models coexist in VRAM?)
     coexistence: list[CoexistenceTest] = []
     if len(models) >= 2:
         console.print("\n[bold]Testing co-residency...[/bold]")
         for pair in combinations(models, 2):
-            test = _estimate_coexistence(list(pair), model_profiles)
+            test = _estimate_coexistence(list(pair), model_profiles, vram_total_gb)
             fits_str = "[green]fits[/green]" if test.fits else "[red]does not fit[/red]"
             console.print(f"  {' + '.join(pair)}: {fits_str}")
             coexistence.append(test)
 
     # Determine hot/cold tiers
-    hot_tier, cold_tier = _compute_tiers(models, model_profiles, coexistence)
+    hot_tier, cold_tier = _compute_tiers(models, model_profiles, coexistence, vram_total_gb)
 
     return SystemProfile(
+        gpu=gpu_name,
+        vram_total_gb=vram_total_gb,
         ollama_version=ollama_version,
         models=model_profiles,
         swap_times=swap_times,
@@ -156,25 +265,19 @@ async def _measure_swap_time(from_model: str, to_model: str, host: str | None) -
 def _estimate_coexistence(
     model_pair: list[str],
     profiles: dict[str, ModelProfile],
+    vram_total_gb: float | None = None,
 ) -> CoexistenceTest:
-    """Estimate whether models can co-reside in VRAM based on profiled usage.
-
-    This is a conservative estimate — actual co-residency depends on KV cache
-    overhead under inference load, which the profiler measures per-model but
-    doesn't test concurrently. The profiler notes this limitation.
-    """
-    vram_total = sum(
+    """Estimate whether models can co-reside in VRAM based on profiled usage."""
+    combined = sum(
         profiles[m].vram_gb or 0 for m in model_pair if m in profiles
     )
-    # Conservative: assume 16GB total VRAM as a baseline
-    # TODO: detect actual GPU VRAM via platform-specific methods
-    assumed_total = 16.0
-    headroom = assumed_total - vram_total
+    total = vram_total_gb or 16.0  # fallback if still unknown
+    headroom = total - combined
 
     return CoexistenceTest(
         models=model_pair,
         fits=headroom > 1.0,  # leave 1GB headroom for system + KV cache
-        combined_vram_gb=round(vram_total, 2) if vram_total > 0 else None,
+        combined_vram_gb=round(combined, 2) if combined > 0 else None,
         headroom_gb=round(headroom, 2),
     )
 
@@ -183,6 +286,7 @@ def _compute_tiers(
     models: list[str],
     profiles: dict[str, ModelProfile],
     coexistence: list[CoexistenceTest],
+    vram_total_gb: float | None = None,
 ) -> tuple[list[str], list[str]]:
     """Determine which models should be hot-tier vs cold-tier.
 
@@ -201,7 +305,8 @@ def _compute_tiers(
     # Greedily add models to hot tier while they fit
     hot: list[str] = []
     total_vram = 0.0
-    vram_limit = 14.0  # leave 2GB headroom from assumed 16GB
+    total = vram_total_gb or 16.0
+    vram_limit = total - 2.0  # leave 2GB headroom
 
     for m in sorted_models:
         m_vram = profiles.get(m, ModelProfile()).vram_gb or 0
