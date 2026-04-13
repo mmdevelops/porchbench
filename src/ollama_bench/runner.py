@@ -46,6 +46,31 @@ from ollama_bench.schemas import (
 )
 from ollama_bench.suite import resolve_messages, resolve_options
 
+
+def find_completed_prompt_ids(
+    suite_name: str,
+    model: str,
+    results_dir: Path,
+) -> set[str]:
+    """Scan results dir for prior runs of this suite+model and return completed prompt IDs."""
+    suite_slug = suite_name.lower().replace(" ", "-")
+    model_slug = model.replace(":", "-").replace("/", "-")
+    pattern = f"*_{suite_slug}_{model_slug}*.json"
+
+    completed: set[str] = set()
+    for path in results_dir.glob(pattern):
+        try:
+            data = path.read_text(encoding="utf-8")
+            run = RunResult.model_validate_json(data)
+            for r in run.results:
+                # Only count as completed if it didn't error
+                if r.response.done_reason is None or not str(r.response.done_reason).startswith("error:"):
+                    completed.add(r.prompt_id)
+        except Exception:
+            continue  # skip corrupt/incompatible files
+
+    return completed
+
 console = Console()
 
 
@@ -106,6 +131,7 @@ async def _run_tool_use_prompt(
         category=prompt.category,
         difficulty=prompt.difficulty,
         tags=prompt.tags,
+        contamination_risk=prompt.contamination_risk,
         options_used=options,
         request=RequestData(messages=messages),
         response=ResponseData(
@@ -135,6 +161,9 @@ async def run_suite(
     output_dir: str | Path = "results",
     on_prompt_complete: Callable[[str, bool], None] | None = None,
     suite_dir: Path | None = None,
+    repeat_index: int | None = None,
+    total_repeats: int | None = None,
+    resume: bool = False,
 ) -> RunResult:
     """Run a full suite against a single model.
 
@@ -147,6 +176,8 @@ async def run_suite(
         output_dir: Directory for writing result JSON.
         on_prompt_complete: Optional callback(prompt_id, success) for progress reporting.
         suite_dir: Directory containing the suite YAML (for resolving fixture paths).
+        repeat_index: 1-based repeat number (None for single runs).
+        total_repeats: Total number of repeats planned (None for single runs).
 
     Returns:
         The completed RunResult (also written to disk).
@@ -159,6 +190,8 @@ async def run_suite(
         suite=suite_ref,
         model=model_info,
         system=system_info,
+        repeat_index=repeat_index,
+        total_repeats=total_repeats,
     )
 
     # Filter prompts if specific IDs requested
@@ -169,6 +202,15 @@ async def run_suite(
         missing = id_set - {p.id for p in prompts}
         if missing:
             console.print(f"[yellow]Warning: prompt IDs not found in suite: {missing}[/yellow]")
+
+    # Resume: skip already-completed prompts
+    if resume:
+        already_done = find_completed_prompt_ids(suite_ref.name, model, Path(output_dir))
+        before = len(prompts)
+        prompts = [p for p in prompts if p.id not in already_done]
+        skipped = before - len(prompts)
+        if skipped:
+            console.print(f"[dim]Resuming: skipping {skipped} already-completed prompts[/dim]")
 
     # Run each prompt
     results: list[PromptResult] = []
@@ -191,6 +233,7 @@ async def run_suite(
                     category=prompt.category,
                     difficulty=prompt.difficulty,
                     tags=prompt.tags,
+                    contamination_risk=prompt.contamination_risk,
                     options_used=options,
                     request=RequestData(messages=messages),
                     response=response_data,
@@ -211,6 +254,7 @@ async def run_suite(
                 category=prompt.category,
                 difficulty=prompt.difficulty,
                 tags=prompt.tags,
+                contamination_risk=prompt.contamination_risk,
                 options_used=options,
                 request=RequestData(messages=messages),
                 response=ResponseData(
@@ -255,7 +299,8 @@ def _write_result(run_result: RunResult, output_dir: str | Path) -> Path:
     ts = run_result.run.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
     suite_slug = run_result.run.suite.name.lower().replace(" ", "-")
     model_slug = run_result.run.model.name.replace(":", "-").replace("/", "-")
-    filename = f"{ts}_{suite_slug}_{model_slug}.json"
+    repeat_suffix = f"_repeat-{run_result.run.repeat_index}" if run_result.run.repeat_index else ""
+    filename = f"{ts}_{suite_slug}_{model_slug}{repeat_suffix}.json"
 
     path = output_dir / filename
     path.write_text(

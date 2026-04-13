@@ -284,30 +284,61 @@ def _extract_summary(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def normalize_score(raw: float, scale_min: float = 1.0, scale_max: float = 5.0) -> float:
+    """Normalize a raw score to 0-100 where scale_min→0 and scale_max→100."""
+    if scale_max == scale_min:
+        return 0.0
+    return max(0.0, (raw - scale_min) / (scale_max - scale_min) * 100)
+
+
 def compute_aggregates(
     scores: list[PromptScore],
     results: list[PromptResult],
 ) -> AggregateScores:
-    """Compute aggregate scores broken down by category and difficulty."""
+    """Compute aggregate scores with normalization and contamination filtering."""
     if not scores:
         return AggregateScores(overall_weighted=0.0)
 
-    overall = sum(s.weighted_score for s in scores) / len(scores)
+    overall = _mean([s.weighted_score for s in scores])
 
     result_map = {r.prompt_id: r for r in results}
 
     by_cat: dict[str, list[float]] = {}
     by_diff: dict[str, list[float]] = {}
+    by_cat_clean: dict[str, list[float]] = {}
+    by_diff_clean: dict[str, list[float]] = {}
+    clean_scores: list[float] = []
+
     for s in scores:
         r = result_map.get(s.prompt_id)
         if r:
             by_cat.setdefault(r.category, []).append(s.weighted_score)
             by_diff.setdefault(r.difficulty, []).append(s.weighted_score)
 
+            if r.contamination_risk != "high":
+                clean_scores.append(s.weighted_score)
+                by_cat_clean.setdefault(r.category, []).append(s.weighted_score)
+                by_diff_clean.setdefault(r.difficulty, []).append(s.weighted_score)
+
+    by_diff_raw = {k: round(_mean(v), 2) for k, v in by_diff.items()}
+
+    # Normalized: difficulty-weighted average (equal weight per difficulty level)
+    by_diff_norm = {k: round(normalize_score(_mean(v)), 2) for k, v in by_diff.items()}
+    overall_norm = round(_mean(list(by_diff_norm.values())), 2) if by_diff_norm else None
+
     return AggregateScores(
         overall_weighted=round(overall, 2),
-        by_category={k: round(sum(v) / len(v), 2) for k, v in by_cat.items()},
-        by_difficulty={k: round(sum(v) / len(v), 2) for k, v in by_diff.items()},
+        by_category={k: round(_mean(v), 2) for k, v in by_cat.items()},
+        by_difficulty=by_diff_raw,
+        overall_normalized=overall_norm,
+        by_difficulty_normalized=by_diff_norm,
+        overall_weighted_clean=round(_mean(clean_scores), 2) if clean_scores else None,
+        by_category_clean={k: round(_mean(v), 2) for k, v in by_cat_clean.items()},
+        by_difficulty_clean={k: round(_mean(v), 2) for k, v in by_diff_clean.items()},
     )
 
 

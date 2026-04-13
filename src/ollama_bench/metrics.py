@@ -13,6 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from ollama_bench.schemas import PromptResult, RunResult
+from ollama_bench.statistics import ConfidenceInterval, auto_ci
 
 
 @dataclass(frozen=True)
@@ -25,9 +26,10 @@ class DescriptiveStats:
     stdev: float | None  # None when count < 2
     min: float
     max: float
+    ci: ConfidenceInterval | None = None  # 95% CI when data supports it
 
     def as_dict(self) -> dict:
-        return {
+        d = {
             "count": self.count,
             "mean": round(self.mean, 2),
             "median": round(self.median, 2),
@@ -35,12 +37,16 @@ class DescriptiveStats:
             "min": round(self.min, 2),
             "max": round(self.max, 2),
         }
+        if self.ci is not None:
+            d["ci"] = self.ci.as_dict()
+        return d
 
 
-def describe(values: list[float]) -> DescriptiveStats | None:
+def describe(values: list[float], compute_ci: bool = True) -> DescriptiveStats | None:
     """Compute descriptive stats for a list of values. Returns None if empty."""
     if not values:
         return None
+    ci = auto_ci(values) if compute_ci and len(values) >= 2 else None
     return DescriptiveStats(
         count=len(values),
         mean=statistics.mean(values),
@@ -48,6 +54,7 @@ def describe(values: list[float]) -> DescriptiveStats | None:
         stdev=statistics.stdev(values) if len(values) >= 2 else None,
         min=min(values),
         max=max(values),
+        ci=ci,
     )
 
 
@@ -101,6 +108,22 @@ def group_by_difficulty(results: list[PromptResult]) -> dict[str, list[PromptRes
     for r in results:
         groups[r.difficulty].append(r)
     return dict(groups)
+
+
+def filter_contamination(
+    results: list[PromptResult],
+    exclude: str = "high",
+) -> list[PromptResult]:
+    """Exclude results with contamination_risk at or above the given level.
+
+    Default: exclude 'high' contamination prompts, keep medium/low/None.
+    """
+    if exclude == "high":
+        return [r for r in results if r.contamination_risk != "high"]
+    elif exclude == "medium":
+        return [r for r in results if r.contamination_risk not in ("high", "medium")]
+    else:
+        return list(results)
 
 
 def summarize_run(run: RunResult) -> dict:

@@ -89,6 +89,7 @@ async def _run_tool_use_discovery_cell(
         category=prompt.category,
         difficulty=prompt.difficulty,
         tags=prompt.tags,
+        contamination_risk=prompt.contamination_risk,
         options_used=options,
         request=RequestData(messages=messages),
         response=ResponseData(
@@ -191,6 +192,7 @@ async def run_discovery(
                             category=prompt.category,
                             difficulty=prompt.difficulty,
                             tags=prompt.tags,
+                            contamination_risk=prompt.contamination_risk,
                             options_used=options,
                             request=RequestData(messages=messages),
                             response=response_data,
@@ -219,6 +221,7 @@ async def run_discovery(
                         category=prompt.category,
                         difficulty=prompt.difficulty,
                         tags=prompt.tags,
+                        contamination_risk=prompt.contamination_risk,
                         options_used=options,
                         request=RequestData(messages=messages),
                         response=ResponseData(

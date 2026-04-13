@@ -1,4 +1,4 @@
-"""Tests for runner dispatch: tool-use prompt routing and result packaging."""
+"""Tests for runner dispatch: tool-use prompt routing, result packaging, incremental discovery."""
 
 from dataclasses import field
 from unittest.mock import AsyncMock, patch
@@ -6,11 +6,21 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ollama_bench.harness.harness import HarnessResult, Outcome, ToolUseMetrics
-from ollama_bench.runner import _run_tool_use_prompt
+from ollama_bench.runner import _run_tool_use_prompt, find_completed_prompt_ids
 from ollama_bench.schemas import (
     Message,
+    ModelInfo,
     ModelOptions,
     Prompt,
+    PromptMetrics,
+    PromptResult,
+    RequestData,
+    ResponseData,
+    ResponseMessage,
+    RunMetadata,
+    RunResult,
+    RunSummary,
+    SuiteReference,
 )
 
 
@@ -155,3 +165,90 @@ class TestToolUseDispatch:
             )
 
         assert result.response.message.content == ""
+
+
+# ---------------------------------------------------------------------------
+# Incremental discovery
+# ---------------------------------------------------------------------------
+
+
+def _write_run_result(tmp_path, suite_name, model_name, prompt_ids, error_ids=None):
+    """Write a minimal RunResult JSON to tmp_path for testing resume logic."""
+    error_ids = error_ids or set()
+    results = []
+    for pid in prompt_ids:
+        if pid in error_ids:
+            done_reason = f"error: timeout"
+        else:
+            done_reason = "stop"
+        results.append(PromptResult(
+            prompt_id=pid,
+            category="coding",
+            difficulty="easy",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="test")]),
+            response=ResponseData(
+                message=ResponseMessage(content="ok"),
+                done_reason=done_reason,
+            ),
+            metrics=PromptMetrics(),
+        ))
+
+    suite_slug = suite_name.lower().replace(" ", "-")
+    model_slug = model_name.replace(":", "-").replace("/", "-")
+
+    run_result = RunResult(
+        run=RunMetadata(
+            suite=SuiteReference(name=suite_name, version="1.0", file="test.yaml", sha256="abc"),
+            model=ModelInfo(name=model_name),
+        ),
+        results=results,
+        summary=RunSummary(
+            total_prompts=len(prompt_ids), completed=len(prompt_ids),
+            failed=len(error_ids), total_duration_s=1.0,
+        ),
+    )
+
+    path = tmp_path / f"2026-01-01T00-00-00_{suite_slug}_{model_slug}.json"
+    path.write_text(run_result.model_dump_json(), encoding="utf-8")
+    return path
+
+
+class TestIncrementalDiscovery:
+    def test_finds_completed_prompts(self, tmp_path):
+        _write_run_result(tmp_path, "Test Suite", "model:7b", ["p1", "p2", "p3"])
+        completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
+        assert completed == {"p1", "p2", "p3"}
+
+    def test_excludes_errored_prompts(self, tmp_path):
+        _write_run_result(tmp_path, "Test Suite", "model:7b", ["p1", "p2"], error_ids={"p2"})
+        completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
+        assert completed == {"p1"}
+
+    def test_no_match_returns_empty(self, tmp_path):
+        _write_run_result(tmp_path, "Other Suite", "model:7b", ["p1"])
+        completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
+        assert completed == set()
+
+    def test_merges_across_multiple_files(self, tmp_path):
+        _write_run_result(tmp_path, "Test Suite", "model:7b", ["p1", "p2"])
+        # Write a second file with different prompts
+        run2 = RunResult(
+            run=RunMetadata(
+                suite=SuiteReference(name="Test Suite", version="1.0", file="test.yaml", sha256="abc"),
+                model=ModelInfo(name="model:7b"),
+            ),
+            results=[PromptResult(
+                prompt_id="p3", category="coding", difficulty="easy",
+                options_used=ModelOptions(),
+                request=RequestData(messages=[Message(role="user", content="test")]),
+                response=ResponseData(message=ResponseMessage(content="ok"), done_reason="stop"),
+                metrics=PromptMetrics(),
+            )],
+            summary=RunSummary(total_prompts=1, completed=1, failed=0, total_duration_s=1.0),
+        )
+        path2 = tmp_path / "2026-01-02T00-00-00_test-suite_model-7b.json"
+        path2.write_text(run2.model_dump_json(), encoding="utf-8")
+
+        completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
+        assert completed == {"p1", "p2", "p3"}

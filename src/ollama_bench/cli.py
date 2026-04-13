@@ -55,6 +55,14 @@ def run(
         Path,
         typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
     ] = Path("results"),
+    repeats: Annotated[
+        int,
+        typer.Option("--repeats", "-n", help="Number of times to repeat each run for determinism verification."),
+    ] = 1,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", help="Skip prompts already completed in prior runs of the same suite+model."),
+    ] = False,
 ) -> None:
     """Run a benchmark suite against one or more Ollama models."""
     # Load and validate suite
@@ -69,49 +77,56 @@ def run(
     console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
     console.print(f"Prompts: {len(suite.prompts)}")
     console.print(f"Models: {', '.join(models)}")
+    if repeats > 1:
+        console.print(f"Repeats: {repeats}")
 
     if prompt_ids:
         console.print(f"Filter: {', '.join(prompt_ids)}")
 
     console.print()
 
-    # Run each model
+    # Run each model × repeat
     for model in models:
-        console.rule(f"[bold]{model}[/bold]")
+        for repeat_i in range(1, repeats + 1):
+            repeat_label = f" (repeat {repeat_i}/{repeats})" if repeats > 1 else ""
+            console.rule(f"[bold]{model}[/bold]{repeat_label}")
 
-        prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
+            prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TimeElapsedColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task(f"Running {model}", total=prompt_count)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+                console=console,
+            ) as progress:
+                task = progress.add_task(f"Running {model}", total=prompt_count)
 
-            def on_complete(prompt_id: str, success: bool) -> None:
-                status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
-                progress.console.print(f"  {prompt_id}: {status}")
-                progress.advance(task)
+                def on_complete(prompt_id: str, success: bool) -> None:
+                    status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
+                    progress.console.print(f"  {prompt_id}: {status}")
+                    progress.advance(task)
 
-            result = asyncio.run(
-                run_suite(
-                    suite=suite,
-                    suite_ref=suite_ref,
-                    model=model,
-                    host=host,
-                    prompt_ids=prompt_ids,
-                    output_dir=output_dir,
-                    on_prompt_complete=on_complete,
-                    suite_dir=suite_path.parent,
+                result = asyncio.run(
+                    run_suite(
+                        suite=suite,
+                        suite_ref=suite_ref,
+                        model=model,
+                        host=host,
+                        prompt_ids=prompt_ids,
+                        output_dir=output_dir,
+                        on_prompt_complete=on_complete,
+                        suite_dir=suite_path.parent,
+                        repeat_index=repeat_i if repeats > 1 else None,
+                        total_repeats=repeats if repeats > 1 else None,
+                        resume=resume,
+                    )
                 )
-            )
 
-        # Print summary table
-        _print_summary(result)
-        console.print()
+            # Print summary table
+            _print_summary(result)
+            console.print()
 
 
 def _print_summary(result) -> None:

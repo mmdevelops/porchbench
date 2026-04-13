@@ -7,17 +7,21 @@ from ollama_bench.metrics import (
     extract_tokens_per_second,
     extract_time_to_first_token,
     extract_total_tokens,
+    filter_contamination,
     group_by_category,
     group_by_difficulty,
     summarize_run,
 )
+from ollama_bench.evaluator import compute_aggregates, normalize_score
 from ollama_bench.schemas import (
+    CriterionScore,
     Message,
     ModelDetails,
     ModelInfo,
     ModelOptions,
     PromptMetrics,
     PromptResult,
+    PromptScore,
     RequestData,
     ResponseData,
     ResponseMessage,
@@ -60,17 +64,36 @@ class TestDescribe:
         assert "mean" in d
         assert d["count"] == 3
 
+    def test_ci_included_for_multiple_values(self):
+        stats = describe([10.0, 20.0, 30.0, 40.0, 50.0])
+        assert stats.ci is not None
+        assert stats.ci.mean == pytest.approx(30.0)
+        assert stats.ci.ci_lower < 30.0
+        assert stats.ci.ci_upper > 30.0
+        d = stats.as_dict()
+        assert "ci" in d
+
+    def test_ci_none_for_single_value(self):
+        stats = describe([42.0])
+        assert stats.ci is None
+
+    def test_ci_disabled(self):
+        stats = describe([10.0, 20.0, 30.0], compute_ci=False)
+        assert stats.ci is None
+
 
 # ---------------------------------------------------------------------------
 # Extraction helpers
 # ---------------------------------------------------------------------------
 
 
-def _make_result(tps=None, ttft=None, tokens=None, category="coding", difficulty="easy"):
+def _make_result(tps=None, ttft=None, tokens=None, category="coding", difficulty="easy",
+                  contamination_risk=None, prompt_id="test"):
     return PromptResult(
-        prompt_id="test",
+        prompt_id=prompt_id,
         category=category,
         difficulty=difficulty,
+        contamination_risk=contamination_risk,
         options_used=ModelOptions(),
         request=RequestData(messages=[Message(role="user", content="Hi")]),
         response=ResponseData(message=ResponseMessage(content="Hello")),
@@ -154,3 +177,110 @@ class TestSummarizeRun:
         assert summary["overall"]["tokens_per_second"]["mean"] == pytest.approx(150.0)
         assert "coding" in summary["by_category"]
         assert "reasoning" in summary["by_category"]
+
+
+# ---------------------------------------------------------------------------
+# Contamination filtering
+# ---------------------------------------------------------------------------
+
+
+class TestContaminationFiltering:
+    def test_filter_excludes_high(self):
+        results = [
+            _make_result(prompt_id="p1", contamination_risk="high"),
+            _make_result(prompt_id="p2", contamination_risk="low"),
+            _make_result(prompt_id="p3", contamination_risk=None),
+        ]
+        filtered = filter_contamination(results, exclude="high")
+        assert len(filtered) == 2
+        assert all(r.contamination_risk != "high" for r in filtered)
+
+    def test_filter_excludes_medium_and_high(self):
+        results = [
+            _make_result(prompt_id="p1", contamination_risk="high"),
+            _make_result(prompt_id="p2", contamination_risk="medium"),
+            _make_result(prompt_id="p3", contamination_risk="low"),
+        ]
+        filtered = filter_contamination(results, exclude="medium")
+        assert len(filtered) == 1
+        assert filtered[0].contamination_risk == "low"
+
+    def test_filter_keeps_all_when_no_contamination(self):
+        results = [_make_result(prompt_id="p1"), _make_result(prompt_id="p2")]
+        filtered = filter_contamination(results, exclude="high")
+        assert len(filtered) == 2
+
+
+# ---------------------------------------------------------------------------
+# Normalization
+# ---------------------------------------------------------------------------
+
+
+class TestNormalization:
+    def test_normalize_boundaries(self):
+        assert normalize_score(1.0) == pytest.approx(0.0)
+        assert normalize_score(5.0) == pytest.approx(100.0)
+        assert normalize_score(3.0) == pytest.approx(50.0)
+
+    def test_normalize_clamps_below_min(self):
+        assert normalize_score(0.5) == pytest.approx(0.0)
+
+    def test_normalize_custom_scale(self):
+        assert normalize_score(50, scale_min=0, scale_max=100) == pytest.approx(50.0)
+
+
+# ---------------------------------------------------------------------------
+# Aggregation with contamination + normalization
+# ---------------------------------------------------------------------------
+
+
+def _make_score(prompt_id, weighted_score):
+    return PromptScore(
+        prompt_id=prompt_id,
+        criteria={"quality": CriterionScore(score=int(weighted_score), rationale="ok")},
+        weighted_score=weighted_score,
+        summary="ok",
+    )
+
+
+class TestComputeAggregates:
+    def test_contamination_filtered_aggregates(self):
+        results = [
+            _make_result(prompt_id="p1", difficulty="easy", contamination_risk="high"),
+            _make_result(prompt_id="p2", difficulty="easy", contamination_risk="low"),
+            _make_result(prompt_id="p3", difficulty="hard", contamination_risk=None),
+        ]
+        scores = [
+            _make_score("p1", 5.0),
+            _make_score("p2", 3.0),
+            _make_score("p3", 2.0),
+        ]
+        agg = compute_aggregates(scores, results)
+
+        # Overall includes all
+        assert agg.overall_weighted == pytest.approx(3.33, abs=0.01)
+        # Clean excludes p1 (high contamination)
+        assert agg.overall_weighted_clean == pytest.approx(2.5)
+        assert "easy" in agg.by_category_clean or "coding" in agg.by_category_clean
+
+    def test_normalized_scoring(self):
+        results = [
+            _make_result(prompt_id="p1", difficulty="easy"),
+            _make_result(prompt_id="p2", difficulty="hard"),
+        ]
+        scores = [
+            _make_score("p1", 5.0),  # easy=5.0 → normalized 100
+            _make_score("p2", 1.0),  # hard=1.0 → normalized 0
+        ]
+        agg = compute_aggregates(scores, results)
+
+        assert agg.by_difficulty_normalized["easy"] == pytest.approx(100.0)
+        assert agg.by_difficulty_normalized["hard"] == pytest.approx(0.0)
+        # Overall normalized = mean of difficulty-level normalized scores
+        assert agg.overall_normalized == pytest.approx(50.0)
+
+    def test_empty_scores(self):
+        agg = compute_aggregates([], [])
+        assert agg.overall_weighted == 0.0
+        assert agg.overall_normalized is None
+        assert agg.overall_weighted_clean is None

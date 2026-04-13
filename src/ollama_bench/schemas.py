@@ -149,6 +149,8 @@ class RunMetadata(BaseModel):
     suite: SuiteReference
     model: ModelInfo
     system: SystemInfo = Field(default_factory=SystemInfo)
+    repeat_index: int | None = None  # 1-based repeat number when using --repeats
+    total_repeats: int | None = None
 
 
 class RequestData(BaseModel):
@@ -221,6 +223,9 @@ class PromptResult(BaseModel):
     request: RequestData
     response: ResponseData
     metrics: PromptMetrics = Field(default_factory=PromptMetrics)
+
+    # --- Methodology extensions ---
+    contamination_risk: str | None = None  # high, medium, low — copied from Prompt
 
     # --- Routing discovery extensions ---
     strategy: str | None = None  # strategy name when run via discover-routes
@@ -300,6 +305,15 @@ class AggregateScores(BaseModel):
     overall_weighted: float
     by_category: dict[str, float] = {}
     by_difficulty: dict[str, float] = {}
+
+    # --- Normalized scoring (METHODOLOGY.md) ---
+    overall_normalized: float | None = None  # 0-100 scale where 1→0, 5→100
+    by_difficulty_normalized: dict[str, float] = {}
+
+    # --- Contamination-filtered aggregates ---
+    overall_weighted_clean: float | None = None  # excludes high-contamination prompts
+    by_category_clean: dict[str, float] = {}
+    by_difficulty_clean: dict[str, float] = {}
 
 
 class EvaluationMetadata(BaseModel):

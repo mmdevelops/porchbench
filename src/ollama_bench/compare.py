@@ -15,6 +15,7 @@ from rich.table import Table
 
 from ollama_bench.metrics import describe, extract_tokens_per_second, summarize_run
 from ollama_bench.schemas import PromptResult, RunResult, Scorecard
+from ollama_bench.statistics import PairedTestResult, paired_comparison
 
 console = Console()
 
@@ -163,3 +164,54 @@ def print_comparison_table(runs: list[RunResult], scorecards: list[Scorecard | N
         summary_table.add_row(*score_row)
 
     console.print(summary_table)
+
+    # Paired statistical comparison (when exactly 2 models)
+    if len(runs) == 2 and has_scores and len(score_lookups) == 2:
+        result = compare_models_paired(aligned, score_lookups[0], score_lookups[1])
+        if result:
+            _print_paired_result(model_names[0], model_names[1], result)
+
+
+def compare_models_paired(
+    aligned: dict[str, list[PromptResult | None]],
+    scores_a: dict[str, float],
+    scores_b: dict[str, float],
+) -> PairedTestResult | None:
+    """Run a paired statistical test on quality scores for two models.
+
+    Only includes prompts where both models have scores.
+    """
+    vals_a: list[float] = []
+    vals_b: list[float] = []
+    for pid in aligned:
+        if pid in scores_a and pid in scores_b:
+            vals_a.append(scores_a[pid])
+            vals_b.append(scores_b[pid])
+
+    if len(vals_a) < 2:
+        return None
+    return paired_comparison(vals_a, vals_b)
+
+
+def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> None:
+    """Print a paired comparison result."""
+    console.print()
+    table = Table(title=f"Paired Comparison: {name_a} vs {name_b}", title_style="bold")
+    table.add_column("Metric", style="dim")
+    table.add_column("Value")
+
+    table.add_row("Test", result.test_name)
+    table.add_row("Paired prompts", str(result.n_pairs))
+
+    direction = name_a if result.mean_difference > 0 else name_b
+    table.add_row("Mean difference", f"{result.mean_difference:+.4f} (favors {direction})")
+    table.add_row("p-value", f"{result.p_value:.4f}")
+
+    sig_str = "[green]Yes[/green]" if result.significant else "[yellow]No[/yellow]"
+    table.add_row("Significant (p<0.05)", sig_str)
+    table.add_row("Effect size (Cohen's d)", f"{result.effect_size:.3f} ({result.effect_magnitude})")
+
+    if result.ci:
+        table.add_row("95% CI on difference", f"[{result.ci.ci_lower:.4f}, {result.ci.ci_upper:.4f}]")
+
+    console.print(table)
