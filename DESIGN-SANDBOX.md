@@ -230,26 +230,63 @@ Rather than hardcoding how each language is invoked, a registry of `LanguageRunt
 
 Adding a language = adding one registry entry. The sandbox interface doesn't change.
 
+The subprocess backend (Phase 1) starts with Python only — it uses the host Python
+interpreter. Bash is also available on Unix systems. Multi-language support via
+container images is a Phase 2 feature.
+
 ### Backend graduation path
 
-The abstract interface supports multiple backends. The progression:
+The abstract interface supports multiple backends. Start simple, graduate to
+stronger isolation only when the use case demands it.
 
-| Phase | Backend | Isolation level | Requirements |
-|---|---|---|---|
-| 1 | Docker | Container (shared kernel) | Docker Desktop or Docker Engine |
-| 2 | Docker + gVisor | Syscall interception | gVisor `runsc` runtime installed |
-| 3 | Firecracker / E2B | MicroVM (dedicated kernel) | Linux + KVM, or E2B cloud API |
-| 4 | WASM (optional) | Capability-based | Wasmtime; limited to pure computation |
+| Phase | Backend | Isolation level | Requirements | Use case |
+|---|---|---|---|---|
+| **1** | **Subprocess + tempdir** | Process-level | None (stdlib only) | Benchmarking (our starting point) |
+| 2 | Docker / Podman | Container (shared kernel) | Docker or Podman installed | Untrusted code, multi-language |
+| 3 | Docker + gVisor | Syscall interception | gVisor `runsc` runtime | Production agent deployment |
+| 4 | Firecracker / E2B | MicroVM (dedicated kernel) | Linux + KVM, or E2B cloud API | Maximum isolation |
 
-The Docker backend applies defense-in-depth even at phase 1:
+**Why subprocess first:** most established code benchmarks (HumanEval, the original
+OpenAI implementation) use plain `subprocess.run()` with Docker as a recommended but
+optional enhancement. For benchmarking model-generated code on a local machine where
+you control the inputs, process-level isolation with timeout and tempdir is sufficient
+and has zero setup friction. Docker on Windows requires WSL2 + Docker Desktop (or
+Podman), adding complexity before you can run your first benchmark.
+
+#### Phase 1: Subprocess backend
+
+The subprocess backend provides:
+- **Tempdir isolation**: each execution gets a fresh `tempfile.mkdtemp()` working directory
+- **Timeout enforcement**: `subprocess.run(timeout=N)` kills runaway processes
+- **Stdout/stderr capture**: `capture_output=True`
+- **File I/O**: `write_files()` copies into the tempdir, `read_file()` reads from it
+- **Cleanup**: tempdir is removed after execution
+
+What it does NOT provide (and why that's acceptable for benchmarking):
+- **No network isolation**: the subprocess can make network calls. For benchmarking
+  suites we author, the prompts don't require network access and models are unlikely
+  to generate network-calling code for file-manipulation tasks.
+- **No memory limits**: Python's subprocess module doesn't enforce memory ceilings.
+  The timeout acts as a backstop — memory-hungry processes will be killed when they
+  exceed the time limit.
+- **No filesystem isolation beyond the tempdir**: the subprocess can technically read
+  files outside its tempdir. Acceptable for benchmarking (we control the code being
+  run); not acceptable for untrusted agent deployment.
+
+#### Phase 2: Docker / Podman backend
+
+For users who want stronger isolation or multi-language support:
 - `--network=none` (no network by default)
 - All Linux capabilities dropped
 - Read-only root filesystem with tmpfs working directory
 - PID limit (fork bomb protection)
 - Memory and CPU limits
 - `no-new-privileges` flag
+- Podman is the recommended Docker alternative on Windows (free, daemonless,
+  Docker-compatible CLI)
 
-Graduating to gVisor is a runtime flag change (`--runtime=runsc`), not a code change. Graduating to Firecracker is a new backend class implementing the same interface.
+Graduating to gVisor is a runtime flag change (`--runtime=runsc`), not a code change.
+Graduating to Firecracker is a new backend class implementing the same interface.
 
 ---
 
