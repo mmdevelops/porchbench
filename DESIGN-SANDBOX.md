@@ -458,6 +458,18 @@ criteria:
 
 The evaluator receives the **full conversation transcript** (including tool calls and results), plus the **outcome** (files produced, whether expected outcome was met). This gives the frontier model enough context to assess not just *what* the model did, but *how* it did it.
 
+**Debiasing note**: the same LLM-as-judge biases that affect text evaluation (see
+DESIGN.md) apply here. Since we evaluate local Ollama models via Claude, self-preference
+bias is naturally mitigated (different model family). Verbosity bias is mitigated by the
+`tool_efficiency` criterion, which explicitly penalizes unnecessary tool calls.
+
+**Tool-calling reliability**: small models (<7B) are generally unreliable for tool
+calling — they may hallucinate arguments, call wrong tools, or fail to call tools when
+needed. Tool-use benchmarks should primarily target 7B+ models. When benchmarking
+smaller models, expect and document higher failure rates rather than treating them as
+bugs. A context window of 32k+ improves tool calling reliability. See METHODOLOGY.md
+for Ollama tool-calling caveats.
+
 ### Outcome Validation (Automated, Pre-Evaluation)
 
 Before sending to the frontier model, the runner can perform **deterministic outcome checks** that don't need an LLM:
@@ -471,6 +483,13 @@ Before sending to the frontier model, the runner can perform **deterministic out
 | Timeout | Did any execution exceed the timeout? |
 
 These produce a binary pass/fail that supplements the nuanced LLM evaluation. A model that produces the wrong file gets `correctness: 1` regardless of how elegant its approach was.
+
+**pass@k for code evaluation**: for prompts where the sandbox can execute the model's
+code and verify output, use **pass@k** (Chen et al. 2021) — the probability that at
+least 1 of k generated samples passes all tests. This is the gold standard for code
+evaluation: test execution, not text similarity. With `temperature: 0`, pass@1 is the
+natural metric (one deterministic sample). With sampling enabled, generate k samples
+and report pass@1, pass@5, pass@10 to characterize reliability. See METHODOLOGY.md.
 
 ---
 

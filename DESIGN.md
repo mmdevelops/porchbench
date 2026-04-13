@@ -129,6 +129,7 @@ prompts:
 | `prompts[].tags` | no | Freeform tags for filtering/grouping |
 | `prompts[].messages` | yes | Chat message list (`role` + `content`) |
 | `prompts[].options` | no | Per-prompt overrides merged over defaults |
+| `prompts[].contamination_risk` | no | `high`, `medium`, `low` — see Contamination Awareness below |
 
 **Schema extensions** — the following optional fields are defined in companion docs and
 recognized by the validation layer:
@@ -145,6 +146,22 @@ recognized by the validation layer:
 | `prompts[].setup_files` | DESIGN-SANDBOX.md | Fixture files pre-loaded into sandbox |
 | `prompts[].expected_outcome` | DESIGN-SANDBOX.md | Expected sandbox state (files, exit codes) |
 | `prompts[].max_tool_calls` | DESIGN-SANDBOX.md | Circuit breaker for tool-use agent loops |
+| `prompts[].contamination_risk` | METHODOLOGY.md | `high`, `medium`, `low` for analysis filtering |
+
+### Prompt design principles
+
+Prompts should be (from HELM and Anthropic's eval guide):
+
+- **Unambiguous** — domain experts should reach identical verdicts on correctness
+- **Balanced** — test both positive and negative cases
+- **Grounded** — has a deterministic correct answer or a clear rubric
+- **Diverse** — covers multiple difficulty levels, categories, and answer types
+- **Boundary-probing** — include tasks at the boundary where models begin to fail;
+  trivially easy or impossibly hard tasks provide no signal
+
+**Ceiling effect awareness**: benchmarks saturate as models improve. Design suites with
+a difficulty range that includes tasks current local models cannot solve, and expect to
+replace or extend the suite as capabilities improve.
 
 ### Why `messages` (chat format) instead of a flat `prompt` string
 
@@ -174,6 +191,13 @@ recognized by the validation layer:
 
 These are set in suite `defaults.options` and can be overridden per-prompt if needed (e.g., to
 deliberately test creativity at `temperature: 0.7`).
+
+**Verification**: even at temperature=0, LLM outputs are not guaranteed deterministic —
+floating-point non-determinism in GPU computation can cause variance. Local single-GPU
+inference is the best case, but **run 3 repeats minimum** to verify. If repeats produce
+non-identical outputs, document this as a finding. With greedy decoding on local hardware,
+prediction interval width ≤ 0.01 is achievable within 3 repeats (Belem et al. 2024).
+See METHODOLOGY.md for full statistical rigor requirements.
 
 ### CLI interface
 
@@ -215,6 +239,7 @@ results/
     },
     "model": {
       "name": "qwen2.5-coder:7b",
+      "digest": "sha256:abc123...",
       "details": {
         "format": "gguf",
         "family": "qwen2",
@@ -299,6 +324,38 @@ A separate command that reads a run result and scores each response via a fronti
 - Decoupled from the runner — you can re-evaluate old runs with updated rubrics
 - The frontier model call is expensive; you don't want to re-run Ollama just to tweak scoring
 - Different evaluator backends (Claude API, local model, manual) can share the same input
+
+### Evaluation method selection
+
+Not all prompts need a frontier model to evaluate. Prefer deterministic methods where
+possible — they are cheaper, faster, and more reproducible (see METHODOLOGY.md):
+
+| Prompt type | Evaluation method | Example |
+|---|---|---|
+| Factual / numeric | Exact match or regex against `expected_answer` | "What is 15% of 240?" → "36" |
+| Code correctness | Test execution via sandbox (**pass@k**, not text similarity) | FizzBuzz → run and check output |
+| Multiple choice | Extract and match selected option | "Which sorting algo is O(n log n)?" |
+| Open-ended | LLM-as-judge with rubric | "Design a REST API..." |
+
+For code evaluation, **pass@k** measures the probability that at least 1 of k generated
+samples passes all unit tests. This is the gold standard (Chen et al. 2021) and aligns
+with DESIGN-SANDBOX.md's `expected_outcome` validation.
+
+### LLM-as-judge debiasing
+
+When using a frontier model as evaluator, three documented biases must be mitigated:
+
+- **Verbosity bias** (~15% score inflation): mitigated by rubric criteria that explicitly
+  penalize unnecessary verbosity. The rubric's `completeness` criterion should not reward
+  length for its own sake.
+- **Self-preference bias**: mitigated by using a different model family as the judge than
+  the models under test. Since we evaluate local Ollama models (Qwen, LLaMA, etc.) via
+  Claude, this is naturally satisfied.
+- **Position bias** (~40% inconsistency when orderings are swapped): not directly relevant
+  for single-response scoring (our default), but critical if pairwise comparison is added
+  later. Mitigation: evaluate both orderings, only count consistent results.
+
+See METHODOLOGY.md for full discussion and references.
 
 ### Evaluation rubric
 
@@ -389,6 +446,36 @@ ollama-bench compare --results results/model_a.json results/model_b.json
   }
 }
 ```
+
+### Scoring methodology
+
+- **Report both composite and per-criterion scores.** The composite is useful for
+  ranking; the per-criterion breakdown is essential for diagnosis.
+- **Include rubric version in the scorecard.** Rubric evolution = new evaluation;
+  scores from different rubric versions are not comparable.
+- **Normalized scoring for cross-difficulty aggregation**: when rolling up scores
+  across difficulty levels, normalize each level to a 0-100 scale where the random
+  baseline = 0 and perfect = 100. This prevents easier prompts from dominating the
+  aggregate. Follows the OpenLLM Leaderboard v2 methodology.
+- **Confidence intervals**: report standard errors alongside aggregate scores.
+  Use paired difference analysis for model comparisons (analyze question-level
+  score differences, not separate confidence intervals). Bootstrap confidence
+  intervals when n < 100.
+
+### Contamination awareness
+
+Public benchmark problems (FizzBuzz, common algorithms) are likely in most models'
+training data. This isn't disqualifying — it's useful for comparability — but must
+be accounted for.
+
+- **Tag prompts** with `contamination_risk: high | medium | low` so analysis can filter
+- **Include both known benchmark problems** (for comparability with published results)
+  and **novel/original problems** (for contamination-free measurement)
+- **For routing discovery**, contamination is less of a concern: we compare prompt
+  strategies on the same problem, not absolute capability. A memorized answer should
+  succeed under all strategies — still useful signal.
+
+See METHODOLOGY.md for full contamination discussion and references.
 
 ---
 

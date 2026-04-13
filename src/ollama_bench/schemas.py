@@ -70,6 +70,9 @@ class Prompt(BaseModel):
     messages: list[Message]
     options: ModelOptions | None = None
 
+    # --- Methodology extension (METHODOLOGY.md) ---
+    contamination_risk: str | None = None  # high, medium, low
+
     # --- Routing extensions (DESIGN-ROUTING.md) ---
     answer_type: str | None = None  # factual, numeric, code, explanation, open-ended
     reasoning_depth: str | None = None  # shallow, medium, deep
@@ -126,6 +129,7 @@ class ModelDetails(BaseModel):
 
 class ModelInfo(BaseModel):
     name: str
+    digest: str | None = None  # SHA256 from ollama.show(), detects silent model updates
     details: ModelDetails = Field(default_factory=ModelDetails)
 
 

@@ -115,6 +115,34 @@ the verbosity effect. We should also measure with sampling enabled:
 
 If the effect disappears under sampling, routing is less valuable for real deployment.
 
+**Determinism verification**: even deterministic runs require **3 repeats minimum** to
+confirm outputs are identical across runs. Local single-GPU inference is the best case
+for reproducibility, but floating-point non-determinism is possible. If repeats diverge,
+this is itself a finding worth documenting (see METHODOLOGY.md).
+
+**Sampled runs and statistical power**: with sampling enabled, each (model, problem,
+strategy) cell requires multiple observations to measure variance. The combinatorial
+expansion gets expensive fast — 10 problems × 5 strategies × 4 models × 5 repeats =
+1,000 runs. Start with deterministic runs to identify promising patterns, then validate
+specific findings with sampled runs.
+
+### Dimension 5: Quantization
+
+Quantization level is a confound that must be controlled. A Q4_K_M 32B model vs. a Q8
+7B model is varying two dimensions simultaneously (scale and precision). For routing
+discovery to produce valid conclusions about model scale effects:
+
+- **Hold quantization constant** across the model roster when comparing scale effects.
+  If all models are Q4_K_M, scale comparisons are clean.
+- **Treat quantization as a separate dimension** when the roster includes mixed levels.
+  Report findings as "at Q4_K_M, the 3B model outperforms the 14B model on X" — not
+  simply "the 3B model outperforms the 14B model."
+- **Record quantization level** in every routing discovery result. The analysis must
+  flag mixed-quantization comparisons.
+
+See METHODOLOGY.md for quantization impact data (Q4_K_M: 3-6% general degradation,
+up to 10-20% on instruction-following).
+
 ---
 
 ## Suite Design for Routing Discovery
@@ -294,6 +322,26 @@ The `headline.routing_worthwhile` flag is the go/no-go signal. It considers:
 If the answer is "no, just use the biggest model," that's a valid and useful finding.
 The benchmarking framework has done its job by providing the evidence.
 
+### Statistical requirements for routing claims
+
+Routing analysis findings should meet the same rigor as any experimental claim
+(see METHODOLOGY.md):
+
+- **Confidence intervals** on all aggregate metrics (inverse scaling rate, quality
+  improvement, token savings). Use bootstrap CIs when sample counts are small.
+- **Paired difference analysis** for model comparisons: compare question-level
+  performance differences rather than independent means. This is more statistically
+  efficient and accounts for per-problem difficulty variation.
+- **Effect size reporting**: report Cohen's d alongside percentage-point differences.
+  The Hakim paper found d=1.34 (very large effect) for inverse scaling. Smaller
+  effects need larger samples to detect reliably.
+- **Pattern confidence**: the `confidence` field in routing patterns should reflect
+  both the evidence count and the consistency of the effect. "High" confidence
+  requires consistent direction across problems in the group, not just an average.
+- **Contamination filtering**: when computing absolute accuracy, filter by
+  `contamination_risk` to ensure results aren't inflated by memorized answers.
+  For strategy comparisons on the same problem, contamination is less concerning.
+
 ---
 
 ## CLI Interface
@@ -453,10 +501,13 @@ empirical patterns this framework discovers.
 
 ## Open Questions
 
-- **Statistical rigor**: with `temperature: 0`, each (model, problem, strategy) triple
-  produces one deterministic result. With sampling, we'd want multiple runs per triple to
-  measure variance. How many runs per triple? 3? 5? 10? The combinatorial expansion gets
-  expensive fast.
+- **Statistical rigor for sampled runs**: with `temperature: 0`, each (model, problem,
+  strategy) triple produces one deterministic result (verified via 3-repeat check). With
+  sampling, we'd want multiple runs per triple to measure variance. METHODOLOGY.md
+  recommends 3 repeats minimum (prediction interval ≤ 0.01 for most models). For sampled
+  runs, 5 repeats per triple is a reasonable starting point — enough for bootstrap CIs
+  without making the combinatorial explosion unmanageable. The answer depends on how
+  sensitive routing decisions are to per-run variance.
 
 - **Incremental discovery**: if you add a new model to your roster, you shouldn't have to
   re-run the entire matrix. The runner should support incremental runs that fill in gaps in

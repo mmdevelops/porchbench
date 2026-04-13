@@ -50,12 +50,17 @@ def extract_metrics(response: ChatResponse) -> PromptMetrics:
 
 
 async def get_model_info(model: str, host: str | None = None) -> ModelInfo:
-    """Fetch model metadata (family, parameter size, quantization) via ollama.show()."""
+    """Fetch model metadata (family, parameter size, quantization, digest) via Ollama API."""
     client = AsyncClient(host=host)
     info = await client.show(model)
     details = info.get("details", {}) or {}
+
+    # Digest comes from list() (/api/tags), not show()
+    digest = await _get_model_digest(model, client)
+
     return ModelInfo(
         name=model,
+        digest=digest,
         details=ModelDetails(
             format=details.get("format"),
             family=details.get("family"),
@@ -63,6 +68,19 @@ async def get_model_info(model: str, host: str | None = None) -> ModelInfo:
             quantization_level=details.get("quantization_level"),
         ),
     )
+
+
+async def _get_model_digest(model: str, client: AsyncClient) -> str | None:
+    """Look up a model's digest from the local model list."""
+    try:
+        listing = await client.list()
+        for m in listing.models:
+            m_name = getattr(m, "model", "") or ""
+            if m_name == model or m_name.startswith(f"{model}:") or model.startswith(m_name):
+                return getattr(m, "digest", None)
+    except Exception:
+        pass
+    return None
 
 
 async def get_server_version(host: str | None = None) -> str:
