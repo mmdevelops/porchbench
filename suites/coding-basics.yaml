@@ -1,0 +1,49 @@
+suite:
+  name: "Coding Basics"
+  version: "1.0"
+  description: "Fundamental coding tasks across languages"
+  categories:
+    - coding
+    - reasoning
+
+defaults:
+  options:
+    temperature: 0
+    seed: 42
+    top_p: 1
+    num_predict: 2048
+    num_ctx: 4096
+
+prompts:
+  - id: "fizzbuzz-python"
+    category: coding
+    difficulty: easy
+    tags: [python, loops, conditionals]
+    messages:
+      - role: user
+        content: |
+          Write a Python function that prints numbers 1 to 100.
+          For multiples of 3 print "Fizz", for multiples of 5 print "Buzz",
+          for multiples of both print "FizzBuzz".
+
+  - id: "binary-search-explain"
+    category: reasoning
+    difficulty: medium
+    tags: [algorithms, explanation]
+    messages:
+      - role: user
+        content: |
+          Explain how binary search works step by step,
+          then implement it in a language of your choice.
+          Analyze its time and space complexity.
+
+  - id: "rest-api-design"
+    category: cross-domain
+    difficulty: hard
+    tags: [architecture, http, databases]
+    messages:
+      - role: user
+        content: |
+          Design a REST API for a library management system.
+          Include endpoints, data models, error handling strategy,
+          and explain your choices.

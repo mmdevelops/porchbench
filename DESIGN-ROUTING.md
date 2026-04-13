@@ -59,21 +59,18 @@ For each problem, run every model under multiple prompt strategies:
 | `direct` | Answer only, no reasoning. | "Respond with only the final answer." |
 | `cot` | Explicit chain-of-thought elicitation. | "Think step by step." |
 | `structured` | Force a specific output format. | "Respond in JSON: {answer, confidence}" |
-| `caveman` | Aggressive token compression. Drop articles, use fragments, abbreviate. | "Respond in minimal terse language. Drop articles, filler, and unnecessary words. Use fragments. Be telegraphic." |
-| `caveman-ultra` | Maximum compression. | "Use absolute minimum tokens. Abbreviate everything. No articles, no filler, no complete sentences. Telegraphic only." |
 
 This produces a matrix: `model × problem × strategy → (accuracy, tokens, latency)`.
 
 The paper tested `universal`, `brevity`, and `direct`. We add `cot` and `structured`
 because they're common in agentic workflows and may interact with scale differently.
-`caveman` and `caveman-ultra` are inspired by the Caveman project
-(github.com/JuliusBrussee/caveman, 18K+ stars), which reports 65-75% output token
-reduction on Claude while maintaining technical accuracy. The Hakim paper
-(arXiv:2604.00025) that motivated our routing design is cited directly by Caveman as
-research backing. Key open question: does Caveman-style compression help local models
-(3B-14B) the same way it helps frontier models? Smaller models may not have the same
-RLHF-induced verbosity, so the gains could be smaller — or the accuracy impact could
-be worse. This is exactly what the routing discovery framework should measure.
+
+> **Deferred: Caveman strategies.** Caveman-style token compression (`caveman`,
+> `caveman-ultra`) inspired by github.com/JuliusBrussee/caveman is a promising
+> addition but deferred until the core 5 strategies are validated. Key open question:
+> smaller local models may not have the same RLHF-induced verbosity as frontier models,
+> so compression gains could be smaller or accuracy impact worse. Revisit after initial
+> routing discovery runs produce data.
 
 ### Dimension 2: Problem characteristics
 
@@ -97,7 +94,7 @@ cost has three components:
 | Cost component | How to measure | Where it comes from |
 |---|---|---|
 | **Tokens generated** | `eval_count` from Ollama response | Already captured in run results |
-| **Latency** | `total_duration_ns` | Already captured |
+| **Latency** | `total_duration` | Already captured |
 | **VRAM residency** | Model size × time loaded | New: needs Ollama `/api/ps` polling |
 | **Model swap time** | Time to load/unload a model | New: empirical measurement |
 
@@ -449,22 +446,17 @@ empirical patterns this framework discovers.
 
 ---
 
-## Open Questions
+## Design Decisions
 
-- **Strategy set**: are the five strategies (universal, brevity, direct, cot, structured)
-  sufficient, or should we support user-defined strategies in the suite? Leaning toward:
-  support user-defined, but ship with these five as defaults.
+- **Strategy set**: user-defined strategies via the `strategies` dict in suite YAML. Ship with five defaults (universal, brevity, direct, cot, structured). Caveman-style strategies deferred (see above).
+- **Evaluation method for routing discovery**: deterministic where possible — `expected_answer` for exact-match and regex; frontier-model evaluation only for open-ended prompts where automated checking isn't feasible. This is cheaper and enables more experiments.
+
+## Open Questions
 
 - **Statistical rigor**: with `temperature: 0`, each (model, problem, strategy) triple
   produces one deterministic result. With sampling, we'd want multiple runs per triple to
   measure variance. How many runs per triple? 3? 5? 10? The combinatorial expansion gets
   expensive fast.
-
-- **Evaluation method for routing discovery**: the paper uses exact-match accuracy
-  (extracted answer vs ground truth). This works for math and multiple-choice but not for
-  open-ended coding tasks. For routing discovery, should we use deterministic checks
-  (exact match, regex, test execution) instead of frontier-model evaluation? Leaning toward:
-  yes, deterministic where possible — it's cheaper and lets you run more experiments.
 
 - **Incremental discovery**: if you add a new model to your roster, you shouldn't have to
   re-run the entire matrix. The runner should support incremental runs that fill in gaps in

@@ -398,7 +398,7 @@ The run result schema gains new fields for tool-use prompts:
     "exit_code": 0
   },
   "metrics": {
-    "total_duration_ns": 12400000000,
+    "total_duration": 12400000000,
     "tokens_per_second": 38.5,
     "total_tokens_generated": 847,
     "total_tokens_prompt": 1203
@@ -559,18 +559,18 @@ ollama-bench/
 
 ---
 
-## Open Questions
+## Design Decisions
 
-- **Tool definition standardization**: Ollama's tool-use format follows OpenAI's function-calling convention. Should we define a standard "benchmark tool kit" (execute_code, read_file, write_file, list_files) that all tool-use suites share, or let each suite define its own tools? Leaning toward: standard kit with per-suite extensions.
+- **Tool definition standardization**: standard benchmark tool kit (execute_code, read_file, write_file, list_files) shared by all tool-use suites, following Ollama's OpenAI-compatible function-calling convention. Suites can define additional tools beyond the standard kit.
+- **Harness extensibility**: keep the base harness simple (ReAct-style loop). Support alternative agent patterns via callback/hook injection, not subclassing.
+- **Non-sandbox tools**: the caller's responsibility. The caller builds the `tool_name → async callable` dispatch table and passes it to the harness. The harness has no concept of "tool providers" — it just dispatches.
+
+## Open Questions
 
 - **Sandbox image caching**: pulling Docker images on every run is slow. Should the runner pre-pull images during a `setup` command, or lazily cache them?
 
 - **Multi-model tool-use comparison**: when comparing models on tool use, do we normalize by token count (some models are chattier) or by wall-clock time? Probably both, displayed separately.
 
-- **Deterministic tool-use runs**: text-only runs use `temperature: 0, seed: 42` for reproducibility. Tool-use runs have an additional source of nondeterminism ��� the model's tool-call decisions may vary. Do we accept this, or attempt multiple runs and report variance?
+- **Deterministic tool-use runs**: text-only runs use `temperature: 0, seed: 42` for reproducibility. Tool-use runs have an additional source of nondeterminism — the model's tool-call decisions may vary. Do we accept this, or attempt multiple runs and report variance?
 
 - **Sandbox pooling**: for large suites, creating/destroying a sandbox per prompt is slow. Could we pool sandboxes and reset them between prompts (wipe filesystem, keep container alive)? This is an optimization, not a design change — the interface supports either approach.
-
-- **Harness extensibility**: the default harness runs a simple ReAct-style loop (observe → act → observe). Should the harness be subclassable for other agent patterns (plan-then-execute, tree-of-thought, etc.)? Leaning toward: keep the base harness simple, allow strategy injection via a callback/hook rather than subclassing.
-
-- **Non-sandbox tools**: some tool-use benchmarks might include tools that don't touch the sandbox (e.g., `search_web`, `query_database`). The dispatch table supports this — any `async callable` can back a tool. But should the harness own a concept of "tool providers" beyond the sandbox, or should that be the caller's problem? Leaning toward: caller's problem — the caller builds the dispatch table and passes it in.

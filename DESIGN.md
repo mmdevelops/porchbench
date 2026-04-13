@@ -3,6 +3,13 @@
 A lightweight Python framework for deterministic benchmarking of local LLMs via Ollama,
 with an optional frontier-model evaluation pass.
 
+### Related Documents
+
+- **DESIGN-SANDBOX.md** — extends the runner with sandboxed code execution and tool-use benchmarking (harness + sandbox layers)
+- **DESIGN-ROUTING.md** — extends the suite/runner with scale-aware prompt routing discovery (strategy × model matrix)
+- **METHODOLOGY.md** — statistical rigor, evaluation methods, debiasing, reproducibility standards
+- **HARDWARE-PLAN.md** — GPU acquisition strategy and current hardware constraints
+
 ## Goals
 
 1. **Reproducibility** — identical inputs produce identical runs across machines and time
@@ -123,6 +130,22 @@ prompts:
 | `prompts[].messages` | yes | Chat message list (`role` + `content`) |
 | `prompts[].options` | no | Per-prompt overrides merged over defaults |
 
+**Schema extensions** — the following optional fields are defined in companion docs and
+recognized by the validation layer:
+
+| Field | Defined in | Purpose |
+|---|---|---|
+| `strategies` (suite-level) | DESIGN-ROUTING.md | Reusable prompt strategy templates for routing discovery |
+| `prompts[].answer_type` | DESIGN-ROUTING.md | `factual`, `numeric`, `code`, `explanation`, `open-ended` |
+| `prompts[].reasoning_depth` | DESIGN-ROUTING.md | `shallow`, `medium`, `deep` |
+| `prompts[].expected_answer` | DESIGN-ROUTING.md | Ground truth for deterministic evaluation |
+| `prompts[].mode` | DESIGN-SANDBOX.md | `text` (default) or `tool-use` |
+| `prompts[].tools` | DESIGN-SANDBOX.md | Tool definitions for tool-use prompts |
+| `prompts[].sandbox` | DESIGN-SANDBOX.md | Per-prompt sandbox config overrides |
+| `prompts[].setup_files` | DESIGN-SANDBOX.md | Fixture files pre-loaded into sandbox |
+| `prompts[].expected_outcome` | DESIGN-SANDBOX.md | Expected sandbox state (files, exit codes) |
+| `prompts[].max_tool_calls` | DESIGN-SANDBOX.md | Circuit breaker for tool-use agent loops |
+
 ### Why `messages` (chat format) instead of a flat `prompt` string
 
 - Matches Ollama's `/api/chat` endpoint directly
@@ -233,10 +256,11 @@ results/
       },
       "metrics": {
         "prompt_eval_count": 52,
-        "prompt_eval_duration_ns": 312000000,
+        "prompt_eval_duration": 312000000,
         "eval_count": 187,
-        "eval_duration_ns": 4210000000,
-        "total_duration_ns": 4580000000,
+        "eval_duration": 4210000000,
+        "total_duration": 4580000000,
+        "load_duration": 101000000,
         "tokens_per_second": 44.42,
         "time_to_first_token_ms": 312.0
       }
@@ -254,12 +278,14 @@ results/
 
 ### Computed metrics
 
-These are derived from Ollama's raw response fields:
+These are derived from Ollama's raw response fields (all durations are nanoseconds
+despite the field names not carrying a `_ns` suffix):
 
 ```
-tokens_per_second    = eval_count / (eval_duration_ns / 1e9)
-time_to_first_token  = prompt_eval_duration_ns / 1e6  (ms)
-total_time           = total_duration_ns / 1e9  (s)
+tokens_per_second    = eval_count / (eval_duration / 1e9)
+time_to_first_token  = prompt_eval_duration / 1e6  (ms)
+total_time           = total_duration / 1e9  (s)
+load_time            = load_duration / 1e9  (s)
 ```
 
 ---
@@ -440,9 +466,12 @@ Steps 6-8 add analysis capabilities.
 
 ---
 
+## Design Decisions
+
+- **Suite versioning**: both semver (human-readable, in `suite.version`) and content hash (machine-comparable, `sha256` in run results). Semver tracks intentional prompt evolution; hash detects any change.
+- **Execution isolation**: restart Ollama between models for rigorous benchmarking to ensure clean VRAM state. The routing profiler (DESIGN-ROUTING.md) measures swap costs, so this overhead is quantified.
+
 ## Open Questions
 
-- **Suite versioning strategy**: do we version suites semantically, or hash the content and treat any change as a new version? (Leaning toward: both — semver for humans, content hash for machines)
 - **Result storage**: flat JSON files are fine to start. If the number of runs grows, consider SQLite.
 - **Evaluator model choice**: Claude via API is the obvious pick for quality, but should we also support using a strong local model (e.g., a large Qwen) as a cheaper evaluator for rapid iteration?
-- **Execution isolation**: should we restart Ollama between models to ensure clean VRAM state? Probably yes for rigorous benchmarking.

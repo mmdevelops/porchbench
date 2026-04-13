@@ -1,0 +1,29 @@
+rubric:
+  name: "Default Coding Rubric"
+  version: "1.0"
+
+criteria:
+  - name: correctness
+    weight: 0.35
+    description: "Does the code work? Would it produce the correct output?"
+    scale: "1-5"
+
+  - name: reasoning
+    weight: 0.25
+    description: "Is the explanation clear and logically sound?"
+    scale: "1-5"
+
+  - name: completeness
+    weight: 0.20
+    description: "Are edge cases addressed? Is the solution thorough?"
+    scale: "1-5"
+
+  - name: code_quality
+    weight: 0.10
+    description: "Is the code clean, idiomatic, and well-structured?"
+    scale: "1-5"
+
+  - name: domain_knowledge
+    weight: 0.10
+    description: "Does the response demonstrate understanding of the broader domain?"
+    scale: "1-5"
