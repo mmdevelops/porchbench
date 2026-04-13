@@ -359,7 +359,7 @@ def analyze_routes(
         ))
 
     # Detect inverse scaling (smaller model outperforms larger on correctness)
-    inverse_scaling_count = _count_inverse_scaling(matrix, models_tested, default_strategy)
+    inverse_scaling_count = _count_inverse_scaling(matrix, default_model, default_strategy)
 
     # Detect patterns by grouping prompts with similar best routes
     patterns = _detect_patterns(best_routes, runs)
@@ -477,30 +477,22 @@ def _find_cell(
 
 
 def _count_inverse_scaling(
-    matrix: list[RoutingCell], models: list[str], strategy: str
+    matrix: list[RoutingCell], largest_model: str, strategy: str
 ) -> int:
     """Count problems where a smaller model outperforms the largest on the same strategy."""
-    if len(models) < 2:
-        return 0
-
     # Group by (prompt_id, strategy)
     by_ps: dict[tuple[str, str], dict[str, RoutingCell]] = defaultdict(dict)
     for c in matrix:
         by_ps[(c.prompt_id, c.strategy)][c.model] = c
 
-    # For each prompt under the given strategy, check if any smaller model
-    # is correct when the largest is not
     count = 0
-    largest = models[-1]  # assumes sorted; _identify_default_model handles this better
-
     for (pid, strat), model_cells in by_ps.items():
         if strat != strategy:
             continue
-        largest_cell = model_cells.get(largest)
+        largest_cell = model_cells.get(largest_model)
         if largest_cell is None or largest_cell.correct is not True:
-            # Check if any other model got it right
             for m, cell in model_cells.items():
-                if m != largest and cell.correct is True:
+                if m != largest_model and cell.correct is True:
                     count += 1
                     break
 
