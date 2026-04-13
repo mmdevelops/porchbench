@@ -55,8 +55,16 @@ def detect_gpu() -> tuple[str, float | None]:
     except (FileNotFoundError, Exception):
         pass
 
-    # Try WMI on Windows (gets GPU name; VRAM may be capped at 4GB)
+    # Try dxdiag on Windows (accurate VRAM even for >4GB GPUs)
     if platform.system() == "Windows":
+        try:
+            gpu_name, vram_gb = _detect_gpu_dxdiag()
+            if gpu_name:
+                return gpu_name, vram_gb
+        except Exception:
+            pass
+
+        # Fallback: WMI for GPU name (VRAM capped at 4GB, not reliable)
         try:
             r = subprocess.run(
                 ["powershell", "-Command",
@@ -67,16 +75,8 @@ def detect_gpu() -> tuple[str, float | None]:
                 data = json.loads(r.stdout)
                 if isinstance(data, dict):
                     data = [data]
-                # Pick the discrete GPU (largest AdapterRAM, skip integrated)
                 best = max(data, key=lambda g: g.get("AdapterRAM", 0))
                 gpu_name = best.get("Name", "")
-                ram = best.get("AdapterRAM", 0)
-                reported_gb = ram / (1024 ** 3)
-                # WMI's AdapterRAM is a 32-bit field, caps at ~4GB.
-                # Only trust it if it reports > 4GB (some drivers handle it).
-                if reported_gb > 4.5:
-                    vram_gb = round(reported_gb, 1)
-                # else: leave vram_gb as None, will be estimated from Ollama
         except (FileNotFoundError, json.JSONDecodeError, Exception):
             pass
 
@@ -93,6 +93,69 @@ def detect_gpu() -> tuple[str, float | None]:
                         break
         except (FileNotFoundError, Exception):
             pass
+
+    return gpu_name, vram_gb
+
+
+def _detect_gpu_dxdiag() -> tuple[str, float | None]:
+    """Parse dxdiag output for GPU name and dedicated memory.
+
+    dxdiag reports correct VRAM even for GPUs >4GB, unlike WMI.
+    Runs dxdiag /t to dump diagnostics to a temp file.
+    """
+    import os
+    import re
+    import tempfile
+    import time
+
+    tmp_path = os.path.join(tempfile.gettempdir(), "ollama_bench_dxdiag.txt")
+
+    # Clean up stale file
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+
+    subprocess.run(
+        ["cmd", "/c", f"dxdiag /t {tmp_path}"],
+        capture_output=True, timeout=15,
+    )
+
+    # dxdiag writes asynchronously; wait for the file
+    for _ in range(10):
+        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+            break
+        time.sleep(0.5)
+
+    if not os.path.exists(tmp_path):
+        return "", None
+
+    try:
+        with open(tmp_path, encoding="utf-8", errors="ignore") as f:
+            text = f.read()
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+    # Parse display device sections. dxdiag lists multiple display devices;
+    # we want the discrete GPU (largest dedicated memory).
+    card_names = re.findall(r"Card name:\s*(.+)", text)
+    dedicated_mb = re.findall(r"Dedicated Memory:\s*(\d+)\s*MB", text)
+
+    if not card_names:
+        return "", None
+
+    # Pair cards with their dedicated memory, pick largest
+    best_idx = 0
+    best_mem = 0
+    for i, mem_str in enumerate(dedicated_mb):
+        mem = int(mem_str)
+        if mem > best_mem:
+            best_mem = mem
+            best_idx = i
+
+    gpu_name = card_names[best_idx].strip() if best_idx < len(card_names) else card_names[0].strip()
+    vram_gb = round(best_mem / 1024, 1) if best_mem > 0 else None
 
     return gpu_name, vram_gb
 
