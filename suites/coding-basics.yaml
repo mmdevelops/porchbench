@@ -1,10 +1,10 @@
 suite:
   name: "Coding Basics"
-  version: "1.0"
-  description: "Fundamental coding tasks across languages"
-  categories:
-    - coding
-    - reasoning
+  version: "2.0"
+  description: >
+    Curated prompts for LLM-as-judge evaluation. Focuses on tasks where
+    quality, style, reasoning depth, and design judgment matter — not just
+    correctness. Scored via frontier model rubric (rubrics/default.yaml).
 
 defaults:
   options:
@@ -15,10 +15,16 @@ defaults:
     num_ctx: 4096
 
 prompts:
-  - id: "fizzbuzz-python"
+
+  # =========================================================================
+  # CODING — easy (implementation quality, not just correctness)
+  # =========================================================================
+
+  - id: "code-fizzbuzz"
     category: coding
     difficulty: easy
     tags: [python, loops, conditionals]
+    contamination_risk: high
     messages:
       - role: user
         content: |
@@ -26,24 +32,387 @@ prompts:
           For multiples of 3 print "Fizz", for multiples of 5 print "Buzz",
           for multiples of both print "FizzBuzz".
 
-  - id: "binary-search-explain"
-    category: reasoning
+  - id: "code-word-count"
+    category: coding
+    difficulty: easy
+    tags: [python, strings, dicts]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a Python function that takes a string of text and returns
+          a dictionary mapping each word to the number of times it appears.
+          Handle punctuation and case-insensitivity.
+
+  - id: "code-validate-email"
+    category: coding
+    difficulty: easy
+    tags: [python, validation, regex]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a Python function that validates an email address.
+          It should check for basic structure (user@domain.tld) without
+          using a regex library. Explain your validation choices.
+
+  - id: "code-list-comprehension"
+    category: coding
+    difficulty: easy
+    tags: [python, idioms]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Rewrite this function using Python list comprehensions and explain
+          why the comprehension version is (or isn't) better:
+
+          def get_even_squares(numbers):
+              result = []
+              for n in numbers:
+                  if n % 2 == 0:
+                      result.append(n ** 2)
+              return result
+
+  # =========================================================================
+  # CODING — medium (algorithm choice, edge cases, explanation)
+  # =========================================================================
+
+  - id: "code-binary-search"
+    category: coding
     difficulty: medium
-    tags: [algorithms, explanation]
+    tags: [python, algorithms, explanation]
+    contamination_risk: high
     messages:
       - role: user
         content: |
           Explain how binary search works step by step,
-          then implement it in a language of your choice.
+          then implement it in Python.
           Analyze its time and space complexity.
 
-  - id: "rest-api-design"
+  - id: "code-rate-limiter"
+    category: coding
+    difficulty: medium
+    tags: [python, algorithms, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Implement a simple rate limiter class in Python that allows
+          at most N requests per time window of W seconds.
+          Explain your design choices.
+
+  - id: "code-csv-parser"
+    category: coding
+    difficulty: medium
+    tags: [python, parsing]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: |
+          Write a Python function that parses a CSV string into a list
+          of dictionaries, using the first row as headers. Handle quoted
+          fields that may contain commas. Don't use the csv module.
+
+  - id: "code-retry-decorator"
+    category: coding
+    difficulty: medium
+    tags: [python, decorators, error-handling]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a Python decorator called `retry` that retries a function
+          up to N times if it raises an exception, with exponential backoff.
+          Show example usage.
+
+  - id: "code-linked-list"
+    category: coding
+    difficulty: medium
+    tags: [python, data-structures]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          Implement a singly linked list in Python with methods for
+          append, prepend, delete by value, and a __repr__ that shows
+          the list contents. Explain when you'd use this over a Python list.
+
+  - id: "code-cache-decorator"
+    category: coding
+    difficulty: medium
+    tags: [python, decorators, performance]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a memoization decorator in Python from scratch (don't use
+          functools.lru_cache). It should cache results based on function
+          arguments. Discuss the limitations of your approach.
+
+  - id: "code-iterator"
+    category: coding
+    difficulty: medium
+    tags: [python, iterators, protocol]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a Python class that implements the iterator protocol
+          to yield Fibonacci numbers up to a maximum value. Show how
+          to use it in a for loop.
+
+  - id: "code-context-manager"
+    category: coding
+    difficulty: medium
+    tags: [python, context-managers]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Write a Python context manager called Timer that measures
+          and prints the execution time of a code block. Implement it
+          both as a class and using contextlib. Explain the tradeoffs.
+
+  # =========================================================================
+  # CODING — hard (design, tradeoffs, architecture)
+  # =========================================================================
+
+  - id: "code-thread-pool"
+    category: coding
+    difficulty: hard
+    tags: [python, concurrency, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Implement a simple thread pool in Python that accepts callables,
+          runs them across a fixed number of worker threads, and provides
+          a way to wait for all tasks to complete. Discuss the GIL implications.
+
+  - id: "code-event-emitter"
+    category: coding
+    difficulty: hard
+    tags: [python, design-patterns]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Implement an EventEmitter class in Python that supports:
+          - on(event, callback) to register handlers
+          - emit(event, *args) to fire an event
+          - off(event, callback) to unregister
+          Include error handling and discuss thread safety.
+
+  - id: "code-json-differ"
+    category: coding
+    difficulty: hard
+    tags: [python, algorithms, recursion]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: |
+          Write a Python function that takes two JSON-like Python dicts
+          and returns a description of the differences: added keys,
+          removed keys, and changed values (including nested dicts).
+
+  # =========================================================================
+  # REASONING — explanation quality
+  # =========================================================================
+
+  - id: "explain-big-o"
+    category: reasoning
+    difficulty: medium
+    tags: [cs, algorithms, explanation]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          Explain Big O notation to someone who understands basic programming
+          but has no formal CS education. Use concrete examples for O(1),
+          O(n), O(n^2), and O(log n). Explain why it matters in practice.
+
+  - id: "explain-rest-principles"
+    category: reasoning
+    difficulty: medium
+    tags: [architecture, http, explanation]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          What are the core principles of REST? Explain each one and give
+          an example of a common API design mistake that violates it.
+
+  - id: "explain-git-rebase"
+    category: reasoning
+    difficulty: medium
+    tags: [tools, git, explanation]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          Explain the difference between git merge and git rebase.
+          When would you use each? What are the dangers of rebasing?
+
+  - id: "explain-solid"
+    category: reasoning
+    difficulty: hard
+    tags: [cs, design-principles, explanation]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          Explain the SOLID principles with a concrete Python example
+          for each. Don't just define them — show code that violates
+          each principle, then refactor it to comply.
+
+  - id: "explain-concurrency"
+    category: reasoning
+    difficulty: hard
+    tags: [cs, concurrency, explanation]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Explain the difference between concurrency and parallelism.
+          Then explain threads vs processes vs async/await in Python,
+          including when each is appropriate and why.
+
+  # =========================================================================
+  # CROSS-DOMAIN — design judgment, tradeoffs, no single right answer
+  # =========================================================================
+
+  - id: "design-rest-api"
     category: cross-domain
     difficulty: hard
     tags: [architecture, http, databases]
+    contamination_risk: high
     messages:
       - role: user
         content: |
           Design a REST API for a library management system.
           Include endpoints, data models, error handling strategy,
           and explain your choices.
+
+  - id: "design-auth-system"
+    category: cross-domain
+    difficulty: hard
+    tags: [security, architecture, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Design an authentication and authorization system for a
+          multi-tenant SaaS application. Cover user registration,
+          login, session management, role-based access, and at least
+          three security considerations.
+
+  - id: "design-queue-system"
+    category: cross-domain
+    difficulty: hard
+    tags: [architecture, distributed, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: |
+          Design a simple message queue system. Cover the API,
+          persistence strategy, delivery guarantees, and how you'd
+          handle consumer failures. Compare at-most-once vs
+          at-least-once vs exactly-once delivery.
+
+  - id: "debug-race-condition"
+    category: cross-domain
+    difficulty: hard
+    tags: [debugging, concurrency]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: |
+          This Python code has a race condition. Identify it, explain
+          why it's dangerous, and fix it:
+
+          import threading
+
+          counter = 0
+
+          def increment():
+              global counter
+              for _ in range(100000):
+                  counter += 1
+
+          threads = [threading.Thread(target=increment) for _ in range(4)]
+          for t in threads: t.start()
+          for t in threads: t.join()
+          print(counter)
+
+  - id: "refactor-god-function"
+    category: cross-domain
+    difficulty: medium
+    tags: [python, refactoring, design]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: |
+          This function does too many things. Refactor it into smaller,
+          well-named functions and explain your reasoning:
+
+          def process_order(order):
+              if order['quantity'] <= 0:
+                  return {'error': 'Invalid quantity'}
+              subtotal = order['price'] * order['quantity']
+              if order.get('coupon') == 'SAVE10':
+                  subtotal *= 0.9
+              tax = subtotal * 0.08
+              total = subtotal + tax
+              if order.get('email'):
+                  print(f"Sending receipt to {order['email']}")
+              return {'subtotal': subtotal, 'tax': tax, 'total': total}
+
+  - id: "review-code-pr"
+    category: cross-domain
+    difficulty: medium
+    tags: [code-review, python, quality]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: |
+          Review this Python code as if it were a pull request.
+          Point out bugs, style issues, and suggest improvements:
+
+          def get_user_data(user_id):
+              import requests
+              resp = requests.get(f"http://api.example.com/users/{user_id}")
+              data = resp.json()
+              name = data['name']
+              email = data['email']
+              age = data['age']
+              if age < 0:
+                  age = 0
+              return {"name": name, "email": email, "age": age, "is_adult": age >= 18}
+
+  - id: "tradeoff-sql-nosql"
+    category: cross-domain
+    difficulty: medium
+    tags: [databases, architecture, tradeoffs]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          You're building a social media platform. The core data includes
+          user profiles, posts, comments, and follower relationships.
+          Would you use a relational database, a document store, or both?
+          Justify your choice with specific tradeoffs for each data type.
+
+  - id: "tradeoff-mono-micro"
+    category: cross-domain
+    difficulty: hard
+    tags: [architecture, tradeoffs, design]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: |
+          A startup has a monolithic Python application that's becoming
+          hard to maintain. The CTO wants to move to microservices.
+          Present a balanced argument: what are the real benefits,
+          what are the hidden costs, and what would you recommend
+          for a team of 5 engineers?

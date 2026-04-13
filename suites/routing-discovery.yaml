@@ -1,8 +1,9 @@
 suite:
   name: "Routing Discovery"
-  version: "1.0"
+  version: "2.0"
   description: >
     Systematic exploration of prompt strategy x model scale interactions.
+    100+ prompts across answer types, reasoning depths, and difficulties.
     Run across your full model roster to discover routing opportunities.
 
 defaults:
@@ -25,8 +26,12 @@ strategies:
     system_message: 'Respond in JSON format: {"answer": "...", "reasoning": "..."}'
 
 prompts:
-  # --- Numeric / shallow ---
-  - id: "math-percentage"
+
+  # =========================================================================
+  # NUMERIC — SHALLOW (arithmetic, conversions, lookups)
+  # =========================================================================
+
+  - id: "num-s-percentage"
     category: reasoning
     difficulty: easy
     answer_type: numeric
@@ -38,19 +43,43 @@ prompts:
       - role: user
         content: "What is 15% of 240?"
 
-  - id: "math-discount"
+  - id: "num-s-addition"
     category: reasoning
     difficulty: easy
     answer_type: numeric
     reasoning_depth: shallow
     tags: [math, arithmetic]
-    expected_answer: "72"
+    expected_answer: "1247"
     contamination_risk: low
     messages:
       - role: user
-        content: "A shirt costs $80. It is on sale for 10% off. What is the sale price?"
+        content: "What is 389 + 858?"
 
-  - id: "unit-conversion"
+  - id: "num-s-multiply"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "1932"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is 23 times 84?"
+
+  - id: "num-s-divide"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "37"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is 1221 divided by 33?"
+
+  - id: "num-s-km-to-miles"
     category: reasoning
     difficulty: easy
     answer_type: numeric
@@ -62,20 +91,342 @@ prompts:
       - role: user
         content: "How many kilometers is 5000 meters?"
 
-  # --- Factual / shallow ---
-  - id: "capital-france"
+  - id: "num-s-celsius"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, units]
+    expected_answer: "212"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is 100 degrees Celsius in Fahrenheit?"
+
+  - id: "num-s-hours"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, units]
+    expected_answer: "180"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "How many minutes are in 3 hours?"
+
+  - id: "num-s-square"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "169"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is 13 squared?"
+
+  - id: "num-s-sqrt"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "12"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is the square root of 144?"
+
+  - id: "num-s-tip"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "6.75"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A meal costs $45. What is a 15% tip?"
+
+  # =========================================================================
+  # NUMERIC — MEDIUM (word problems, multi-step, algebra)
+  # =========================================================================
+
+  - id: "num-m-discount"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, arithmetic]
+    expected_answer: "72"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A shirt costs $80. It is on sale for 10% off. What is the sale price?"
+
+  - id: "num-m-sequence-fib"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, patterns]
+    expected_answer: "21"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "What is the next number in the sequence: 1, 1, 2, 3, 5, 8, 13, ?"
+
+  - id: "num-m-average"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, statistics]
+    expected_answer: "82"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A student scored 78, 85, 92, 73, and 82 on five tests. What is their average score?"
+
+  - id: "num-m-speed-time"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, word-problem]
+    expected_answer: "100"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          A train travels at 60 km/h for the first half of a journey
+          and 90 km/h for the second half. If the total distance is
+          300 km, how many minutes does it take for the second half?
+
+  - id: "num-m-compound"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, finance]
+    expected_answer: "1125"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          You invest $1000 at 5% annual simple interest.
+          How much do you have after 2 years and 6 months?
+
+  - id: "num-m-area-rect"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, geometry]
+    expected_answer: "36"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A rectangle has a perimeter of 30 cm and one side is 12 cm. What is its area in square cm?"
+
+  - id: "num-m-profit"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, word-problem]
+    expected_answer: "25"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A shopkeeper buys an item for $60 and sells it for $75. What is the profit percentage?"
+
+  - id: "num-m-ratio"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, ratios]
+    expected_answer: "18"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "Two numbers are in the ratio 2:3. If the smaller number is 12, what is the larger number?"
+
+  - id: "num-m-age"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, algebra]
+    expected_answer: "7"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          A father is 3 times as old as his son. In 7 years, the father will
+          be twice as old as the son. How old is the son now?
+
+  - id: "num-m-workers"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, word-problem]
+    expected_answer: "3"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "If 6 workers can build a wall in 8 days, how many days would 16 workers take?"
+
+  # =========================================================================
+  # NUMERIC — DEEP (multi-step, probability, harder math)
+  # =========================================================================
+
+  - id: "num-d-probability-dice"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, probability]
+    expected_answer: "0.1667"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: >
+          You roll two fair six-sided dice. What is the probability
+          that their sum is 7? Express as a decimal rounded to 4 places.
+
+  - id: "num-d-combinations"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, combinatorics]
+    expected_answer: "10"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "How many ways can you choose 3 items from a set of 5? (combinations, not permutations)"
+
+  - id: "num-d-quadratic"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, algebra]
+    expected_answer: "5"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is the positive root of x^2 - 3x - 10 = 0?"
+
+  - id: "num-d-gcd"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, number-theory]
+    expected_answer: "12"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is the greatest common divisor of 84 and 132?"
+
+  - id: "num-d-triangle-area"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, geometry]
+    expected_answer: "24"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A triangle has vertices at (0,0), (8,0), and (4,6). What is its area?"
+
+  - id: "num-d-modular"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, number-theory]
+    expected_answer: "2"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is the remainder when 2^10 is divided by 7?"
+
+  - id: "num-d-series-sum"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, series]
+    expected_answer: "5050"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the sum of all integers from 1 to 100?"
+
+  - id: "num-d-rates"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, word-problem]
+    expected_answer: "24"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          Pipe A fills a tank in 40 minutes. Pipe B fills it in 60 minutes.
+          How many minutes to fill the tank with both pipes open?
+
+  - id: "num-d-exponent"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, arithmetic]
+    expected_answer: "3"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "If 2^x = 256 and 2^y = 32, what is x - y?"
+
+  - id: "num-d-permutation"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, combinatorics]
+    expected_answer: "120"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "How many distinct ways can you arrange the letters in the word ABCDE?"
+
+  # =========================================================================
+  # FACTUAL — SHALLOW (direct recall)
+  # =========================================================================
+
+  - id: "fact-s-capital-france"
     category: reasoning
     difficulty: easy
     answer_type: factual
     reasoning_depth: shallow
-    tags: [geography, trivia]
+    tags: [geography]
     expected_answer: "Paris"
     contamination_risk: high
     messages:
       - role: user
         content: "What is the capital of France?"
 
-  - id: "boiling-point"
+  - id: "fact-s-boiling-point"
     category: reasoning
     difficulty: easy
     answer_type: numeric
@@ -87,36 +438,295 @@ prompts:
       - role: user
         content: "At what temperature in Celsius does water boil at sea level?"
 
-  # --- Reasoning / medium ---
-  - id: "logic-sequence"
+  - id: "fact-s-planet-largest"
+    category: reasoning
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, astronomy]
+    expected_answer: "Jupiter"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the largest planet in our solar system?"
+
+  - id: "fact-s-element-symbol"
+    category: reasoning
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, chemistry]
+    expected_answer: "Au"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the chemical symbol for gold?"
+
+  - id: "fact-s-speed-of-light"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [science, physics]
+    expected_answer: "300000"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the approximate speed of light in km/s? Round to the nearest thousand."
+
+  - id: "fact-s-continent-count"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [geography]
+    expected_answer: "7"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "How many continents are there on Earth?"
+
+  - id: "fact-s-dna-bases"
+    category: reasoning
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, biology]
+    expected_answer: "4"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "How many distinct nucleotide bases make up DNA?"
+
+  - id: "fact-s-water-formula"
+    category: reasoning
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, chemistry]
+    expected_answer: "H2O"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the chemical formula for water?"
+
+  - id: "fact-s-earth-moon"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [science, astronomy]
+    expected_answer: "1"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "How many natural moons does Earth have?"
+
+  - id: "fact-s-tcp-port-http"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [computing, networking]
+    expected_answer: "80"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the default TCP port for HTTP?"
+
+  # =========================================================================
+  # FACTUAL — MEDIUM (requires domain knowledge or comparison)
+  # =========================================================================
+
+  - id: "fact-m-sorting-best"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: medium
+    tags: [cs, algorithms]
+    expected_answer: "O(n log n)"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the average time complexity of merge sort?"
+
+  - id: "fact-m-http-status"
     category: reasoning
     difficulty: medium
     answer_type: numeric
+    reasoning_depth: shallow
+    tags: [computing, http]
+    expected_answer: "404"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What HTTP status code means 'Not Found'?"
+
+  - id: "fact-m-big-o-binary"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
     reasoning_depth: medium
-    tags: [logic, patterns]
-    expected_answer: "21"
+    tags: [cs, algorithms]
+    expected_answer: "O(log n)"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the time complexity of binary search?"
+
+  - id: "fact-m-osi-layers"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [computing, networking]
+    expected_answer: "7"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "How many layers are in the OSI networking model?"
+
+  - id: "fact-m-electron-charge"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, physics]
+    expected_answer: "negative"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Is the charge of an electron positive or negative?"
+
+  - id: "fact-m-mitochondria"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, biology]
+    expected_answer: "ATP"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What molecule does the mitochondria primarily produce as cellular energy currency?"
+
+  - id: "fact-m-python-mutable"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: medium
+    tags: [computing, python]
+    expected_answer: "list"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "In Python, which built-in sequence type is mutable: list or tuple?"
+
+  - id: "fact-m-acid-ph"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [science, chemistry]
+    expected_answer: "7"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What pH value is considered neutral?"
+
+  - id: "fact-m-rest-idempotent"
+    category: reasoning
+    difficulty: medium
+    answer_type: factual
+    reasoning_depth: medium
+    tags: [computing, http]
+    expected_answer: "PUT"
     contamination_risk: medium
     messages:
       - role: user
-        content: "What is the next number in the sequence: 1, 1, 2, 3, 5, 8, 13, ?"
+        content: "Which HTTP method is idempotent and used to update or create a resource at a specific URL: POST or PUT?"
 
-  - id: "word-problem"
+  - id: "fact-m-sql-join-type"
     category: reasoning
     difficulty: medium
-    answer_type: numeric
+    answer_type: factual
     reasoning_depth: medium
-    tags: [math, word-problem]
-    expected_answer: "45"
-    contamination_risk: low
+    tags: [computing, databases]
+    expected_answer: "INNER JOIN"
+    contamination_risk: high
     messages:
       - role: user
-        content: >
-          A train travels at 60 km/h for the first half of a journey
-          and 90 km/h for the second half. If the total distance is
-          300 km, how many minutes does it take for the second half?
+        content: "What type of SQL JOIN returns only rows that have matching values in both tables?"
 
-  # --- Coding / medium ---
-  - id: "code-reverse-string"
+  # =========================================================================
+  # CODE — EASY (simple functions)
+  # =========================================================================
+
+  - id: "code-e-max-list"
+    category: coding
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    tags: [python, functions]
+    expected_answer: "def find_max"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called find_max that takes a list of numbers and returns the largest one without using the built-in max function."
+
+  - id: "code-e-is-even"
+    category: coding
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    tags: [python, functions]
+    expected_answer: "def is_even"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called is_even that returns True if a number is even, False otherwise."
+
+  - id: "code-e-count-vowels"
+    category: coding
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    tags: [python, strings]
+    expected_answer: "def count_vowels"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called count_vowels that counts the number of vowels (a, e, i, o, u) in a string. Case-insensitive."
+
+  - id: "code-e-celsius-to-f"
+    category: coding
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    tags: [python, functions]
+    expected_answer: "def celsius_to_fahrenheit"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called celsius_to_fahrenheit that converts a Celsius temperature to Fahrenheit."
+
+  - id: "code-e-sum-list"
+    category: coding
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    tags: [python, functions]
+    expected_answer: "def sum_list"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called sum_list that takes a list of numbers and returns their sum without using the built-in sum function."
+
+  # =========================================================================
+  # CODE — MEDIUM (algorithms, data structures)
+  # =========================================================================
+
+  - id: "code-m-reverse-string"
     category: coding
     difficulty: medium
     answer_type: code
@@ -126,25 +736,218 @@ prompts:
     contamination_risk: high
     messages:
       - role: user
-        content: "Write a Python function called `reverse` that reverses a string without using slicing or built-in reverse methods."
+        content: "Write a Python function called reverse that reverses a string without using slicing or built-in reverse methods."
 
-  # --- Reasoning / deep ---
-  - id: "probability-dice"
-    category: reasoning
-    difficulty: hard
-    answer_type: numeric
-    reasoning_depth: deep
-    tags: [math, probability]
-    expected_answer: "0.5"
+  - id: "code-m-binary-search"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, algorithms]
+    expected_answer: "def binary_search"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called binary_search that takes a sorted list and a target value, returns the index if found or -1 if not."
+
+  - id: "code-m-fibonacci"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, algorithms]
+    expected_answer: "def fibonacci"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called fibonacci that returns the nth Fibonacci number. fibonacci(0)=0, fibonacci(1)=1."
+
+  - id: "code-m-palindrome"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, strings]
+    expected_answer: "def is_palindrome"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called is_palindrome that checks if a string is a palindrome, ignoring case and non-alphanumeric characters."
+
+  - id: "code-m-flatten"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, recursion]
+    expected_answer: "def flatten"
     contamination_risk: medium
     messages:
       - role: user
-        content: >
-          You roll two fair six-sided dice. What is the probability
-          that their sum is 7? Express as a decimal.
+        content: "Write a Python function called flatten that takes a nested list (e.g. [1, [2, [3, 4]], 5]) and returns a flat list [1, 2, 3, 4, 5]."
 
-  # --- Open-ended (no expected_answer) ---
-  - id: "explain-recursion"
+  - id: "code-m-two-sum"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, algorithms]
+    expected_answer: "def two_sum"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called two_sum that takes a list of integers and a target, returns indices of two numbers that add up to target."
+
+  - id: "code-m-anagram"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, strings]
+    expected_answer: "def is_anagram"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called is_anagram that checks if two strings are anagrams of each other (ignoring case and spaces)."
+
+  - id: "code-m-matrix-transpose"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, matrices]
+    expected_answer: "def transpose"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called transpose that takes a 2D list (matrix) and returns its transpose."
+
+  - id: "code-m-merge-sorted"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, algorithms]
+    expected_answer: "def merge_sorted"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called merge_sorted that merges two sorted lists into one sorted list."
+
+  - id: "code-m-remove-duplicates"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, lists]
+    expected_answer: "def remove_duplicates"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called remove_duplicates that removes duplicates from a list while preserving order."
+
+  # =========================================================================
+  # CODE — HARD (complex algorithms, design)
+  # =========================================================================
+
+  - id: "code-h-lru-cache"
+    category: coding
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    tags: [python, data-structures]
+    expected_answer: "class LRUCache"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Implement an LRUCache class in Python with get(key) and put(key, value) methods, both O(1). Initialize with a capacity."
+
+  - id: "code-h-trie"
+    category: coding
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    tags: [python, data-structures]
+    expected_answer: "class Trie"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Implement a Trie class in Python with insert(word), search(word), and starts_with(prefix) methods."
+
+  - id: "code-h-mergesort"
+    category: coding
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    tags: [python, algorithms]
+    expected_answer: "def merge_sort"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Implement merge sort in Python as a function called merge_sort that sorts a list in ascending order."
+
+  - id: "code-h-graph-bfs"
+    category: coding
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    tags: [python, algorithms, graphs]
+    expected_answer: "def bfs"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called bfs that performs breadth-first search on a graph represented as an adjacency list dict. Return the list of visited nodes starting from a given node."
+
+  - id: "code-h-balanced-parens"
+    category: coding
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    tags: [python, algorithms]
+    expected_answer: "def is_balanced"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Write a Python function called is_balanced that checks if a string of brackets ()[]{}  is properly balanced."
+
+  # =========================================================================
+  # EXPLANATION — varying depth (no expected_answer, needs LLM eval)
+  # =========================================================================
+
+  - id: "expl-s-variable"
+    category: reasoning
+    difficulty: easy
+    answer_type: explanation
+    reasoning_depth: shallow
+    tags: [cs, concepts]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is a variable in programming?"
+
+  - id: "expl-s-boolean"
+    category: reasoning
+    difficulty: easy
+    answer_type: explanation
+    reasoning_depth: shallow
+    tags: [cs, concepts]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is a boolean value?"
+
+  - id: "expl-s-http"
+    category: reasoning
+    difficulty: easy
+    answer_type: explanation
+    reasoning_depth: shallow
+    tags: [computing, networking]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What does HTTP stand for and what is it used for?"
+
+  - id: "expl-m-recursion"
     category: reasoning
     difficulty: medium
     answer_type: explanation
@@ -154,3 +957,213 @@ prompts:
     messages:
       - role: user
         content: "Explain recursion to someone who knows basic programming but has never encountered the concept."
+
+  - id: "expl-m-hash-table"
+    category: reasoning
+    difficulty: medium
+    answer_type: explanation
+    reasoning_depth: medium
+    tags: [cs, data-structures]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain how a hash table works and why lookups are typically O(1)."
+
+  - id: "expl-m-sql-vs-nosql"
+    category: reasoning
+    difficulty: medium
+    answer_type: explanation
+    reasoning_depth: medium
+    tags: [computing, databases]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain the key differences between SQL and NoSQL databases and when you would choose each."
+
+  - id: "expl-m-tcp-vs-udp"
+    category: reasoning
+    difficulty: medium
+    answer_type: explanation
+    reasoning_depth: medium
+    tags: [computing, networking]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain the difference between TCP and UDP. When would you use each?"
+
+  - id: "expl-m-acid"
+    category: reasoning
+    difficulty: medium
+    answer_type: explanation
+    reasoning_depth: medium
+    tags: [computing, databases]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain the ACID properties of database transactions."
+
+  - id: "expl-d-cap-theorem"
+    category: reasoning
+    difficulty: hard
+    answer_type: explanation
+    reasoning_depth: deep
+    tags: [computing, distributed]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain the CAP theorem in distributed systems. Give a concrete example of the tradeoff."
+
+  - id: "expl-d-gc-algorithms"
+    category: reasoning
+    difficulty: hard
+    answer_type: explanation
+    reasoning_depth: deep
+    tags: [cs, memory]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Compare mark-and-sweep, reference counting, and generational garbage collection. What are the tradeoffs?"
+
+  - id: "expl-d-consensus"
+    category: reasoning
+    difficulty: hard
+    answer_type: explanation
+    reasoning_depth: deep
+    tags: [computing, distributed]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Explain the Raft consensus algorithm at a high level. Why is it considered simpler than Paxos?"
+
+  - id: "expl-d-cache-coherence"
+    category: reasoning
+    difficulty: hard
+    answer_type: explanation
+    reasoning_depth: deep
+    tags: [cs, hardware]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "What is the cache coherence problem in multiprocessor systems and how does the MESI protocol address it?"
+
+  # =========================================================================
+  # OPEN-ENDED — design, opinion, creative (no expected_answer)
+  # =========================================================================
+
+  - id: "open-e-name-function"
+    category: cross-domain
+    difficulty: easy
+    answer_type: open-ended
+    reasoning_depth: shallow
+    tags: [coding, naming]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "Suggest a good function name for a function that checks if a user's subscription has expired."
+
+  - id: "open-e-error-message"
+    category: cross-domain
+    difficulty: easy
+    answer_type: open-ended
+    reasoning_depth: shallow
+    tags: [ux, writing]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "Write a user-friendly error message for when a file upload fails because the file is too large (max 10MB)."
+
+  - id: "open-m-rest-api"
+    category: cross-domain
+    difficulty: medium
+    answer_type: open-ended
+    reasoning_depth: medium
+    tags: [architecture, http]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Design the REST API endpoints for a simple todo list application. List the routes, HTTP methods, and what each returns."
+
+  - id: "open-m-db-schema"
+    category: cross-domain
+    difficulty: medium
+    answer_type: open-ended
+    reasoning_depth: medium
+    tags: [databases, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Design a database schema for a basic blog platform with users, posts, and comments. Show the tables and their relationships."
+
+  - id: "open-m-refactor"
+    category: coding
+    difficulty: medium
+    answer_type: open-ended
+    reasoning_depth: medium
+    tags: [python, refactoring]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          This function is hard to read. Suggest how to refactor it:
+          def f(x):
+            r = []
+            for i in x:
+              if i > 0:
+                if i % 2 == 0:
+                  r.append(i * 2)
+            return r
+
+  - id: "open-m-tradeoff"
+    category: cross-domain
+    difficulty: medium
+    answer_type: open-ended
+    reasoning_depth: medium
+    tags: [architecture, design]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "You need to store user session data. Compare the tradeoffs of using cookies vs server-side sessions vs JWTs."
+
+  - id: "open-h-system-design"
+    category: cross-domain
+    difficulty: hard
+    answer_type: open-ended
+    reasoning_depth: deep
+    tags: [architecture, design]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "Design a URL shortener service. Cover the API, storage, redirect mechanism, and how you would handle high traffic."
+
+  - id: "open-h-migration"
+    category: cross-domain
+    difficulty: hard
+    answer_type: open-ended
+    reasoning_depth: deep
+    tags: [databases, operations]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "You need to add a NOT NULL column to a production database table with 50 million rows. Describe your migration strategy to avoid downtime."
+
+  - id: "open-h-debugging"
+    category: cross-domain
+    difficulty: hard
+    answer_type: open-ended
+    reasoning_depth: deep
+    tags: [debugging, operations]
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A web application is intermittently returning 502 errors. Describe your systematic debugging approach."
+
+  - id: "open-h-security"
+    category: cross-domain
+    difficulty: hard
+    answer_type: open-ended
+    reasoning_depth: deep
+    tags: [security, architecture]
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "What are the key security considerations when designing an authentication system for a REST API? Cover at least 5 concerns."
