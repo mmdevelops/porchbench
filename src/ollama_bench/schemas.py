@@ -140,6 +140,7 @@ class SystemInfo(BaseModel):
     gpu: str = ""
     vram_gb: float | None = None
     os: str = ""
+    kv_cache_type: str | None = None  # f16, q8_0, q4_0, tq3, tq4 — from OLLAMA_KV_CACHE_TYPE
 
 
 class RunMetadata(BaseModel):
@@ -210,6 +211,11 @@ class PromptResult(BaseModel):
     request: RequestData
     response: ResponseData
     metrics: PromptMetrics = Field(default_factory=PromptMetrics)
+
+    # --- Routing discovery extensions ---
+    strategy: str | None = None  # strategy name when run via discover-routes
+    correct: bool | None = None  # automated correctness check result
+    expected_answer: str | None = None  # ground truth copied from prompt for analysis
 
 
 class RunSummary(BaseModel):
@@ -293,3 +299,125 @@ class Scorecard(BaseModel):
     evaluation: EvaluationMetadata
     scores: list[PromptScore]
     aggregate: AggregateScores
+
+
+# ---------------------------------------------------------------------------
+# Routing discovery schemas (DESIGN-ROUTING.md)
+# ---------------------------------------------------------------------------
+
+
+class RoutingCell(BaseModel):
+    """One (model, prompt, strategy) observation in the routing matrix."""
+
+    model: str
+    prompt_id: str
+    strategy: str
+    correct: bool | None = None
+    tokens_generated: int | None = None
+    latency_ms: float | None = None
+    tokens_per_second: float | None = None
+
+
+class DefaultComparison(BaseModel):
+    """How a route compares to the default (largest model, universal strategy)."""
+
+    default_model: str
+    default_strategy: str = "universal"
+    default_correct: bool | None = None
+    default_tokens: int | None = None
+    quality_delta_pp: float | None = None  # percentage points
+    token_savings_pct: float | None = None
+
+
+class BestRoute(BaseModel):
+    """Best (model, strategy) for a single problem."""
+
+    prompt_id: str
+    best_model: str
+    best_strategy: str
+    correct: bool | None = None
+    tokens: int | None = None
+    vs_default: DefaultComparison | None = None
+
+
+class RoutingPattern(BaseModel):
+    """A discovered pattern across problem groups."""
+
+    description: str
+    affected_problems: list[str]
+    recommended_route: dict[str, str]  # e.g. {"model_size": "<=7B", "strategy": "direct"}
+    confidence: str  # high, medium, low
+    evidence_count: int
+
+
+class RoutingHeadline(BaseModel):
+    """Top-level summary of routing discovery findings."""
+
+    inverse_scaling_detected: bool
+    inverse_scaling_rate: float  # fraction of problems showing the effect
+    problems_where_routing_helps: int
+    problems_total: int
+    max_quality_gain_pp: float | None = None
+    max_cost_reduction_pct: float | None = None
+    routing_worthwhile: bool
+
+
+class RoutingVerdict(BaseModel):
+    routing_recommended: bool
+    estimated_quality_improvement_pp: float | None = None
+    estimated_token_savings_pct: float | None = None
+    caveat: str = ""
+
+
+class RoutingAnalysis(BaseModel):
+    """Complete routing analysis output. Serialized to results/ as JSON."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    models_tested: list[str]
+    strategies_tested: list[str]
+    headline: RoutingHeadline
+    best_route_per_problem: list[BestRoute]
+    patterns: list[RoutingPattern]
+    verdict: RoutingVerdict
+    matrix: list[RoutingCell] = []  # raw data backing the analysis
+
+
+# ---------------------------------------------------------------------------
+# System profile schemas (DESIGN-ROUTING.md profiler)
+# ---------------------------------------------------------------------------
+
+
+class ModelProfile(BaseModel):
+    """Performance profile for a single model."""
+
+    vram_bytes: int | None = None
+    vram_gb: float | None = None
+    load_time_s: float | None = None
+    tokens_per_second: float | None = None
+
+
+class SwapMeasurement(BaseModel):
+    from_model: str
+    to_model: str
+    swap_time_s: float
+
+
+class CoexistenceTest(BaseModel):
+    models: list[str]
+    fits: bool
+    combined_vram_gb: float | None = None
+    headroom_gb: float | None = None
+
+
+class SystemProfile(BaseModel):
+    """Complete system profile for routing cost estimation."""
+
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    gpu: str = ""
+    vram_total_gb: float | None = None
+    ollama_version: str = ""
+    models: dict[str, ModelProfile] = {}
+    swap_times: list[SwapMeasurement] = []
+    coexistence: list[CoexistenceTest] = []
+    recommended_hot_tier: list[str] = []
+    cold_tier: list[str] = []

@@ -231,5 +231,157 @@ def compare(
     print_comparison_table(runs, scorecards)
 
 
+@app.command("discover-routes")
+def discover_routes(
+    suite_path: Annotated[
+        Path,
+        typer.Option("--suite", "-s", help="Path to a routing discovery suite YAML."),
+    ],
+    models: Annotated[
+        list[str],
+        typer.Option("--model", "-m", help="Ollama model name(s). Repeat for each."),
+    ],
+    host: Annotated[
+        Optional[str],
+        typer.Option("--host", "-H", help="Ollama server URL."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
+    ] = Path("results"),
+) -> None:
+    """Run routing discovery: every prompt x strategy x model."""
+    from ollama_bench.routing import count_discovery_runs, run_discovery
+
+    try:
+        suite = load_suite(suite_path)
+    except Exception as exc:
+        console.print(f"[red]Failed to load suite: {exc}[/red]")
+        raise typer.Exit(code=1)
+
+    suite_ref = make_suite_reference(suite_path, suite)
+    total = count_discovery_runs(suite, models)
+
+    console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
+    console.print(f"Prompts: {len(suite.prompts)}")
+    console.print(f"Strategies: {len(suite.strategies) or 1}")
+    console.print(f"Models: {', '.join(models)}")
+    console.print(f"Total runs: [bold]{total}[/bold]")
+    console.print()
+
+    results = asyncio.run(
+        run_discovery(suite, suite_ref, models, host=host, output_dir=output_dir)
+    )
+
+    # Print summary per model
+    for run in results:
+        correct_count = sum(1 for r in run.results if r.correct is True)
+        total_checked = sum(1 for r in run.results if r.correct is not None)
+        console.print(
+            f"\n[bold]{run.run.model.name}[/bold]: "
+            f"{correct_count}/{total_checked} correct, "
+            f"{run.summary.avg_tokens_per_second or 0:.1f} avg tok/s"
+        )
+
+
+@app.command("analyze-routes")
+def analyze_routes_cmd(
+    result_paths: Annotated[
+        list[Path],
+        typer.Option("--result", "-r", help="Routing discovery result JSON files."),
+    ],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for analysis output."),
+    ] = Path("results"),
+    summary_only: Annotated[
+        bool,
+        typer.Option("--summary", help="Print summary only, don't write full analysis."),
+    ] = False,
+) -> None:
+    """Analyze routing discovery results and produce a routing analysis."""
+    from ollama_bench.routing import analyze_routes
+
+    runs = []
+    for p in result_paths:
+        try:
+            data = p.read_text(encoding="utf-8")
+            runs.append(RunResult.model_validate_json(data))
+        except Exception as exc:
+            console.print(f"[red]Failed to load {p}: {exc}[/red]")
+            raise typer.Exit(code=1)
+
+    analysis = analyze_routes(runs)
+
+    # Print headline
+    h = analysis.headline
+    console.print("\n[bold]Routing Analysis[/bold]")
+    console.print(f"Models: {', '.join(analysis.models_tested)}")
+    console.print(f"Strategies: {', '.join(analysis.strategies_tested)}")
+    console.print(f"Problems: {h.problems_total}")
+    console.print()
+
+    worthwhile_str = (
+        "[green]YES[/green]" if h.routing_worthwhile else "[yellow]NO[/yellow]"
+    )
+    console.print(f"Routing worthwhile: {worthwhile_str}")
+    console.print(f"Inverse scaling detected: {h.inverse_scaling_detected} (rate: {h.inverse_scaling_rate:.1%})")
+    console.print(f"Problems where routing helps: {h.problems_where_routing_helps}/{h.problems_total}")
+
+    if h.max_quality_gain_pp is not None:
+        console.print(f"Max quality gain: {h.max_quality_gain_pp:+.1f}pp")
+    if h.max_cost_reduction_pct is not None:
+        console.print(f"Max token savings: {h.max_cost_reduction_pct:.1f}%")
+
+    # Print patterns
+    if analysis.patterns:
+        console.print("\n[bold]Patterns[/bold]")
+        for p in analysis.patterns:
+            console.print(f"  [{p.confidence}] {p.description} ({p.evidence_count} problems)")
+
+    # Print verdict
+    v = analysis.verdict
+    console.print(f"\n[bold]Verdict[/bold]: {'Route' if v.routing_recommended else 'Use largest model'}")
+    if v.estimated_quality_improvement_pp is not None:
+        console.print(f"  Est. quality improvement: {v.estimated_quality_improvement_pp:+.1f}pp")
+    if v.estimated_token_savings_pct is not None:
+        console.print(f"  Est. token savings: {v.estimated_token_savings_pct:.1f}%")
+    console.print(f"  Caveat: {v.caveat}")
+
+    if not summary_only:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        ts = analysis.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
+        path = output_dir / f"{ts}_routing-analysis.json"
+        path.write_text(analysis.model_dump_json(indent=2), encoding="utf-8")
+        console.print(f"\n[green]Analysis written to {path}[/green]")
+
+
+@app.command()
+def profile(
+    models: Annotated[
+        list[str],
+        typer.Option("--model", "-m", help="Ollama model name(s) to profile."),
+    ],
+    host: Annotated[
+        Optional[str],
+        typer.Option("--host", "-H", help="Ollama server URL."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for profile output."),
+    ] = Path("results"),
+) -> None:
+    """Profile local system: model load times, VRAM, swap costs, co-residency."""
+    from ollama_bench.profiler import profile_system, write_profile, print_profile_summary
+
+    sys_profile = asyncio.run(profile_system(models, host=host))
+
+    path = write_profile(sys_profile, output_dir)
+    console.print(f"\n[green]Profile written to {path}[/green]\n")
+
+    print_profile_summary(sys_profile)
+
+
 if __name__ == "__main__":
     app()

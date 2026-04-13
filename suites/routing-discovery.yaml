@@ -1,0 +1,156 @@
+suite:
+  name: "Routing Discovery"
+  version: "1.0"
+  description: >
+    Systematic exploration of prompt strategy x model scale interactions.
+    Run across your full model roster to discover routing opportunities.
+
+defaults:
+  options:
+    temperature: 0
+    seed: 42
+    top_p: 1
+    num_predict: 2048
+    num_ctx: 4096
+
+strategies:
+  universal: {}
+  brevity:
+    system_message: "Answer concisely in under 50 words. Be direct."
+  direct:
+    system_message: "Respond with only the final answer. No explanation."
+  cot:
+    system_message: "Think step by step, then give your final answer."
+  structured:
+    system_message: 'Respond in JSON format: {"answer": "...", "reasoning": "..."}'
+
+prompts:
+  # --- Numeric / shallow ---
+  - id: "math-percentage"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "36"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "What is 15% of 240?"
+
+  - id: "math-discount"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, arithmetic]
+    expected_answer: "72"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "A shirt costs $80. It is on sale for 10% off. What is the sale price?"
+
+  - id: "unit-conversion"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [math, units]
+    expected_answer: "5"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: "How many kilometers is 5000 meters?"
+
+  # --- Factual / shallow ---
+  - id: "capital-france"
+    category: reasoning
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    tags: [geography, trivia]
+    expected_answer: "Paris"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "What is the capital of France?"
+
+  - id: "boiling-point"
+    category: reasoning
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    tags: [science, chemistry]
+    expected_answer: "100"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "At what temperature in Celsius does water boil at sea level?"
+
+  # --- Reasoning / medium ---
+  - id: "logic-sequence"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [logic, patterns]
+    expected_answer: "21"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: "What is the next number in the sequence: 1, 1, 2, 3, 5, 8, 13, ?"
+
+  - id: "word-problem"
+    category: reasoning
+    difficulty: medium
+    answer_type: numeric
+    reasoning_depth: medium
+    tags: [math, word-problem]
+    expected_answer: "45"
+    contamination_risk: low
+    messages:
+      - role: user
+        content: >
+          A train travels at 60 km/h for the first half of a journey
+          and 90 km/h for the second half. If the total distance is
+          300 km, how many minutes does it take for the second half?
+
+  # --- Coding / medium ---
+  - id: "code-reverse-string"
+    category: coding
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    tags: [python, strings]
+    expected_answer: "def reverse"
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Write a Python function called `reverse` that reverses a string without using slicing or built-in reverse methods."
+
+  # --- Reasoning / deep ---
+  - id: "probability-dice"
+    category: reasoning
+    difficulty: hard
+    answer_type: numeric
+    reasoning_depth: deep
+    tags: [math, probability]
+    expected_answer: "0.5"
+    contamination_risk: medium
+    messages:
+      - role: user
+        content: >
+          You roll two fair six-sided dice. What is the probability
+          that their sum is 7? Express as a decimal.
+
+  # --- Open-ended (no expected_answer) ---
+  - id: "explain-recursion"
+    category: reasoning
+    difficulty: medium
+    answer_type: explanation
+    reasoning_depth: medium
+    tags: [cs, concepts]
+    contamination_risk: high
+    messages:
+      - role: user
+        content: "Explain recursion to someone who knows basic programming but has never encountered the concept."
