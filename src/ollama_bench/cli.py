@@ -142,19 +142,33 @@ def evaluate(
     ] = Path("rubrics/default.yaml"),
     evaluator_model: Annotated[
         str,
-        typer.Option("--evaluator", "-e", help="Frontier model for evaluation."),
-    ] = "claude-sonnet-4-6-20250514",
+        typer.Option("--evaluator", "-e", help="Model to use as judge."),
+    ] = "deepseek-r1:14b",
+    backend: Annotated[
+        str,
+        typer.Option("--backend", "-b", help="Evaluation backend: 'ollama' (default) or 'api'."),
+    ] = "ollama",
+    host: Annotated[
+        Optional[str],
+        typer.Option("--host", "-H", help="Ollama server URL (for ollama backend)."),
+    ] = None,
     output_dir: Annotated[
         Path,
         typer.Option("--output-dir", "-o", help="Directory for scorecard JSON files."),
     ] = Path("scorecards"),
     api_key: Annotated[
         Optional[str],
-        typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Anthropic API key."),
+        typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Anthropic API key (for api backend)."),
     ] = None,
 ) -> None:
-    """Score a run result via a frontier model."""
-    from ollama_bench.evaluator import evaluate_run, load_rubric, write_scorecard
+    """Score a run result using an LLM judge (local Ollama model or Claude API)."""
+    from ollama_bench.evaluator import (
+        AnthropicEvalBackend,
+        OllamaEvalBackend,
+        evaluate_run,
+        load_rubric,
+        write_scorecard,
+    )
 
     # Load inputs
     try:
@@ -170,14 +184,29 @@ def evaluate(
         console.print(f"[red]Failed to load rubric: {exc}[/red]")
         raise typer.Exit(code=1)
 
+    # Create backend
+    if backend == "ollama":
+        eval_backend = OllamaEvalBackend(model=evaluator_model, host=host)
+        backend_label = f"ollama/{evaluator_model}"
+    elif backend == "api":
+        try:
+            eval_backend = AnthropicEvalBackend(model=evaluator_model, api_key=api_key)
+        except ImportError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1)
+        backend_label = f"api/{evaluator_model}"
+    else:
+        console.print(f"[red]Unknown backend: {backend}. Use 'ollama' or 'api'.[/red]")
+        raise typer.Exit(code=1)
+
     console.print(f"Run: [bold]{run_result.run.model.name}[/bold] ({run_result.run.id[:8]})")
     console.print(f"Rubric: {rubric.rubric.name} v{rubric.rubric.version}")
-    console.print(f"Evaluator: {evaluator_model}")
+    console.print(f"Evaluator: {backend_label}")
     console.print(f"Prompts to score: {len(run_result.results)}")
     console.print()
 
     scorecard = asyncio.run(
-        evaluate_run(run_result, rubric, evaluator_model, api_key)
+        evaluate_run(run_result, rubric, eval_backend, evaluator_label=backend_label)
     )
 
     path = write_scorecard(scorecard, output_dir)
