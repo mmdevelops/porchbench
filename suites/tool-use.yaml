@@ -1,0 +1,513 @@
+suite:
+  name: "Tool Use Discovery"
+  version: "1.0"
+  description: >
+    Tool-use benchmarking across three tiers: mechanics (can the model call
+    tools?), multi-step (can it plan and execute?), error recovery (can it
+    adapt?). Includes routing discovery strategies to measure strategy x
+    model interaction on tool-use tasks.
+
+defaults:
+  options:
+    temperature: 0
+    seed: 42
+    top_p: 1
+    num_predict: 2048
+    num_ctx: 8192
+
+strategies:
+  universal: {}
+  cot:
+    system_message: "Think step by step about what tools to use and in what order, then execute your plan."
+  direct:
+    system_message: "Complete the task using the minimum number of tool calls. Do not explain your reasoning."
+  structured:
+    system_message: "Before calling any tools, output your plan as a numbered list. Then execute it."
+
+prompts:
+
+  # =========================================================================
+  # TIER 1: TOOL MECHANICS (can the model call tools correctly?)
+  # Expected: 1-2 tool calls. max_tool_calls: 5
+  # =========================================================================
+
+  # --- Simple single calls ---
+
+  - id: "t1-read-file"
+    category: tool-use
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [file-read, trivial-fixture]
+    setup_files:
+      - path: "data.txt"
+        source: "fixtures/prices-trivial.csv"
+    messages:
+      - role: user
+        content: "Read the file data.txt and tell me how many lines it has (including the header)."
+    expected_outcome:
+      validator: "content_contains"
+      validator_args:
+        response_contains: ["4"]
+
+  - id: "t1-write-file"
+    category: tool-use
+    difficulty: easy
+    answer_type: code
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [file-write, trivial]
+    messages:
+      - role: user
+        content: "Create a file called hello.txt containing the text 'Hello, World!'"
+    expected_outcome:
+      validator: "file_exists"
+      validator_args:
+        path: "hello.txt"
+
+  - id: "t1-execute-simple"
+    category: tool-use
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [code-exec, trivial]
+    messages:
+      - role: user
+        content: "Use Python to calculate 17 * 23 and tell me the result."
+    expected_outcome:
+      validator: "content_contains"
+      validator_args:
+        response_contains: ["391"]
+
+  - id: "t1-read-csv-count"
+    category: tool-use
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [file-read, csv, simple-fixture]
+    setup_files:
+      - path: "prices.csv"
+        source: "fixtures/prices-simple.csv"
+    messages:
+      - role: user
+        content: "Read prices.csv and tell me how many products are in the 'dairy' category."
+    expected_outcome:
+      validator: "content_contains"
+      validator_args:
+        response_contains: ["3"]
+
+  # --- Irrelevance detection ---
+
+  - id: "t1-no-tools-needed"
+    category: tool-use
+    difficulty: easy
+    answer_type: factual
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [irrelevance]
+    messages:
+      - role: user
+        content: "What is the capital of France?"
+    expected_outcome:
+      validator: "content_contains"
+      validator_args:
+        response_contains: ["Paris"]
+
+  - id: "t1-no-tools-math"
+    category: tool-use
+    difficulty: easy
+    answer_type: numeric
+    reasoning_depth: shallow
+    mode: tool-use
+    max_tool_calls: 5
+    tags: [irrelevance]
+    messages:
+      - role: user
+        content: "What is 7 times 8?"
+    expected_outcome:
+      validator: "content_contains"
+      validator_args:
+        response_contains: ["56"]
+
+  # =========================================================================
+  # TIER 2: MULTI-STEP TASKS (can the model plan and execute?)
+  # Expected: 3-5 tool calls. max_tool_calls: 12
+  # =========================================================================
+
+  # --- Read -> Transform -> Write ---
+
+  - id: "t2-sort-csv-trivial"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [csv, sort, trivial-fixture]
+    setup_files:
+      - path: "data.csv"
+        source: "fixtures/prices-trivial.csv"
+    messages:
+      - role: user
+        content: "Read data.csv, sort it by price from lowest to highest, and save the result to sorted.csv."
+    expected_outcome:
+      validator: "csv_sort"
+      validator_args:
+        path: "sorted.csv"
+        sort_column: "price"
+        ascending: true
+        numeric: true
+
+  - id: "t2-sort-csv-simple"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [csv, sort, simple-fixture]
+    setup_files:
+      - path: "prices.csv"
+        source: "fixtures/prices-simple.csv"
+    messages:
+      - role: user
+        content: "Read prices.csv, sort it by price descending, and save to expensive-first.csv."
+    expected_outcome:
+      validator: "csv_sort"
+      validator_args:
+        path: "expensive-first.csv"
+        sort_column: "price"
+        ascending: false
+        numeric: true
+
+  - id: "t2-filter-csv"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [csv, filter, simple-fixture]
+    setup_files:
+      - path: "prices.csv"
+        source: "fixtures/prices-simple.csv"
+    messages:
+      - role: user
+        content: "Read prices.csv and create a new file dairy.csv containing only the rows where category is 'dairy'."
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "csv_row_count"
+            path: "dairy.csv"
+            expected_rows: 3
+          - type: "content_contains"
+            path: "dairy.csv"
+            required_substrings: ["milk", "eggs", "butter"]
+
+  - id: "t2-json-to-csv"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [json, csv, conversion, simple-fixture]
+    setup_files:
+      - path: "sales.json"
+        source: "fixtures/sales-data.json"
+    messages:
+      - role: user
+        content: "Read sales.json and convert it to a CSV file called sales.csv with columns: date, product, quantity, unit_price, region."
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "csv_row_count"
+            path: "sales.csv"
+            expected_rows: 10
+          - type: "content_contains"
+            path: "sales.csv"
+            required_substrings: ["date", "product", "Widget A"]
+
+  - id: "t2-aggregate"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [csv, aggregate, simple-fixture]
+    setup_files:
+      - path: "employees.csv"
+        source: "fixtures/employees.csv"
+    messages:
+      - role: user
+        content: >
+          Read employees.csv and calculate the average salary per department.
+          Write the results to dept_avg.csv with columns: department, avg_salary.
+          Sort by avg_salary descending.
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "file_exists"
+            path: "dept_avg.csv"
+          - type: "csv_sort"
+            path: "dept_avg.csv"
+            sort_column: "avg_salary"
+            ascending: false
+            numeric: true
+          - type: "csv_row_count"
+            path: "dept_avg.csv"
+            expected_rows: 3
+
+  - id: "t2-json-summary"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [json, aggregate, simple-fixture]
+    setup_files:
+      - path: "sales.json"
+        source: "fixtures/sales-data.json"
+    messages:
+      - role: user
+        content: >
+          Read sales.json and create a summary JSON file called summary.json
+          with the total revenue per product (quantity * unit_price).
+          The output should be a JSON object mapping product name to total revenue.
+    expected_outcome:
+      validator: "json_valid"
+      validator_args:
+        path: "summary.json"
+        required_keys: ["Widget A", "Widget B", "Widget C"]
+
+  - id: "t2-count-and-report"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [csv, analysis, realistic-fixture]
+    setup_files:
+      - path: "employees.csv"
+        source: "fixtures/employees.csv"
+    messages:
+      - role: user
+        content: >
+          Read employees.csv and write a report file called report.txt containing:
+          1. Total number of employees
+          2. Number of employees per department
+          3. The highest-paid employee's name and salary
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "file_exists"
+            path: "report.txt"
+          - type: "content_contains"
+            path: "report.txt"
+            required_substrings: ["12", "Engineering", "Henry", "112000"]
+
+  # --- Inspect before acting ---
+
+  - id: "t2-discover-structure"
+    category: tool-use
+    difficulty: medium
+    answer_type: code
+    reasoning_depth: medium
+    mode: tool-use
+    max_tool_calls: 12
+    tags: [exploration, json, simple-fixture]
+    setup_files:
+      - path: "data.json"
+        source: "fixtures/sales-data.json"
+    messages:
+      - role: user
+        content: >
+          There is a file called data.json. I don't know its structure.
+          Read it, figure out what fields it contains, and write a
+          schema description to schema.txt (one line per field with
+          the field name and its data type).
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "file_exists"
+            path: "schema.txt"
+          - type: "content_contains"
+            path: "schema.txt"
+            required_substrings: ["date", "product", "quantity"]
+
+  # =========================================================================
+  # TIER 3: ERROR RECOVERY (can the model adapt?)
+  # Expected: 5-8 tool calls. max_tool_calls: 20
+  # =========================================================================
+
+  - id: "t3-debug-script"
+    category: tool-use
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    mode: tool-use
+    max_tool_calls: 20
+    tags: [debugging, code-fix]
+    setup_files:
+      - path: "buggy.py"
+        source: "fixtures/buggy-script.py"
+    messages:
+      - role: user
+        content: >
+          The file buggy.py has three bugs. Read the file, identify the bugs,
+          fix them, and save the corrected version as fixed.py. Then run
+          fixed.py to verify it works correctly.
+    expected_outcome:
+      validator: "code_output"
+      validator_args:
+        test_code: |
+          import subprocess, sys
+          r = subprocess.run([sys.executable, "fixed.py"], capture_output=True, text=True, timeout=5)
+          assert r.returncode == 0, f"fixed.py failed: {r.stderr}"
+          output = r.stdout.strip()
+          assert "20.0" in output, f"calculate_average wrong: {output}"
+          assert "quick" in output, f"find_longest_word wrong: {output}"
+          assert "3" in output, f"count_occurrences wrong: {output}"
+          print("All checks passed")
+
+  - id: "t3-messy-data-clean"
+    category: tool-use
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    mode: tool-use
+    max_tool_calls: 20
+    tags: [data-cleaning, csv, realistic-fixture]
+    setup_files:
+      - path: "messy.csv"
+        source: "fixtures/messy-data.csv"
+    messages:
+      - role: user
+        content: >
+          Read messy.csv. It has missing values and data quality issues.
+          Clean it by: (1) removing rows where name is empty, (2) filling
+          missing scores with 0, (3) removing rows where email is missing
+          or invalid (must contain @). Save the cleaned data to clean.csv.
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "file_exists"
+            path: "clean.csv"
+          - type: "csv_row_count"
+            path: "clean.csv"
+            min_rows: 4
+
+  - id: "t3-config-fix"
+    category: tool-use
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    mode: tool-use
+    max_tool_calls: 20
+    tags: [json, validation, error-recovery]
+    setup_files:
+      - path: "config.json"
+        source: "fixtures/config-broken.json"
+    messages:
+      - role: user
+        content: >
+          Read config.json. It has values that should be numbers but are
+          stored as strings (some aren't even valid numbers). Fix all
+          numeric fields: port should be int, ttl should be int,
+          max_size should be int (default to 100 if not parseable),
+          max_retries should be int (default to 3 if not parseable).
+          Boolean-like strings ("yes", "true") should become actual
+          booleans. Save the fixed config to fixed_config.json.
+    expected_outcome:
+      validator: "code_output"
+      validator_args:
+        test_code: |
+          import json
+          data = json.loads(open("fixed_config.json").read())
+          assert data["database"]["port"] == 5432, f"port: {data['database']['port']}"
+          assert data["cache"]["ttl"] == 300, f"ttl: {data['cache']['ttl']}"
+          assert data["cache"]["max_size"] == 100, f"max_size: {data['cache']['max_size']}"
+          assert data["features"]["max_retries"] == 3, f"max_retries: {data['features']['max_retries']}"
+          assert data["features"]["dark_mode"] is True, f"dark_mode: {data['features']['dark_mode']}"
+          assert data["features"]["notifications"] is True, f"notifications: {data['features']['notifications']}"
+          print("All config checks passed")
+
+  - id: "t3-multi-format"
+    category: tool-use
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    mode: tool-use
+    max_tool_calls: 20
+    tags: [conversion, multi-step, realistic-fixture]
+    setup_files:
+      - path: "employees.csv"
+        source: "fixtures/employees.csv"
+    messages:
+      - role: user
+        content: >
+          Read employees.csv. Create three output files:
+          1. engineering.json - JSON array of engineering department employees
+          2. high_earners.csv - CSV of employees earning over $90,000
+          3. stats.txt - A text file with: total employees, average salary,
+             and the department with the most employees
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "json_valid"
+            path: "engineering.json"
+          - type: "file_exists"
+            path: "high_earners.csv"
+          - type: "content_contains"
+            path: "stats.txt"
+            required_substrings: ["12", "Engineering"]
+
+  - id: "t3-pipeline"
+    category: tool-use
+    difficulty: hard
+    answer_type: code
+    reasoning_depth: deep
+    mode: tool-use
+    max_tool_calls: 20
+    tags: [pipeline, multi-step, realistic-fixture]
+    setup_files:
+      - path: "sales.json"
+        source: "fixtures/sales-data.json"
+    messages:
+      - role: user
+        content: >
+          Build a data pipeline:
+          1. Read sales.json
+          2. Calculate total_revenue (quantity * unit_price) for each record
+          3. Group by region and calculate total revenue per region
+          4. Save the region totals to region_revenue.csv sorted by revenue descending
+          5. Save the top region name to winner.txt
+    expected_outcome:
+      validator: "composite"
+      validator_args:
+        validators:
+          - type: "csv_sort"
+            path: "region_revenue.csv"
+            sort_column: "revenue"
+            ascending: false
+            numeric: true
+          - type: "file_exists"
+            path: "winner.txt"

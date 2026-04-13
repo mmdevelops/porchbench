@@ -1,0 +1,11 @@
+id,name,email,age,score
+1,Alice,alice@example.com,28,95.5
+2,Bob,,35,
+3,Carol,carol@test.org,22,88.0
+4,,dave@example.com,41,72.3
+5,Eve,eve@example.com,,91.0
+6,Frank,not-an-email,29,85.5
+7,Grace,grace@example.com,33,
+8,Henry,henry@test.org,27,90.0
+9,,iris@example.com,31,76.5
+10,Jack,jack@example.com,44,82.0

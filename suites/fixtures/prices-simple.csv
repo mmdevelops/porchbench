@@ -1,0 +1,16 @@
+name,price,category
+apple,1.50,fruit
+banana,0.75,fruit
+cherry,3.00,fruit
+milk,4.25,dairy
+eggs,5.99,dairy
+bread,3.50,bakery
+butter,4.75,dairy
+flour,2.25,bakery
+rice,1.99,grain
+pasta,2.50,grain
+chicken,8.99,meat
+beef,12.50,meat
+salmon,15.00,seafood
+tomato,2.00,produce
+lettuce,1.75,produce

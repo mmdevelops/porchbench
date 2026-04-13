@@ -1,0 +1,16 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": "5432",
+    "name": "myapp"
+  },
+  "cache": {
+    "ttl": "300",
+    "max_size": "not_a_number"
+  },
+  "features": {
+    "dark_mode": "yes",
+    "notifications": "true",
+    "max_retries": "three"
+  }
+}
