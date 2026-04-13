@@ -8,6 +8,7 @@ Errors on individual prompts are captured without aborting the run.
 from __future__ import annotations
 
 import json
+import os
 import platform
 import time
 from datetime import datetime, timezone
@@ -213,9 +214,11 @@ async def _get_model_info_safe(model: str, host: str | None) -> ModelInfo:
 async def _get_system_info(host: str | None) -> SystemInfo:
     """Gather system metadata for the run result."""
     ollama_version = await client.get_server_version(host)
+    kv_cache_type = os.environ.get("OLLAMA_KV_CACHE_TYPE")
     return SystemInfo(
         ollama_version=ollama_version,
         os=f"{platform.system()} {platform.release()}",
+        kv_cache_type=kv_cache_type,
         # GPU detection is platform-specific and best-effort.
         # For now we capture OS; GPU info can be added via ollama.ps() or nvidia-smi.
     )

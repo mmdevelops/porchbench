@@ -134,6 +134,7 @@ def summarize_run(run: RunResult) -> dict:
     return {
         "model": run.run.model.name,
         "quantization": run.run.model.details.quantization_level,
+        "kv_cache_type": run.run.system.kv_cache_type,
         "overall": {
             "tokens_per_second": _stats_dict(overall_tps),
             "time_to_first_token_ms": _stats_dict(overall_ttft),

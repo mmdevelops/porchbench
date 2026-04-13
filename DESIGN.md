@@ -9,6 +9,7 @@ with an optional frontier-model evaluation pass.
 - **DESIGN-ROUTING.md** — extends the suite/runner with scale-aware prompt routing discovery (strategy × model matrix)
 - **METHODOLOGY.md** — statistical rigor, evaluation methods, debiasing, reproducibility standards
 - **HARDWARE-PLAN.md** — GPU acquisition strategy and current hardware constraints
+- **docs/design/prelim/PRELIM-kv-cache-compression.md** — KV cache compression benchmarking (cache sweep, NIAH, memory profiling)
 
 ## Goals
 

@@ -76,6 +76,81 @@ Treat quantization as a **first-class independent variable**, not a footnote.
 
 ---
 
+## KV Cache Compression
+
+Treat KV cache type as a **first-class independent variable**, separate from weight
+quantization. Weight quantization (Q4_K_M, Q8, etc.) compresses model parameters;
+KV cache compression reduces the memory used to store attention context during inference.
+They are orthogonal — a Q4_K_M model can use f16, q8_0, or q4_0 KV cache independently.
+
+| KV Cache Type | Compression | Impact | Notes |
+|---|---|---|---|
+| f16 | 1x (baseline) | Reference quality | Ollama default |
+| q8_0 | 2x | ~lossless | Safe for all context lengths |
+| q4_0 | 4x | Measurable degradation at long contexts | May affect retrieval accuracy |
+| tq3 | ~5x | Under evaluation | TurboQuant, not yet merged in Ollama |
+| tq4 | ~4x | Under evaluation | TurboQuant, not yet merged in Ollama |
+
+### Rules
+
+- **Never compare runs with different KV cache types without explicit acknowledgment.**
+  KV cache compression affects memory capacity, throughput, and potentially accuracy.
+  A q4_0 cache run at 128K context vs. an f16 cache run at 32K context confounds cache
+  type with context length.
+- **Record the KV cache type** in every run result. The framework captures
+  `OLLAMA_KV_CACHE_TYPE` from the server environment. When unset, Ollama defaults to f16.
+- **Hold KV cache type constant** when comparing models or quantization levels, unless
+  KV cache compression is the variable under study.
+- **Test accuracy at multiple context lengths** when evaluating a new cache type.
+  Degradation often appears only at longer contexts (>32K tokens).
+
+### Benchmarking KV cache types
+
+To compare cache types, set `OLLAMA_KV_CACHE_TYPE` and restart the Ollama server
+between runs:
+
+```bash
+# Baseline run (f16 cache)
+OLLAMA_KV_CACHE_TYPE=f16 ollama serve &
+ollama-bench run --suite suites/long-context.yaml --model qwen2.5:7b
+
+# Compressed cache run
+OLLAMA_KV_CACHE_TYPE=q4_0 ollama serve &
+ollama-bench run --suite suites/long-context.yaml --model qwen2.5:7b
+```
+
+The framework records the cache type in `system.kv_cache_type` for each run result,
+enabling downstream comparison of identical model + prompt combinations under different
+compression settings.
+
+### Key metrics for KV cache evaluation
+
+| Metric | What it measures | How to capture |
+|---|---|---|
+| Throughput (tok/s) | Decode speed impact | `metrics.tokens_per_second` (already captured) |
+| Prefill speed | Prompt processing impact | `metrics.prompt_eval_duration` (already captured) |
+| Peak VRAM | Memory savings | `ollama.ps()` size_vram (profiler captures this) |
+| Max context length | Capacity ceiling | Binary search on `num_ctx` until OOM |
+| Retrieval accuracy | Compression quality loss | Needle-in-a-Haystack tasks at varying depths |
+
+### Limitations
+
+- `OLLAMA_KV_CACHE_TYPE` is a **server-level** setting. It cannot be varied per-request
+  or per-model (unless set in a Modelfile). Benchmarking across cache types requires
+  server restarts.
+- The framework detects cache type from the **local environment variable**. When
+  benchmarking against a remote Ollama server, the detection will be inaccurate —
+  record the cache type manually in such cases.
+- KV cache compression interacts with `num_ctx`: a q4_0 cache at 128K may fit in VRAM
+  where f16 would not. This is a feature, not a confound — but it must be documented
+  when reporting results.
+
+*References: Zandieh et al. (2026), "TurboQuant: Online Vector Quantization with
+Near-optimal Distortion Rate" (arXiv 2504.19874); Liu et al. (2024), "KIVI:
+A Tuning-Free Asymmetric 2bit Quantization for KV Cache" (arXiv 2402.02750)*
+
+---
+
 ## Evaluation Methods
 
 ### When to use automated (deterministic) evaluation
@@ -258,6 +333,12 @@ estimation.
 ### Biases in LLM-as-judge
 - Panickssery et al. (2024), "Self-Preference Bias in LLM-as-a-Judge" (arXiv 2410.21819)
 - Kim et al. (2025), "Systematic Study of Position Bias" (IJCNLP 2025)
+
+### KV cache compression
+- Zandieh et al. (2026), "TurboQuant: Online Vector Quantization with Near-optimal Distortion Rate" (arXiv 2504.19874, ICLR 2026)
+- Liu et al. (2024), "KIVI: A Tuning-Free Asymmetric 2bit Quantization for KV Cache" (arXiv 2402.02750, ICML 2024)
+- Hooper et al. (2024), "KVQuant: Towards 10 Million Context Length LLM Inference with KV Cache Quantization" (arXiv 2401.18079, NeurIPS 2024)
+- Kang et al. (2024), "GEAR: An Efficient KV Cache Compression Recipe for Near-Lossless Generative Inference of LLM" (arXiv 2403.05527, ICML 2024)
 
 ### Data contamination
 - Xu et al. (2024), "Benchmark Data Contamination Survey" (arXiv 2406.04244)
