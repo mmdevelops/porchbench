@@ -105,6 +105,7 @@ def run(
                     prompt_ids=prompt_ids,
                     output_dir=output_dir,
                     on_prompt_complete=on_complete,
+                    suite_dir=suite_path.parent,
                 )
             )
 
@@ -126,6 +127,12 @@ def _print_summary(result) -> None:
     table.add_row("Total time", f"{s.total_duration_s:.1f}s")
     if s.avg_tokens_per_second is not None:
         table.add_row("Avg tokens/sec", f"{s.avg_tokens_per_second:.1f}")
+
+    # Tool-use validation summary
+    tool_results = [r for r in result.results if r.validation_passed is not None]
+    if tool_results:
+        passed = sum(1 for r in tool_results if r.validation_passed)
+        table.add_row("Validation", f"{passed}/{len(tool_results)} passed")
 
     console.print(table)
 
@@ -299,7 +306,10 @@ def discover_routes(
     console.print()
 
     results = asyncio.run(
-        run_discovery(suite, suite_ref, models, host=host, output_dir=output_dir)
+        run_discovery(
+            suite, suite_ref, models, host=host, output_dir=output_dir,
+            suite_dir=suite_path.parent,
+        )
     )
 
     # Print summary per model

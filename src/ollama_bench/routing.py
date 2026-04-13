@@ -36,6 +36,7 @@ from ollama_bench.schemas import (
     RunSummary,
     Suite,
     SuiteReference,
+    ToolUseMetricsData,
     compute_derived_metrics,
 )
 from ollama_bench.suite import resolve_messages, resolve_options
@@ -54,6 +55,63 @@ def count_discovery_runs(suite: Suite, models: list[str]) -> int:
     return len(suite.prompts) * n_strategies * len(models)
 
 
+async def _run_tool_use_discovery_cell(
+    prompt,
+    model: str,
+    options: ModelOptions,
+    messages: list[Message],
+    strategy_name: str,
+    suite_dir: Path | None,
+    host: str | None,
+) -> PromptResult:
+    """Run a single tool-use prompt for routing discovery and package as PromptResult."""
+    from ollama_bench.tool_runner import run_tool_use_prompt
+
+    result = await run_tool_use_prompt(
+        prompt=prompt,
+        model=model,
+        options=options,
+        messages=messages,
+        suite_dir=suite_dir,
+        host=host,
+    )
+
+    harness_result = result["harness_result"]
+
+    final_content = ""
+    for msg in reversed(harness_result.transcript):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            final_content = msg["content"]
+            break
+
+    return PromptResult(
+        prompt_id=prompt.id,
+        category=prompt.category,
+        difficulty=prompt.difficulty,
+        tags=prompt.tags,
+        options_used=options,
+        request=RequestData(messages=messages),
+        response=ResponseData(
+            message=ResponseMessage(content=final_content),
+            done_reason=harness_result.stopped_reason,
+        ),
+        metrics=PromptMetrics(),
+        strategy=strategy_name,
+        correct=result["validation_passed"],
+        expected_answer=prompt.expected_answer,
+        validation_passed=result["validation_passed"],
+        validation_reason=result["validation_reason"],
+        stopped_reason=harness_result.stopped_reason,
+        tool_use_metrics=ToolUseMetricsData(
+            total_tool_calls=harness_result.tool_use_metrics.total_tool_calls,
+            tool_call_breakdown=harness_result.tool_use_metrics.tool_call_breakdown,
+            errors_encountered=harness_result.tool_use_metrics.errors_encountered,
+            self_corrections=harness_result.tool_use_metrics.self_corrections,
+            conversation_turns=harness_result.tool_use_metrics.conversation_turns,
+        ),
+    )
+
+
 async def run_discovery(
     suite: Suite,
     suite_ref: SuiteReference,
@@ -61,6 +119,7 @@ async def run_discovery(
     host: str | None = None,
     output_dir: str | Path = "results",
     on_cell_complete: callable | None = None,
+    suite_dir: Path | None = None,
 ) -> list[RunResult]:
     """Run routing discovery: every prompt × strategy × model.
 
@@ -102,37 +161,46 @@ async def run_discovery(
 
                 label = f"{prompt.id}/{strategy_name}"
                 try:
-                    response = await client.chat(messages, model_name, options, host=host)
+                    if prompt.mode == "tool-use":
+                        pr = await _run_tool_use_discovery_cell(
+                            prompt, model_name, options, messages,
+                            strategy_name, suite_dir, host,
+                        )
+                        correct = pr.validation_passed
+                    else:
+                        response = await client.chat(messages, model_name, options, host=host)
 
-                    raw_metrics = client.extract_metrics(response)
-                    metrics = compute_derived_metrics(raw_metrics)
+                        raw_metrics = client.extract_metrics(response)
+                        metrics = compute_derived_metrics(raw_metrics)
 
-                    response_data = ResponseData(
-                        message=ResponseMessage(
-                            role=response.message.role or "assistant",
-                            content=response.message.content or "",
-                        ),
-                        done_reason=getattr(response, "done_reason", None),
-                    )
+                        response_data = ResponseData(
+                            message=ResponseMessage(
+                                role=response.message.role or "assistant",
+                                content=response.message.content or "",
+                            ),
+                            done_reason=getattr(response, "done_reason", None),
+                        )
 
-                    correct = check_correctness(
-                        response.message.content or "",
-                        prompt.expected_answer,
-                    )
+                        correct = check_correctness(
+                            response.message.content or "",
+                            prompt.expected_answer,
+                        )
 
-                    prompt_results.append(PromptResult(
-                        prompt_id=prompt.id,
-                        category=prompt.category,
-                        difficulty=prompt.difficulty,
-                        tags=prompt.tags,
-                        options_used=options,
-                        request=RequestData(messages=messages),
-                        response=response_data,
-                        metrics=metrics,
-                        strategy=strategy_name,
-                        correct=correct,
-                        expected_answer=prompt.expected_answer,
-                    ))
+                        pr = PromptResult(
+                            prompt_id=prompt.id,
+                            category=prompt.category,
+                            difficulty=prompt.difficulty,
+                            tags=prompt.tags,
+                            options_used=options,
+                            request=RequestData(messages=messages),
+                            response=response_data,
+                            metrics=metrics,
+                            strategy=strategy_name,
+                            correct=correct,
+                            expected_answer=prompt.expected_answer,
+                        )
+
+                    prompt_results.append(pr)
 
                     status = "[green]ok[/green]" if correct else (
                         "[yellow]?[/yellow]" if correct is None else "[red]FAIL[/red]"

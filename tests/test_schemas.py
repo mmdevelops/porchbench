@@ -31,6 +31,7 @@ from ollama_bench.schemas import (
     SuiteReference,
     Strategy,
     SystemInfo,
+    ToolUseMetricsData,
     compute_derived_metrics,
 )
 
@@ -202,6 +203,77 @@ class TestRunResult:
         assert pr.strategy == "direct"
         assert pr.correct is True
         assert pr.expected_answer == "42"
+
+    def test_prompt_result_tool_use_fields_default_none(self):
+        pr = PromptResult(
+            prompt_id="p1", category="coding", difficulty="easy",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="Hi")]),
+            response=ResponseData(message=ResponseMessage(content="ok")),
+        )
+        assert pr.validation_passed is None
+        assert pr.validation_reason is None
+        assert pr.stopped_reason is None
+        assert pr.tool_use_metrics is None
+
+    def test_prompt_result_tool_use_fields_populated(self):
+        metrics = ToolUseMetricsData(
+            total_tool_calls=3,
+            tool_call_breakdown={"execute_code": 2, "read_file": 1},
+            errors_encountered=1,
+            self_corrections=1,
+            conversation_turns=4,
+        )
+        pr = PromptResult(
+            prompt_id="t1-csv", category="tool-use", difficulty="easy",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="Sort the CSV")]),
+            response=ResponseData(
+                message=ResponseMessage(content="Done"),
+                done_reason="done",
+            ),
+            validation_passed=True,
+            validation_reason="CSV sorted correctly",
+            stopped_reason="done",
+            tool_use_metrics=metrics,
+        )
+        assert pr.validation_passed is True
+        assert pr.stopped_reason == "done"
+        assert pr.tool_use_metrics.total_tool_calls == 3
+        assert pr.tool_use_metrics.tool_call_breakdown["execute_code"] == 2
+
+    def test_prompt_result_tool_use_roundtrip_json(self):
+        """Tool-use fields survive JSON serialization and deserialization."""
+        metrics = ToolUseMetricsData(
+            total_tool_calls=5,
+            tool_call_breakdown={"execute_code": 3, "write_file": 2},
+            errors_encountered=0,
+            self_corrections=0,
+            conversation_turns=6,
+        )
+        pr = PromptResult(
+            prompt_id="t2-multi", category="tool-use", difficulty="medium",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="task")]),
+            response=ResponseData(message=ResponseMessage(content="result")),
+            validation_passed=False,
+            validation_reason="Output mismatch",
+            stopped_reason="max_tool_calls",
+            tool_use_metrics=metrics,
+        )
+        json_str = pr.model_dump_json()
+        restored = PromptResult.model_validate_json(json_str)
+        assert restored.validation_passed is False
+        assert restored.validation_reason == "Output mismatch"
+        assert restored.stopped_reason == "max_tool_calls"
+        assert restored.tool_use_metrics.total_tool_calls == 5
+        assert restored.tool_use_metrics.tool_call_breakdown["write_file"] == 2
+
+    def test_tool_use_metrics_data_defaults(self):
+        m = ToolUseMetricsData()
+        assert m.total_tool_calls == 0
+        assert m.tool_call_breakdown == {}
+        assert m.errors_encountered == 0
 
     def test_model_info_defaults(self):
         info = ModelInfo(name="test:7b")

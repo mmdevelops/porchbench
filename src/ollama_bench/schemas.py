@@ -200,6 +200,16 @@ def compute_derived_metrics(metrics: PromptMetrics) -> PromptMetrics:
     return metrics
 
 
+class ToolUseMetricsData(BaseModel):
+    """Serializable mirror of harness.ToolUseMetrics for run result JSON."""
+
+    total_tool_calls: int = 0
+    tool_call_breakdown: dict[str, int] = {}
+    errors_encountered: int = 0
+    self_corrections: int = 0
+    conversation_turns: int = 0
+
+
 class PromptResult(BaseModel):
     """Result of running a single prompt against a model."""
 
@@ -216,6 +226,12 @@ class PromptResult(BaseModel):
     strategy: str | None = None  # strategy name when run via discover-routes
     correct: bool | None = None  # automated correctness check result
     expected_answer: str | None = None  # ground truth copied from prompt for analysis
+
+    # --- Tool-use extensions (DESIGN-SANDBOX.md) ---
+    validation_passed: bool | None = None  # sandbox validator result
+    validation_reason: str | None = None
+    stopped_reason: str | None = None  # done, max_tool_calls, max_turns, error
+    tool_use_metrics: ToolUseMetricsData | None = None
 
 
 class RunSummary(BaseModel):

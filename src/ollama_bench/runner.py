@@ -41,6 +41,7 @@ from ollama_bench.schemas import (
     SystemInfo,
     Suite,
     SuiteReference,
+    ToolUseMetricsData,
     compute_derived_metrics,
 )
 from ollama_bench.suite import resolve_messages, resolve_options
@@ -71,6 +72,60 @@ async def run_prompt(
     return response_data, metrics
 
 
+async def _run_tool_use_prompt(
+    prompt,
+    model: str,
+    options: ModelOptions,
+    messages: list[Message],
+    suite_dir: Path | None,
+    host: str | None,
+) -> PromptResult:
+    """Dispatch a tool-use prompt through the sandbox harness and package the result."""
+    from ollama_bench.tool_runner import run_tool_use_prompt
+
+    result = await run_tool_use_prompt(
+        prompt=prompt,
+        model=model,
+        options=options,
+        messages=messages,
+        suite_dir=suite_dir,
+        host=host,
+    )
+
+    harness_result = result["harness_result"]
+
+    # Extract the final assistant message from transcript as the response
+    final_content = ""
+    for msg in reversed(harness_result.transcript):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            final_content = msg["content"]
+            break
+
+    return PromptResult(
+        prompt_id=prompt.id,
+        category=prompt.category,
+        difficulty=prompt.difficulty,
+        tags=prompt.tags,
+        options_used=options,
+        request=RequestData(messages=messages),
+        response=ResponseData(
+            message=ResponseMessage(content=final_content),
+            done_reason=harness_result.stopped_reason,
+        ),
+        metrics=PromptMetrics(),
+        validation_passed=result["validation_passed"],
+        validation_reason=result["validation_reason"],
+        stopped_reason=harness_result.stopped_reason,
+        tool_use_metrics=ToolUseMetricsData(
+            total_tool_calls=harness_result.tool_use_metrics.total_tool_calls,
+            tool_call_breakdown=harness_result.tool_use_metrics.tool_call_breakdown,
+            errors_encountered=harness_result.tool_use_metrics.errors_encountered,
+            self_corrections=harness_result.tool_use_metrics.self_corrections,
+            conversation_turns=harness_result.tool_use_metrics.conversation_turns,
+        ),
+    )
+
+
 async def run_suite(
     suite: Suite,
     suite_ref: SuiteReference,
@@ -79,6 +134,7 @@ async def run_suite(
     prompt_ids: list[str] | None = None,
     output_dir: str | Path = "results",
     on_prompt_complete: Callable[[str, bool], None] | None = None,
+    suite_dir: Path | None = None,
 ) -> RunResult:
     """Run a full suite against a single model.
 
@@ -90,6 +146,7 @@ async def run_suite(
         prompt_ids: Optional filter — only run these prompt IDs.
         output_dir: Directory for writing result JSON.
         on_prompt_complete: Optional callback(prompt_id, success) for progress reporting.
+        suite_dir: Directory containing the suite YAML (for resolving fixture paths).
 
     Returns:
         The completed RunResult (also written to disk).
@@ -123,18 +180,24 @@ async def run_suite(
         messages = resolve_messages(prompt)
 
         try:
-            response_data, metrics = await run_prompt(messages, model, options, host=host)
+            if prompt.mode == "tool-use":
+                result = await _run_tool_use_prompt(
+                    prompt, model, options, messages, suite_dir, host,
+                )
+            else:
+                response_data, metrics = await run_prompt(messages, model, options, host=host)
+                result = PromptResult(
+                    prompt_id=prompt.id,
+                    category=prompt.category,
+                    difficulty=prompt.difficulty,
+                    tags=prompt.tags,
+                    options_used=options,
+                    request=RequestData(messages=messages),
+                    response=response_data,
+                    metrics=metrics,
+                )
 
-            results.append(PromptResult(
-                prompt_id=prompt.id,
-                category=prompt.category,
-                difficulty=prompt.difficulty,
-                tags=prompt.tags,
-                options_used=options,
-                request=RequestData(messages=messages),
-                response=response_data,
-                metrics=metrics,
-            ))
+            results.append(result)
             if on_prompt_complete:
                 on_prompt_complete(prompt.id, True)
 

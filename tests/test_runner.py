@@ -1,0 +1,157 @@
+"""Tests for runner dispatch: tool-use prompt routing and result packaging."""
+
+from dataclasses import field
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from ollama_bench.harness.harness import HarnessResult, Outcome, ToolUseMetrics
+from ollama_bench.runner import _run_tool_use_prompt
+from ollama_bench.schemas import (
+    Message,
+    ModelOptions,
+    Prompt,
+)
+
+
+def _make_tool_use_prompt(**overrides) -> Prompt:
+    defaults = dict(
+        id="t1-read",
+        category="tool-use",
+        difficulty="easy",
+        mode="tool-use",
+        max_tool_calls=5,
+        messages=[Message(role="user", content="Read data.txt")],
+    )
+    defaults.update(overrides)
+    return Prompt(**defaults)
+
+
+def _make_harness_result(**overrides) -> HarnessResult:
+    defaults = dict(
+        transcript=[
+            {"role": "user", "content": "Read data.txt"},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"function": {"name": "read_file", "arguments": {"path": "data.txt"}}}
+            ]},
+            {"role": "tool", "content": "hello world"},
+            {"role": "assistant", "content": "The file contains: hello world"},
+        ],
+        outcome=Outcome(),
+        tool_use_metrics=ToolUseMetrics(
+            total_tool_calls=1,
+            tool_call_breakdown={"read_file": 1},
+            conversation_turns=2,
+        ),
+        stopped_reason="done",
+    )
+    defaults.update(overrides)
+    return HarnessResult(**defaults)
+
+
+class TestToolUseDispatch:
+    @pytest.mark.asyncio
+    async def test_packages_harness_result_into_prompt_result(self):
+        """_run_tool_use_prompt converts harness output to PromptResult with tool-use fields."""
+        prompt = _make_tool_use_prompt()
+        harness_result = _make_harness_result()
+        messages = [Message(role="user", content="Read data.txt")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": True,
+            "validation_reason": "File content matches",
+        }
+
+        with patch(
+            "ollama_bench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "test-model:7b", ModelOptions(), messages, None, None,
+            )
+
+        assert result.prompt_id == "t1-read"
+        assert result.category == "tool-use"
+        assert result.validation_passed is True
+        assert result.validation_reason == "File content matches"
+        assert result.stopped_reason == "done"
+        assert result.tool_use_metrics is not None
+        assert result.tool_use_metrics.total_tool_calls == 1
+        assert result.tool_use_metrics.tool_call_breakdown == {"read_file": 1}
+
+    @pytest.mark.asyncio
+    async def test_extracts_final_assistant_message(self):
+        """Response content is taken from the last assistant message in transcript."""
+        prompt = _make_tool_use_prompt()
+        harness_result = _make_harness_result()
+        messages = [Message(role="user", content="Read data.txt")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": None,
+            "validation_reason": "No expected outcome defined",
+        }
+
+        with patch(
+            "ollama_bench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "test-model:7b", ModelOptions(), messages, None, None,
+            )
+
+        assert result.response.message.content == "The file contains: hello world"
+
+    @pytest.mark.asyncio
+    async def test_handles_validation_failure(self):
+        prompt = _make_tool_use_prompt()
+        harness_result = _make_harness_result(stopped_reason="max_tool_calls")
+        messages = [Message(role="user", content="Read data.txt")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": False,
+            "validation_reason": "Expected sorted output, got unsorted",
+        }
+
+        with patch(
+            "ollama_bench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "test-model:7b", ModelOptions(), messages, None, None,
+            )
+
+        assert result.validation_passed is False
+        assert result.stopped_reason == "max_tool_calls"
+        assert result.tool_use_metrics.conversation_turns == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_transcript_yields_empty_content(self):
+        """When transcript has no assistant messages, response content is empty."""
+        prompt = _make_tool_use_prompt()
+        harness_result = _make_harness_result(
+            transcript=[{"role": "user", "content": "Read data.txt"}],
+        )
+        messages = [Message(role="user", content="Read data.txt")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": None,
+            "validation_reason": "No expected outcome defined",
+        }
+
+        with patch(
+            "ollama_bench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "test-model:7b", ModelOptions(), messages, None, None,
+            )
+
+        assert result.response.message.content == ""
