@@ -319,6 +319,8 @@ prompts:
     difficulty: hard
     tags: [cs, design-principles, explanation]
     contamination_risk: high
+    options:
+      num_predict: 8192
     messages:
       - role: user
         content: |
