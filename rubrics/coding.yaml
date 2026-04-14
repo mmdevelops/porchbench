@@ -1,0 +1,45 @@
+rubric:
+  name: "Coding Rubric"
+  version: "1.0"
+
+criteria:
+  - name: correctness
+    weight: 0.40
+    description: >
+      Does the code work? Would it produce the correct output for standard
+      inputs and edge cases? Check for logic errors, off-by-one mistakes,
+      incorrect API usage, and missing error handling.
+    scale: "1-5"
+
+  - name: completeness
+    weight: 0.20
+    description: >
+      Are edge cases handled? Does the solution address all parts of the
+      prompt? Are error conditions considered? A complete solution doesn't
+      need to be exhaustive, but shouldn't have obvious gaps.
+    scale: "1-5"
+
+  - name: code_quality
+    weight: 0.20
+    description: >
+      Is the code clean, idiomatic, and well-structured? Good naming,
+      appropriate data structures, no unnecessary complexity. Pythonic
+      style where applicable. Would a senior developer approve this in
+      code review?
+    scale: "1-5"
+
+  - name: reasoning
+    weight: 0.10
+    description: >
+      Does the response explain design choices clearly? Are tradeoffs
+      acknowledged (e.g., time vs space complexity, readability vs
+      performance)?
+    scale: "1-5"
+
+  - name: domain_knowledge
+    weight: 0.10
+    description: >
+      Does the response demonstrate understanding of relevant language
+      features, libraries, or patterns? Does it use appropriate tools
+      for the job?
+    scale: "1-5"

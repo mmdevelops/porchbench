@@ -11,8 +11,8 @@ defaults:
     temperature: 0
     seed: 42
     top_p: 1
-    num_predict: 2048
-    num_ctx: 4096
+    num_predict: 4096
+    num_ctx: 8192
 
 prompts:
 
@@ -25,6 +25,10 @@ prompts:
     difficulty: easy
     tags: [python, loops, conditionals]
     contamination_risk: high
+    expected_answer: >
+      Must check divisibility by 15 (or both 3 and 5) before checking 3 or 5
+      individually. Should use range(1, 101). Output must include FizzBuzz for
+      15, 30, 45, etc.
     messages:
       - role: user
         content: |
@@ -37,6 +41,10 @@ prompts:
     difficulty: easy
     tags: [python, strings, dicts]
     contamination_risk: medium
+    expected_answer: >
+      Must lowercase input and strip punctuation before counting. Should
+      handle empty strings. A correct solution for "Hello hello, world!"
+      produces {"hello": 2, "world": 1}.
     messages:
       - role: user
         content: |
@@ -49,6 +57,10 @@ prompts:
     difficulty: easy
     tags: [python, validation, regex]
     contamination_risk: medium
+    expected_answer: >
+      Must check for exactly one @, non-empty local part and domain, at least
+      one dot in domain portion, no spaces. Should not accept "user@" or
+      "@domain.com" or "user@domain".
     messages:
       - role: user
         content: |
@@ -61,6 +73,10 @@ prompts:
     difficulty: easy
     tags: [python, idioms]
     contamination_risk: medium
+    expected_answer: >
+      Correct comprehension: [n ** 2 for n in numbers if n % 2 == 0].
+      Should note that comprehension is more readable and slightly faster
+      for simple transformations but less suitable for complex multi-step logic.
     messages:
       - role: user
         content: |
@@ -83,6 +99,10 @@ prompts:
     difficulty: medium
     tags: [python, algorithms, explanation]
     contamination_risk: high
+    expected_answer: >
+      Must use low/high pointers and mid = (low + high) // 2. Time O(log n),
+      space O(1) for iterative. Common bug: using mid = (low + high) / 2
+      (float division). Must handle empty list and missing element.
     messages:
       - role: user
         content: |
@@ -107,6 +127,10 @@ prompts:
     difficulty: medium
     tags: [python, parsing]
     contamination_risk: low
+    expected_answer: >
+      Must handle quoted fields containing commas (e.g., "Smith, Jr." stays
+      as one field). Must use first row as header keys. Should handle
+      escaped quotes within quoted fields.
     messages:
       - role: user
         content: |
@@ -119,6 +143,11 @@ prompts:
     difficulty: medium
     tags: [python, decorators, error-handling]
     contamination_risk: medium
+    expected_answer: >
+      Decorator must accept max_retries parameter. Must implement exponential
+      backoff (delay doubles each retry). Must re-raise the last exception
+      after exhausting retries. Should use functools.wraps to preserve
+      function metadata.
     messages:
       - role: user
         content: |
@@ -131,6 +160,10 @@ prompts:
     difficulty: medium
     tags: [python, data-structures]
     contamination_risk: high
+    expected_answer: >
+      Must implement Node class with value/next. Append is O(n) without tail
+      pointer, O(1) with. Delete must handle head deletion and missing values.
+      __repr__ should show chain like "1 -> 2 -> 3 -> None".
     messages:
       - role: user
         content: |
@@ -143,6 +176,10 @@ prompts:
     difficulty: medium
     tags: [python, decorators, performance]
     contamination_risk: medium
+    expected_answer: >
+      Must use a dict keyed by function arguments. Must handle unhashable
+      arguments gracefully (either skip caching or raise clear error).
+      Should mention limitation: unbounded cache growth without eviction.
     messages:
       - role: user
         content: |
@@ -155,6 +192,10 @@ prompts:
     difficulty: medium
     tags: [python, iterators, protocol]
     contamination_risk: medium
+    expected_answer: >
+      Must implement __iter__ returning self and __next__ raising StopIteration
+      when value exceeds max. Sequence: 0, 1, 1, 2, 3, 5, 8... Must work
+      in a for loop.
     messages:
       - role: user
         content: |
@@ -167,6 +208,11 @@ prompts:
     difficulty: medium
     tags: [python, context-managers]
     contamination_risk: medium
+    expected_answer: >
+      Class version must implement __enter__ (start timer) and __exit__
+      (print elapsed). contextlib version uses @contextmanager with yield.
+      Should note class version is reusable and supports attributes,
+      contextlib is more concise.
     messages:
       - role: user
         content: |
@@ -183,6 +229,10 @@ prompts:
     difficulty: hard
     tags: [python, concurrency, design]
     contamination_risk: medium
+    expected_answer: >
+      Must use a task queue (Queue) with worker threads pulling from it.
+      Must support shutdown/wait. Must mention GIL limits thread pool to
+      I/O-bound tasks; CPU-bound needs multiprocessing.
     messages:
       - role: user
         content: |
@@ -195,6 +245,11 @@ prompts:
     difficulty: hard
     tags: [python, design-patterns]
     contamination_risk: medium
+    expected_answer: >
+      Must store callbacks in a dict[str, list[callable]]. on() appends,
+      off() removes specific callback, emit() calls all registered handlers.
+      Should handle exceptions in individual handlers without stopping other
+      handlers. Thread safety requires a lock around the callback registry.
     messages:
       - role: user
         content: |
@@ -209,6 +264,11 @@ prompts:
     difficulty: hard
     tags: [python, algorithms, recursion]
     contamination_risk: low
+    expected_answer: >
+      Must recursively compare nested dicts. Must report added keys,
+      removed keys, and changed values separately. Must handle type
+      changes (e.g., value was string, now dict). Lists can be compared
+      by equality or element-wise.
     messages:
       - role: user
         content: |

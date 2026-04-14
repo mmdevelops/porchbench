@@ -1,0 +1,43 @@
+rubric:
+  name: "Cross-Domain Rubric"
+  version: "1.0"
+
+criteria:
+  - name: domain_knowledge
+    weight: 0.30
+    description: >
+      Does the response demonstrate genuine understanding of the
+      relevant domain(s)? Are domain-specific concepts used correctly?
+      Does it go beyond generic advice to show specialized knowledge?
+    scale: "1-5"
+
+  - name: design_quality
+    weight: 0.25
+    description: >
+      Is the proposed design, architecture, or solution structurally
+      sound? Are components well-chosen and properly connected? Would
+      it work in practice, not just in theory?
+    scale: "1-5"
+
+  - name: reasoning
+    weight: 0.25
+    description: >
+      Is the tradeoff analysis balanced and honest? Are both sides
+      presented fairly? Does the response arrive at a justified
+      recommendation rather than a generic "it depends"?
+    scale: "1-5"
+
+  - name: completeness
+    weight: 0.15
+    description: >
+      Are all requirements from the prompt addressed? For multi-part
+      questions, is each part given appropriate coverage?
+    scale: "1-5"
+
+  - name: correctness
+    weight: 0.05
+    description: >
+      If code or technical specifics are included, are they correct?
+      Low weight because cross-domain prompts emphasize judgment over
+      implementation.
+    scale: "1-5"

@@ -113,6 +113,51 @@ def load_rubric(path: str | Path) -> Rubric:
     return Rubric.model_validate(data)
 
 
+# Mapping from prompt category to rubric filename (without .yaml)
+_CATEGORY_RUBRIC_MAP = {
+    "coding": "coding",
+    "reasoning": "reasoning",
+    "cross-domain": "cross-domain",
+}
+
+
+def load_rubric_dir(rubric_dir: str | Path) -> dict[str, Rubric]:
+    """Load all rubric YAML files from a directory, keyed by category.
+
+    Returns a dict mapping category name to Rubric. Files are matched
+    by the _CATEGORY_RUBRIC_MAP. A 'default' key is added if default.yaml
+    exists, used as fallback for unmatched categories.
+    """
+    rubric_dir = Path(rubric_dir)
+    rubrics: dict[str, Rubric] = {}
+
+    for category, filename in _CATEGORY_RUBRIC_MAP.items():
+        path = rubric_dir / f"{filename}.yaml"
+        if path.exists():
+            rubrics[category] = load_rubric(path)
+
+    default_path = rubric_dir / "default.yaml"
+    if default_path.exists():
+        rubrics["default"] = load_rubric(default_path)
+
+    return rubrics
+
+
+def select_rubric(
+    category: str,
+    rubrics: dict[str, Rubric],
+    fallback: Rubric | None = None,
+) -> Rubric:
+    """Pick the best rubric for a prompt category."""
+    if category in rubrics:
+        return rubrics[category]
+    if "default" in rubrics:
+        return rubrics["default"]
+    if fallback is not None:
+        return fallback
+    raise ValueError(f"No rubric found for category '{category}' and no fallback available")
+
+
 # ---------------------------------------------------------------------------
 # Scoring prompt construction
 # ---------------------------------------------------------------------------
@@ -137,6 +182,18 @@ def build_scoring_prompt(
         for c in rubric.criteria
     )
 
+    # Include correctness hints if available
+    reference_block = ""
+    if prompt_result.expected_answer:
+        reference_block = f"""
+## Reference (Correctness Guide)
+The following describes what a correct response should include. Use this
+to verify factual accuracy and completeness — do not penalize alternative
+valid approaches that meet these criteria.
+
+{prompt_result.expected_answer}
+"""
+
     return f"""You are an expert evaluator assessing the quality of an AI model's response.
 
 ## Original Prompt
@@ -144,7 +201,7 @@ def build_scoring_prompt(
 
 ## Model Response
 {prompt_result.response.message.content}
-
+{reference_block}
 ## Scoring Rubric: {rubric.rubric.name} v{rubric.rubric.version}
 
 Score the response on each criterion using the specified scale. Be rigorous and precise.
@@ -352,11 +409,20 @@ async def evaluate_run(
     rubric: Rubric,
     backend: EvalBackend,
     evaluator_label: str = "",
+    rubrics_by_category: dict[str, Rubric] | None = None,
 ) -> Scorecard:
-    """Score all prompts in a run result. Returns a complete Scorecard."""
+    """Score all prompts in a run result. Returns a complete Scorecard.
+
+    When rubrics_by_category is provided, each prompt is scored with the
+    rubric matching its category. Falls back to the rubric parameter for
+    unmatched categories.
+    """
+    # Include responses that completed (stop) or were truncated (length)
+    # — truncated responses still have real content worth evaluating
     completed = [
         r for r in run_result.results
-        if r.response.done_reason == "stop"
+        if r.response.done_reason in ("stop", "length", None)
+        and r.response.message.content
     ]
 
     scores: list[PromptScore] = []
@@ -373,7 +439,14 @@ async def evaluate_run(
 
         for prompt_result in completed:
             try:
-                score = await score_prompt(prompt_result, rubric, backend)
+                if rubrics_by_category:
+                    prompt_rubric = select_rubric(
+                        prompt_result.category, rubrics_by_category, fallback=rubric
+                    )
+                else:
+                    prompt_rubric = rubric
+
+                score = await score_prompt(prompt_result, prompt_rubric, backend)
                 scores.append(score)
                 progress.console.print(
                     f"  {prompt_result.prompt_id}: "
@@ -388,6 +461,9 @@ async def evaluate_run(
     aggregates = compute_aggregates(scores, completed)
 
     rubric_label = f"{rubric.rubric.name} v{rubric.rubric.version}"
+    if rubrics_by_category:
+        cat_names = [r.rubric.name for r in rubrics_by_category.values()]
+        rubric_label = f"category-aware ({', '.join(cat_names)})"
 
     return Scorecard(
         evaluation=EvaluationMetadata(

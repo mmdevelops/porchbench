@@ -182,6 +182,10 @@ def evaluate(
         Optional[str],
         typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Anthropic API key (for api backend)."),
     ] = None,
+    rubric_dir: Annotated[
+        Optional[Path],
+        typer.Option("--rubric-dir", help="Directory of category-specific rubrics (coding.yaml, reasoning.yaml, cross-domain.yaml)."),
+    ] = None,
 ) -> None:
     """Score a run result using an LLM judge (local Ollama model or Claude API)."""
     from ollama_bench.evaluator import (
@@ -189,6 +193,7 @@ def evaluate(
         OllamaEvalBackend,
         evaluate_run,
         load_rubric,
+        load_rubric_dir,
         write_scorecard,
     )
 
@@ -205,6 +210,15 @@ def evaluate(
     except Exception as exc:
         console.print(f"[red]Failed to load rubric: {exc}[/red]")
         raise typer.Exit(code=1)
+
+    # Load category-specific rubrics if directory provided
+    rubrics_by_category = None
+    if rubric_dir:
+        try:
+            rubrics_by_category = load_rubric_dir(rubric_dir)
+            console.print(f"Category rubrics: {', '.join(rubrics_by_category.keys())}")
+        except Exception as exc:
+            console.print(f"[yellow]Warning: could not load rubric dir: {exc}[/yellow]")
 
     # Create backend
     if backend == "ollama":
@@ -228,7 +242,11 @@ def evaluate(
     console.print()
 
     scorecard = asyncio.run(
-        evaluate_run(run_result, rubric, eval_backend, evaluator_label=backend_label)
+        evaluate_run(
+            run_result, rubric, eval_backend,
+            evaluator_label=backend_label,
+            rubrics_by_category=rubrics_by_category,
+        )
     )
 
     path = write_scorecard(scorecard, output_dir)

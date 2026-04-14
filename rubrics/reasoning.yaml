@@ -1,0 +1,36 @@
+rubric:
+  name: "Reasoning Rubric"
+  version: "1.0"
+
+criteria:
+  - name: accuracy
+    weight: 0.35
+    description: >
+      Are the facts, definitions, and explanations correct? Are there
+      any misleading simplifications or outright errors? Technical
+      claims should be verifiable.
+    scale: "1-5"
+
+  - name: clarity
+    weight: 0.30
+    description: >
+      Is the explanation well-organized and easy to follow? Does it
+      build concepts progressively? Are analogies apt? Would a
+      mid-level developer walk away understanding the topic?
+    scale: "1-5"
+
+  - name: depth
+    weight: 0.20
+    description: >
+      Does the response go beyond surface-level definitions? Are
+      nuances, tradeoffs, and common misconceptions addressed? Does
+      it distinguish when different approaches apply?
+    scale: "1-5"
+
+  - name: completeness
+    weight: 0.15
+    description: >
+      Are all parts of the question addressed? If the prompt asks
+      about multiple concepts or comparisons, are all covered with
+      appropriate attention?
+    scale: "1-5"

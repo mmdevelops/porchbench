@@ -132,6 +132,7 @@ async def _run_tool_use_prompt(
         difficulty=prompt.difficulty,
         tags=prompt.tags,
         contamination_risk=prompt.contamination_risk,
+        expected_answer=prompt.expected_answer,
         options_used=options,
         request=RequestData(messages=messages),
         response=ResponseData(
@@ -234,6 +235,7 @@ async def run_suite(
                     difficulty=prompt.difficulty,
                     tags=prompt.tags,
                     contamination_risk=prompt.contamination_risk,
+        expected_answer=prompt.expected_answer,
                     options_used=options,
                     request=RequestData(messages=messages),
                     response=response_data,
@@ -255,6 +257,7 @@ async def run_suite(
                 difficulty=prompt.difficulty,
                 tags=prompt.tags,
                 contamination_risk=prompt.contamination_risk,
+        expected_answer=prompt.expected_answer,
                 options_used=options,
                 request=RequestData(messages=messages),
                 response=ResponseData(

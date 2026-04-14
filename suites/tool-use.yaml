@@ -12,7 +12,7 @@ defaults:
     temperature: 0
     seed: 42
     top_p: 1
-    num_predict: 2048
+    num_predict: 4096
     num_ctx: 8192
 
 strategies:
