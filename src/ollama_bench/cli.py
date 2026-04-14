@@ -186,7 +186,7 @@ def evaluate(
     evaluator_model: Annotated[
         str,
         typer.Option("--evaluator", "-e", help="Model to use as judge."),
-    ] = "deepseek-r1:14b",
+    ] = "gemma4:e4b",
     backend: Annotated[
         str,
         typer.Option("--backend", "-b", help="Evaluation backend: 'ollama' (default) or 'api'."),

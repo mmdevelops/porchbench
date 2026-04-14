@@ -50,7 +50,7 @@ from ollama_bench.schemas import (
 
 console = Console()
 
-DEFAULT_OLLAMA_EVALUATOR = "deepseek-r1:14b"
+DEFAULT_OLLAMA_EVALUATOR = "gemma4:e4b"
 
 
 # ---------------------------------------------------------------------------
