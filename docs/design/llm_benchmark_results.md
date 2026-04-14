@@ -355,6 +355,6 @@ No `gfx1201` or `ROCm` mention during initialization. 43-minute gap between GPU 
 
 - **GPU:** AMD Radeon RX 9070 XT (RDNA 4, gfx1201, 16GB GDDR6)
 - **OS:** Windows 11
-- **Ollama GPU fix:** ROCm HIP SDK 7.x required — copy `gfx1201` rocblas libraries from `C:\Program Files\AMD\ROCm\7.x\bin\rocblas\library` into `C:\Users\<USER>\AppData\Local\Programs\Ollama\lib\ollama\rocm\rocblas\library`
+- **Ollama GPU fix:** ROCm HIP SDK 7.x — copy `gfx1201` rocblas libraries from `C:\Program Files\AMD\ROCm\7.x\bin\rocblas\library` into `C:\Users\<USER>\AppData\Local\Programs\Ollama\lib\ollama\rocm\rocblas\library` **(APPLIED — GPU acceleration working)**
 - **Confirmed working log entry:** `library=ROCm compute=gfx1201 name=ROCm0 description="AMD Radeon RX 9070 XT" total="15.9 GiB"`
 - Native Ollama Windows support for RDNA 4 is still pending (issue #10430) as of April 2026

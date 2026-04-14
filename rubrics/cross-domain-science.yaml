@@ -1,0 +1,56 @@
+rubric:
+  name: "Cross-Domain Science Rubric"
+  version: "1.0"
+
+criteria:
+  - name: correctness
+    weight: 0.25
+    description: >
+      Does the code run correctly? Does it produce correct output for the
+      test cases given? Are algorithms implemented faithfully (not just
+      superficially)? Code correctness is the verifiable ground truth
+      anchor — a response that sounds knowledgeable but produces broken
+      code should score low here regardless of explanation quality.
+    scale: "1-5"
+
+  - name: domain_knowledge
+    weight: 0.30
+    description: >
+      Does the response demonstrate genuine understanding of the relevant
+      scientific domain? Are domain-specific concepts used correctly and
+      precisely? Does it go beyond surface-level explanations to show
+      specialized knowledge? Watch for confident-sounding but factually
+      wrong claims (e.g., "high GC content means higher mutation rate").
+      The expected_answer hints identify specific traps — if the model
+      falls into a listed trap, deduct heavily.
+    scale: "1-5"
+
+  - name: reasoning
+    weight: 0.25
+    description: >
+      Does the response connect code output to domain implications
+      logically? Are the domain reasoning questions answered with
+      genuine analysis, not generic hedging? Does it arrive at specific,
+      defensible conclusions rather than "it depends"? For multi-part
+      questions, does each answer show independent reasoning rather
+      than restating the same point?
+    scale: "1-5"
+
+  - name: completeness
+    weight: 0.15
+    description: >
+      Are all parts of the prompt addressed? Multi-part prompts typically
+      require: (1) working implementation, (2) test output, (3) answers
+      to 2-3 domain reasoning questions. Missing any numbered requirement
+      is a significant deduction. Truncated responses should be evaluated
+      on what's present but noted.
+    scale: "1-5"
+
+  - name: design_quality
+    weight: 0.05
+    description: >
+      Is the code clean and well-structured? Low weight because these
+      prompts test domain knowledge transfer, not software architecture.
+      Only deduct for egregiously poor code organization that obscures
+      correctness assessment.
+    scale: "1-5"

@@ -1,0 +1,998 @@
+suite:
+  name: "Cross-Domain Science"
+  version: "1.0"
+  rubric: cross-domain-science
+  description: >
+    Tests domain knowledge transfer: each prompt requires both a working
+    Python implementation and answers to domain-specific reasoning questions.
+    Designed to differentiate models that genuinely understand a scientific
+    domain from those that pattern-match surface-level answers. The two-part
+    structure (implement + reason) prevents models from faking competence —
+    the code grounds the evaluation while the domain questions reveal depth.
+
+defaults:
+  options:
+    temperature: 0
+    seed: 42
+    top_p: 1
+    num_predict: 8192
+    num_ctx: 8192
+
+prompts:
+
+  # =========================================================================
+  # SECURITY (5 prompts)
+  # =========================================================================
+
+  - id: "sec-timing-oracle"
+    category: security
+    difficulty: hard
+    tags: [python, cryptography, timing-attack, side-channel]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Naive version must use early return (for i in range; if
+      a[i] != b[i]: return False). Constant-time version must use XOR
+      accumulator (result |= a[i] ^ b[i]) or hmac.compare_digest. The
+      benchmark should show measurable timing difference — strings matching
+      in 0 chars should return faster than strings matching in 999 chars for
+      naive version. Constant-time version timing should be independent of
+      match position.
+
+      DOMAIN: Attacker learns position of first mismatch from response time.
+      For HMAC: attacker can recover signature byte-by-byte — try all 256
+      values for byte 0, the one that takes longest is correct, then move to
+      byte 1. Total requests: O(256 * N) where N is signature length
+      (typically 32 bytes = ~8192 requests), NOT O(256^N) brute force.
+      Python's == for strings uses memcmp which short-circuits.
+      hmac.compare_digest uses a fixed-length XOR comparison.
+
+      TRAPS: "Constant-time means constant speed/performance" is WRONG — it
+      means execution time is independent of which specific inputs are
+      compared. If model claims this is about performance optimization rather
+      than security, deduct heavily. Also: claiming you need microsecond
+      precision — network jitter is overcome by statistical averaging over
+      many requests.
+    messages:
+      - role: user
+        content: |
+          Implement two versions of a string comparison function in Python:
+
+          1. A naive version that returns False on the first mismatched character
+          2. A constant-time version that always compares every character regardless of match position
+
+          Write a timing benchmark that demonstrates the measurable difference
+          between the two functions when comparing strings that match in
+          different numbers of leading characters.
+
+          Then answer:
+          1. Why does the naive version leak information? Be specific about what an attacker learns per request.
+          2. How would an attacker exploit this against an HMAC verification endpoint? How many requests would they need to recover an N-byte signature?
+          3. Why is Python's == operator not constant-time for strings, and what does hmac.compare_digest do differently?
+
+  - id: "sec-jwt-validation"
+    category: security
+    difficulty: medium
+    tags: [python, jwt, web-security, base64]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must handle base64url encoding correctly — replace '-'
+      with '+' and '_' with '/' before decoding, and add padding ('='
+      characters) as needed. Standard base64.b64decode will fail on raw JWT
+      parts without this conversion. Must split on '.' and handle exactly 3
+      parts. Should return parsed JSON (json.loads) for header and payload,
+      not raw bytes.
+
+      DOMAIN: Three attacks without signature verification: (1) Token
+      forgery — attacker creates arbitrary claims (admin: true), (2)
+      alg:none — attacker changes algorithm to "none" and strips signature,
+      server accepts unsigned token, (3) Algorithm confusion — attacker
+      switches from RS256 to HS256, server uses public key as HMAC secret.
+      JWS provides integrity/authentication (payload readable but
+      tamper-evident). JWE provides confidentiality (payload encrypted). Use
+      JWS when payload isn't sensitive; JWE when it contains PII or secrets.
+
+      TRAPS: "Base64url is the same as base64" is WRONG — different alphabet
+      (+/ vs -_) and padding handling. If model uses standard base64.b64decode
+      without url-safe conversion, the code will fail on real JWTs. "JWT is
+      encrypted" is WRONG — standard JWTs (JWS) are only signed.
+    messages:
+      - role: user
+        content: |
+          Write a Python function that decodes a JWT (JSON Web Token) WITHOUT
+          using any JWT or cryptography libraries. Your function should:
+
+          1. Split the token into header, payload, and signature parts
+          2. Base64url-decode the header and payload
+          3. Return a dictionary with the decoded header, decoded payload, and raw signature
+
+          Then answer:
+          1. What are three specific attacks possible if your application decodes and trusts a JWT without verifying its signature?
+          2. Why is the "alg": "none" attack dangerous, and what makes it work?
+          3. What is the difference between JWS and JWE, and when would you choose each?
+
+  - id: "sec-hash-crack"
+    category: security
+    difficulty: medium
+    tags: [python, cryptography, hashing, password-security]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must use hashlib.md5 with .hexdigest(). PINs must be
+      zero-padded strings ("0000" through "9999"), not integers. Rainbow
+      table should be a dict mapping hash→plaintext (10,000 entries). Lookup
+      should be O(1) per hash. Table construction should take milliseconds
+      (the speed of MD5 is the point). Should handle the case where a hash
+      isn't in the table.
+
+      DOMAIN: MD5 is unsuitable because it's FAST — designed for integrity
+      checking, not password storage. A modern GPU can compute billions of
+      MD5 hashes per second. Bcrypt resists by being deliberately slow
+      (configurable work factor 2^N iterations) and includes a built-in salt,
+      making precomputation tables useless. Rainbow tables trade storage for
+      computation: instead of computing every hash on the fly or storing every
+      hash, they store chains of hash→reduce→hash operations. Lookup requires
+      recomputing partial chains but needs much less storage than a full table.
+
+      TRAPS: "SHA-256 is a good password hash because it's stronger" is WRONG
+      — SHA-256 is also fast; the problem is speed, not collision resistance.
+      "Salting fixes MD5" is incomplete — salting prevents precomputation but
+      MD5 is still fast enough for brute force against individual hashes.
+    messages:
+      - role: user
+        content: |
+          Write a Python program that:
+
+          1. Builds a rainbow table mapping MD5 hashes to their plaintext for all 4-digit PINs (0000-9999)
+          2. Given a list of MD5 hashes, looks up and returns any matching PINs
+          3. Times the table construction and the lookup phase separately
+
+          Then answer:
+          1. Why is MD5 unsuitable for password hashing despite being a cryptographically-designed hash?
+          2. How does bcrypt resist this exact attack, and what role does the work factor play?
+          3. Explain the time-memory tradeoff in rainbow tables. Why are they more efficient than brute-force but less efficient than a full precomputation table?
+
+  - id: "sec-csrf-demo"
+    category: security
+    difficulty: medium
+    tags: [python, flask, web-security, csrf]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Vulnerable app must use session-based auth and accept POST
+      without token validation. Malicious page must use a hidden form with
+      auto-submit targeting the /transfer endpoint. Fix must generate a random
+      token per session, include it as a hidden form field, and validate
+      server-side on POST. Token should use secrets.token_hex() or similar
+      CSPRNG, NOT random.randint().
+
+      DOMAIN: Same-Origin Policy prevents READING cross-origin responses, not
+      SENDING requests. A form submission sends the POST with cookies; the
+      browser blocks reading the response, but the transfer already happened.
+      SameSite=Lax allows cookies on top-level GET navigations — a link/redirect
+      from attacker site would include cookies. Also doesn't protect against
+      same-site subdomains with XSS. CSRF exploits server trust in the browser;
+      XSS exploits user trust in the server. CSRF tokens don't prevent XSS
+      (XSS can read the token from the DOM). XSS prevention doesn't prevent
+      CSRF (CSRF doesn't require script execution).
+
+      TRAPS: "CORS prevents CSRF" is WRONG — CORS restricts reading responses,
+      not sending requests. Simple POST requests don't trigger preflight.
+      "Using POST instead of GET prevents CSRF" is WRONG — forms can submit
+      POST cross-origin.
+    messages:
+      - role: user
+        content: |
+          Build a minimal demonstration of a CSRF vulnerability:
+
+          1. Write a Flask app with a /transfer endpoint that moves money between accounts (POST with amount and recipient, authenticated via session cookie)
+          2. Write the malicious HTML page that exploits this endpoint (the CSRF attack)
+          3. Fix the Flask app by adding CSRF token protection
+
+          Then answer:
+          1. Why doesn't the browser's Same-Origin Policy prevent CSRF attacks?
+          2. Why doesn't SameSite=Lax fully prevent CSRF? Give a specific scenario where it fails.
+          3. What is the difference between CSRF and XSS, and why does preventing one not prevent the other?
+
+  - id: "sec-idor-api"
+    category: security
+    difficulty: hard
+    tags: [python, flask, web-security, authorization, owasp]
+    contamination_risk: low
+    expected_answer: >
+      CORRECTNESS: Vulnerable version must have valid authentication
+      (login/session check) but use the URL parameter directly for data
+      lookup without checking if the authenticated user matches. Fixed
+      version must compare session user ID against URL parameter (e.g.,
+      if session['user_id'] != id: abort(403)). Test must log in as user A,
+      access A's profile (200), attempt B's profile — vulnerable returns
+      200, fixed returns 403. Should use Flask test client.
+
+      DOMAIN: Authentication verifies WHO you are. Authorization verifies
+      WHAT you're allowed to do. IDOR is an authorization flaw — user is
+      authenticated but accessing resources outside their scope. UUIDs don't
+      solve IDOR because: UUIDs can leak through logs/URLs/API responses,
+      and the root cause is missing authorization check, not predictable
+      identifiers. Security through obscurity is not access control. OWASP
+      A01:2021 "Broken Access Control" ranked #1 because it encompasses
+      IDOR, privilege escalation, path traversal, CORS misconfiguration;
+      hard to automate testing for (unlike SQLi which scanners catch).
+
+      TRAPS: "Using UUIDs instead of sequential IDs prevents IDOR" is WRONG.
+      "IDOR only applies to database IDs" is WRONG — file paths, API
+      parameters, any indirect object reference counts.
+    messages:
+      - role: user
+        content: |
+          Write a Flask REST API with these endpoints:
+
+          1. GET /users/<id>/profile — returns user profile data
+          2. PUT /users/<id>/profile — updates user profile data
+
+          Implement it FIRST with an IDOR (Insecure Direct Object Reference)
+          vulnerability — the logged-in user can access/edit any user's profile
+          by changing the ID in the URL.
+
+          Then write the fixed version with proper authorization checks.
+
+          Write a test (using Flask test client) that proves the vulnerable
+          version is exploitable and the fixed version blocks unauthorized access.
+
+          Then answer:
+          1. What is the difference between authentication and authorization? Why does being logged in not prevent IDOR?
+          2. Why don't UUIDs solve IDOR, even though they're unguessable?
+          3. What is the broader OWASP category that includes IDOR, and why is it consistently ranked #1?
+
+  # =========================================================================
+  # BIOLOGY / BIOINFORMATICS (5 prompts)
+  # =========================================================================
+
+  - id: "bio-sequence-align"
+    category: biology
+    difficulty: hard
+    tags: [python, bioinformatics, dynamic-programming, evolution]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must correctly initialize first row and column with gap
+      penalties (0, -2, -4, -6, ...). Scoring matrix must be (m+1)x(n+1).
+      Traceback must follow diagonal (match/mismatch), up (gap in seq 2), or
+      left (gap in seq 1) from bottom-right to top-left. For AGTACGCA vs
+      TATGC, optimal score should be -1. Must handle empty sequences and
+      different-length sequences.
+
+      DOMAIN: Score of -3 for 20bp suggests weak relatedness — but could be
+      wrong if scoring parameters are poorly chosen, sequences have extensive
+      indels, or conserved domains are separated by divergent regions. Use
+      Smith-Waterman when: comparing a short motif against a full gene,
+      finding conserved domains in divergent proteins, searching for binding
+      sites — any case expecting sub-region similarity. The +1/-1 matrix
+      treats all substitutions equally, but transitions are more common than
+      transversions. BLOSUM/PAM capture observed substitution frequencies from
+      aligned protein families — conservative substitutions score higher.
+
+      TRAPS: "Negative score means unrelated" is oversimplified — short
+      sequences with high gap penalties can score negative despite homology.
+      "Global alignment is always better because it uses all the data" is
+      WRONG — it forces end-to-end alignment obscuring local conservation.
+    messages:
+      - role: user
+        content: |
+          Implement the Needleman-Wunsch global sequence alignment algorithm
+          for two DNA sequences in Python. Use a simple scoring scheme:
+          +1 for match, -1 for mismatch, -2 for gap.
+
+          Your implementation should:
+          1. Build the full scoring matrix
+          2. Perform traceback to recover the optimal alignment
+          3. Return the alignment score, the aligned sequences (with gaps shown as '-'), and the scoring matrix
+
+          Test with: AGTACGCA and TATGC
+
+          Then answer:
+          1. If two 20bp sequences produce an alignment score of -3, what does this suggest about their evolutionary relatedness? When would this conclusion be wrong?
+          2. When would you use Smith-Waterman (local alignment) instead of Needleman-Wunsch? Give a concrete biological scenario.
+          3. Why is the simple +1/-1 scoring matrix biologically unrealistic, and what do BLOSUM and PAM matrices capture that it doesn't?
+
+  - id: "bio-codon-bias"
+    category: biology
+    difficulty: medium
+    tags: [python, bioinformatics, molecular-biology, translation]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must include complete codon table (64 codons, 20 amino
+      acids + 3 stops). RSCU formula: RSCU_i = (observed_i * n_synonymous) /
+      sum(observed for all synonymous codons). Must handle stop codons
+      (exclude from amino acid analysis). Positions should be indexed. Test
+      sequence must demonstrate bias (not uniform usage). Must handle
+      sequences not a multiple of 3.
+
+      DOMAIN: Codon bias exists because tRNA abundance varies — translational
+      selection favors codons matching abundant tRNAs for speed and accuracy,
+      especially in highly expressed genes. Heterologous expression can fail
+      because host tRNA pools differ (e.g., human gene in E. coli). Codon
+      optimization replaces rare codons with host-preferred synonymous codons.
+      Wobble hypothesis (Crick, 1966): third codon position forms non-standard
+      base pairs with anticodon first position. One tRNA recognizes multiple
+      codons but with different efficiency — wobble pairs are less stable.
+
+      TRAPS: "All synonymous codons are interchangeable" is WRONG — tRNA
+      abundance creates speed/accuracy differences. "Codon bias is random
+      drift" is WRONG for highly-expressed genes. "Codon optimization always
+      improves expression" is WRONG — rare codons can be important for
+      protein folding via translational pauses.
+    messages:
+      - role: user
+        content: |
+          Write a Python function that takes a coding DNA sequence (must be a
+          multiple of 3 nucleotides) and:
+
+          1. Splits it into codons and translates to amino acids using the standard genetic code
+          2. For each amino acid, computes the Relative Synonymous Codon Usage (RSCU)
+          3. Identifies rare codons (RSCU < 0.5) and reports their positions in the sequence
+
+          Test with a sequence of at least 30 codons that you construct to
+          demonstrate codon bias.
+
+          Then answer:
+          1. Why do organisms have codon usage bias? What selective pressure maintains it?
+          2. How does codon bias affect heterologous protein expression, and what is codon optimization?
+          3. What is the wobble hypothesis, and how does it explain why synonymous codons are NOT functionally equivalent?
+
+  - id: "bio-phylo-distance"
+    category: biology
+    difficulty: hard
+    tags: [python, bioinformatics, evolution, molecular-evolution]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: p = (differences) / (compared positions, excluding gaps).
+      JC formula: d = -0.75 * math.log(1 - 4*p/3). Must check p < 0.75
+      before log. For p=0.05: d ~ 0.0517. For p=0.30: d ~ 0.3808. For
+      p=0.70: d ~ 1.7269. Gap handling: exclude positions where either
+      sequence has '-'.
+
+      DOMAIN: Raw p-distance underestimates due to multiple hits — a site
+      can mutate A>G>A appearing unchanged despite two substitutions
+      (saturation). JC models this as continuous-time Markov process. JC
+      assumes equal substitution rates (unrealistic) and uniform site rates.
+      Kimura 2-parameter separates transition/transversion rates. Gamma
+      models allow rate variation across sites. Breaks down at p >= 0.75
+      (random sequence expectation) — sequences saturated, original
+      similarity erased, log undefined.
+
+      TRAPS: "More differences always means more divergence" is WRONG at
+      high divergence — observed differences plateau. "JC is outdated" is
+      WRONG — appropriate for close sequences and first approximations.
+    messages:
+      - role: user
+        content: |
+          Implement the Jukes-Cantor distance correction for a pair of aligned
+          DNA sequences in Python.
+
+          Your function should:
+          1. Count the proportion of differing sites (p-distance), ignoring positions with gaps
+          2. Apply the Jukes-Cantor formula: d = -3/4 * ln(1 - 4p/3)
+          3. Return both the raw p-distance and the corrected distance
+          4. Handle the case where the correction is undefined (p >= 0.75)
+
+          Test with sequence pairs at low divergence (p~0.05), moderate
+          divergence (p~0.30), and high divergence (p~0.70).
+
+          Then answer:
+          1. Why can't you use the raw proportion of differences as evolutionary distance? What specific phenomenon does Jukes-Cantor correct for?
+          2. What assumption does Jukes-Cantor make that is biologically unrealistic, and what more complex model relaxes this assumption?
+          3. At what divergence level does the Jukes-Cantor correction break down, and why does this represent a fundamental limit of sequence comparison?
+
+  - id: "bio-restriction-map"
+    category: biology
+    difficulty: medium
+    tags: [python, bioinformatics, molecular-biology, restriction-enzymes]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must correctly expand IUPAC ambiguity codes — either by
+      regex (N>[ACGT], R>[AG], Y>[CT], W>[AT], S>[GC], M>[AC], K>[GT]) or
+      by checking all expansions. Must search both strands for non-palindromic
+      sites with ambiguity codes. For truly palindromic sequences, forward
+      hits ARE the reverse complement hits. Must handle overlapping sites.
+
+      DOMAIN: Restriction enzymes are homodimers — two identical subunits
+      each recognize one strand, so the site must be palindromic (reads same
+      5'>3' on both strands). CpG depletion: 5-methylcytosine at CpG
+      spontaneously deaminates to thymine ~10x faster than other mutations.
+      Over evolution, CpG is depleted (~1% observed vs ~4% expected). NotI
+      (GCGGCCGC, 2 CpGs) is exceptionally rare — cuts human genome into ~1Mb
+      fragments. Expected 6-base frequency: (1/4)^6 = 1/4096 bp. Actual
+      genomes deviate due to GC content variation, CpG depletion,
+      dinucleotide biases, and selection against sites in organisms with
+      restriction-modification systems.
+
+      TRAPS: "CpG is rare by random chance" is WRONG — methylation-induced
+      deamination is the mechanism. "Palindromic means same forwards and
+      backwards on one strand" is WRONG — it means same on both strands
+      read 5'>3'.
+    messages:
+      - role: user
+        content: |
+          Write a Python function that finds all restriction enzyme cut sites
+          in a DNA sequence. The function should:
+
+          1. Accept a DNA sequence and a dictionary of enzyme names to recognition sequences
+          2. Handle palindromic recognition sequences (restriction sites read the same on both strands)
+          3. Handle IUPAC ambiguity codes in recognition sequences (R=A/G, Y=C/T, W=A/T, S=G/C, M=A/C, K=G/T, N=any)
+          4. Return cut positions and the enzyme name for each site found
+
+          Test with enzymes: EcoRI (GAATTC), BamHI (GGATCC), NotI (GCGGCCGC),
+          and HinfI (GANTC, where N is any base).
+
+          Then answer:
+          1. Why are restriction enzyme recognition sites palindromic? What biological mechanism creates this specificity?
+          2. Why are CpG-containing sites (like NotI: GCGGCCGC) rare in mammalian genomes? Be specific about the molecular mechanism.
+          3. What is the expected frequency of a 6-base recognition site in random DNA, and why do actual genomes deviate significantly from this prediction?
+
+  - id: "bio-protein-hydrophobicity"
+    category: biology
+    difficulty: hard
+    tags: [python, bioinformatics, structural-biology, membrane-proteins]
+    contamination_risk: low
+    expected_answer: >
+      CORRECTNESS: Must include Kyte-Doolittle values for all 20 amino acids
+      (Ile 4.5, Val 4.2, Leu 3.8, Phe 2.8, Cys 2.5, Met 1.9, Ala 1.8,
+      Gly -0.4, Thr -0.7, Ser -0.8, Trp -0.9, Tyr -1.3, Pro -1.6,
+      His -3.2, Glu -3.5, Gln -3.5, Asp -3.5, Asn -3.5, Lys -3.9,
+      Arg -4.5). Window averaging must handle edges. Test sequence should
+      show a clear peak above 1.6 in the transmembrane region. Must handle
+      unknown amino acids.
+
+      DOMAIN: TM helices pass through the lipid bilayer (hydrophobic). Alpha
+      helix rise is 1.5 A/residue; bilayer core is ~30 A; minimum ~20
+      residues to span. Cannot distinguish TM from buried interior because
+      globular protein cores are also hydrophobic — context matters (membrane
+      vs soluble). Additional methods: HMMs (TMHMM, Phobius) use topology
+      patterns; evolutionary conservation (lipid-facing varies more than
+      helix-helix interface); positive-inside rule (cytoplasmic loops enriched
+      in Arg/Lys); signal peptide prediction (hydrophobic signal peptides
+      confused with TM helices).
+
+      TRAPS: "Hydrophobic = membrane protein" is WRONG — all globular
+      proteins have hydrophobic cores. "Window size 7 is always correct"
+      is WRONG — 19-21 is better for TM prediction.
+    messages:
+      - role: user
+        content: |
+          Write a Python function that:
+
+          1. Computes a hydrophobicity profile for a protein sequence using the Kyte-Doolittle scale with a sliding window (default window size 7)
+          2. Identifies putative transmembrane regions: stretches of at least 15 residues where the average hydrophobicity in every window exceeds 1.6
+          3. Returns the per-position hydrophobicity values and a list of transmembrane region start/end positions
+
+          Test with a sequence containing at least one known transmembrane helix
+          (you can use a simplified version of bacteriorhodopsin's first TM
+          helix: MGRPEWIWLALGTALMGLGTLYF flanked by hydrophilic residues).
+
+          Then answer:
+          1. Why does a sustained hydrophobic stretch suggest a transmembrane alpha-helix? What is the minimum length requirement and why?
+          2. Why can't hydrophobicity alone distinguish transmembrane helices from buried interior residues in globular proteins?
+          3. What other computational methods complement hydrophobicity analysis for transmembrane prediction, and what additional information do they use?
+
+  # =========================================================================
+  # MATHEMATICS / STATISTICS (6 prompts)
+  # =========================================================================
+
+  - id: "math-bootstrap-ci"
+    category: math-stats
+    difficulty: medium
+    tags: [python, statistics, bootstrap, confidence-intervals]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Must use random.choices (with replacement), NOT
+      random.sample (without replacement). Median must handle odd and even
+      lengths. Percentile: sort bootstrap medians, take index B*0.025 and
+      B*0.975. For t-CI: mean +/- t_crit * (stdev/sqrt(n)) where t_crit ~
+      2.145 for n=15, df=14. Must use fixed random seed. The dataset is
+      right-skewed (outliers 14.8, 9.6), so bootstrap CI for median should
+      be tighter than t-CI for mean.
+
+      DOMAIN: Dataset is right-skewed — mean (4.55) pulled by outliers,
+      median (3.2) is robust. t-CI assumes normality (violated). Bootstrap
+      doesn't assume normality. With bimodal data, median CI can be very
+      wide spanning the gap — median may not summarize well. CLT helps with
+      means (sampling distribution approaches normal) but says nothing about
+      medians. Median CI width depends on 1/(2*f(m)*sqrt(n)) where f(m) is
+      density at the median. Low density at median = wide CI regardless of n.
+
+      TRAPS: "Larger samples always give tighter CIs" is true for means but
+      median CI depends on density at the median. "Bootstrap works for any
+      sample size" — with n<10, bootstrap CIs can be unreliable.
+    messages:
+      - role: user
+        content: |
+          Implement a percentile bootstrap confidence interval for the median
+          of a dataset in Python (no numpy/scipy).
+
+          Your implementation should:
+          1. Resample with replacement B=10,000 times
+          2. Compute the median of each bootstrap sample
+          3. Return the 2.5th and 97.5th percentiles as the 95% CI bounds
+          4. Also compute the analytical 95% CI for the mean of the same dataset (using t-distribution critical values)
+
+          Test with: [2.3, 1.1, 14.8, 3.7, 2.9, 5.1, 3.2, 2.8, 9.6, 4.5, 3.1, 2.7, 6.3, 2.4, 3.8]
+
+          Then answer:
+          1. Why is the bootstrap CI for the median more appropriate than the analytical CI for the mean for this specific dataset? Examine the data before answering.
+          2. What happens to bootstrap CIs when the data is bimodal? Is the median still a good summary statistic?
+          3. Why does the Central Limit Theorem help with means but NOT with medians, and what does the width of a median's CI depend on?
+
+  - id: "math-numerical-deriv"
+    category: math-stats
+    difficulty: hard
+    tags: [python, numerical-methods, floating-point, calculus]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Forward and backward error proportional to h down to
+      ~1e-8, then increases. Central error proportional to h^2 down to
+      ~1e-5, then increases. Optimal h for forward: ~sqrt(epsilon) ~ 1e-8.
+      Optimal h for central: ~epsilon^(1/3) ~ 1e-5.3. Error ratios should
+      be ~2 for forward (O(h)) and ~4 for central (O(h^2)) in the
+      well-behaved region.
+
+      DOMAIN: Catastrophic cancellation: f(x+h) and f(x) nearly equal when
+      h tiny — subtracting loses significant digits. At h=1e-15, values may
+      round to same float64. U-shaped curve: truncation error decreases as
+      h->0 (better approximation), roundoff increases (worse cancellation).
+      Minimum where truncation ~ roundoff. Forward: truncation O(h), roundoff
+      O(eps/h), optimal sqrt(eps). Central: truncation O(h^2), roundoff
+      O(eps/h), optimal eps^(1/3). Taylor: f(x+h) = f(x) + hf'(x) +
+      h^2 f''(x)/2 + ... Central: h^1 terms cancel, error is O(h^2).
+
+      TRAPS: "Smaller h is always better" is WRONG. "Use h=1e-15 for max
+      precision" is WRONG — near machine epsilon, produces garbage.
+    messages:
+      - role: user
+        content: |
+          Implement forward, backward, and central difference numerical
+          derivatives in Python:
+
+          1. Forward:  f'(x) ≈ (f(x+h) - f(x)) / h
+          2. Backward: f'(x) ≈ (f(x) - f(x-h)) / h
+          3. Central:  f'(x) ≈ (f(x+h) - f(x-h)) / (2h)
+
+          Test all three on f(x) = sin(x) at x = 1.0 (where f'(1) = cos(1))
+          for h values: 1e-1, 1e-2, ..., 1e-15. Print a table showing h,
+          each method's error, and the ratio of errors between consecutive h
+          values.
+
+          Then answer:
+          1. Why does accuracy DEGRADE when h gets very small (below ~1e-8)? What specific floating-point phenomenon causes this?
+          2. What is the U-shaped error curve, and what determines the optimal h for each method?
+          3. Why is central difference O(h²) while forward/backward are O(h)? Show the Taylor series argument briefly.
+
+  - id: "math-bayesian-coin"
+    category: math-stats
+    difficulty: medium
+    tags: [python, bayesian-inference, probability, beta-distribution]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Starting Beta(1,1). After each observation: Beta(a+1,b)
+      for H, Beta(a,b+1) for T. After HHTHTTHHHH: Beta(8,4). Posterior
+      mean = 8/12 ~ 0.667. 95% credible interval approximately [0.39, 0.88].
+      Implementation of Beta quantile can use bisection on regularized
+      incomplete beta function or normal approximation.
+
+      DOMAIN: Conjugate means posterior is same family as prior — Beta x
+      Bernoulli = Beta. Updating is just adding counts. Alpha = pseudo-counts
+      of heads, beta = pseudo-counts of tails. Posterior probability of
+      p in [0.45, 0.55] is ~0.08-0.10 (small), but 95% CI includes 0.5 —
+      not enough data to confidently claim bias. Beta(10,10) prior encodes
+      "probably fair" — posterior Beta(17,13), mean ~0.567, pulled toward 0.5.
+      Strong prior appropriate when genuine prior knowledge exists.
+
+      TRAPS: "7 heads in 10 proves bias" is WRONG — CI includes 0.5, data
+      consistent with fair coin. "Uniform prior is uninformative" — technically
+      Jeffreys Beta(0.5,0.5) is the invariant uninformative prior.
+    messages:
+      - role: user
+        content: |
+          Implement Bayesian updating for estimating a coin's bias in Python:
+
+          1. Start with a Beta(1,1) prior (uniform)
+          2. Observe the sequence H, H, T, H, T, T, H, H, H, H (7 heads, 3 tails)
+          3. After each flip, compute and print the posterior Beta parameters and the posterior mean
+          4. After all flips, compute the 95% credible interval for the bias
+
+          You may implement the inverse incomplete beta function numerically
+          or use a reasonable approximation.
+
+          Then answer:
+          1. Why is the Beta distribution the conjugate prior for the Bernoulli likelihood? What does "conjugate" mean concretely in terms of computation?
+          2. After observing 7 heads in 10 flips, how confident should you be that the coin is biased? What probability does the posterior assign to the fair-coin hypothesis (p ∈ [0.45, 0.55])?
+          3. What would change if you used a Beta(10,10) prior instead of Beta(1,1)? When would a strong prior be appropriate?
+
+  - id: "math-condition-number"
+    category: math-stats
+    difficulty: hard
+    tags: [python, linear-algebra, numerical-analysis, conditioning]
+    contamination_risk: low
+    expected_answer: >
+      CORRECTNESS: Cramer's rule: x1 = det(A1)/det(A), x2 = det(A2)/det(A).
+      Infinity norm: max row sum of absolute values. A_inv for 2x2:
+      (1/det)*[[d,-b],[-c,a]]. Well-conditioned: x=[1.6, 1.8], kappa ~ 2.
+      Ill-conditioned: x=[1, 1] but perturbed b gives dramatically different
+      x. Must show relative output error / relative input error ~ kappa.
+
+      DOMAIN: Determinant is scale-dependent — multiplying A by 1000 changes
+      det by 10^6 but not conditioning. Identity matrix: det=1, kappa=1.
+      [[1e-8,0],[0,1e-8]]: det=1e-16 (tiny!), kappa=1 (perfect). Condition
+      number captures ratio of largest to smallest singular value. Real-world:
+      multicollinear regression — X^T*X ill-conditioned, coefficients flip
+      sign with one new observation. Ridge regression adds lambda*I to
+      improve conditioning.
+
+      TRAPS: "Small determinant means nearly singular" is WRONG —
+      scale-dependent. "Scaling always fixes conditioning" — equilibration
+      helps but can't fix inherent ill-conditioning.
+    messages:
+      - role: user
+        content: |
+          Implement a function in Python that:
+
+          1. Solves a 2×2 linear system Ax = b using Cramer's rule
+          2. Computes the condition number of A in the infinity norm: κ(A) = ||A||∞ · ||A⁻¹||∞
+          3. Estimates the maximum relative output error given a relative input perturbation
+
+          Test with:
+          - Well-conditioned: A = [[2, 1], [1, 3]], b = [5, 7]
+          - Ill-conditioned: A = [[1, 1], [1, 1.0001]], b = [2, 2.0001]
+
+          For the ill-conditioned system, also solve with b' = [2, 2.0002]
+          and show how a tiny input change produces a large output change.
+
+          Then answer:
+          1. What does the condition number tell you that the determinant alone doesn't? Give an example where the determinant is "large" but the system is ill-conditioned.
+          2. Why can a system with a large determinant still be numerically unstable?
+          3. Give a real-world example where matrix conditioning matters and explain the practical consequence of ignoring it.
+
+  - id: "math-bond-pricing"
+    category: math-stats
+    difficulty: medium
+    tags: [python, numerical-methods, finance, present-value, duration]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Semi-annual: periods=20, coupon per period=25
+      ($1000*5%/2), yield per period = annual_yield/2. At y=3%: price ~
+      $1,085.30 (premium). At y=5%: price = $1,000 (par). At y=7%: price ~
+      $928.94 (discount). Duration ~ 8.0-8.5 years (Macaulay) or 7.8-8.3
+      (modified) at y=5%. Convexity positive. Must handle semi-annual
+      compounding — common error: using annual yield without dividing by 2.
+
+      DOMAIN: Each PV term C/(1+y)^t decreases as y increases — total PV
+      decreases. Convex because d^2P/dy^2 > 0: 1% yield increase causes
+      less price drop than 1% decrease causes price gain. Higher coupon
+      reduces duration because more cash flow arrives EARLIER — duration is
+      weighted-average time to cash flows, weighted by PV. Higher coupons
+      weight earlier periods more, pulling average forward. Zero-coupon:
+      duration = maturity. Immunization: match portfolio duration to liability
+      duration. Duration alone insufficient for large yield moves — convexity
+      correction needed.
+
+      TRAPS: "Higher coupon = higher price" — only at same yield; question
+      is about duration. "Duration measures holding period" is WRONG — it
+      measures price sensitivity to yield changes.
+    messages:
+      - role: user
+        content: |
+          Implement a bond pricing function in Python that:
+
+          1. Computes present value: PV = Σ(C/(1+y)^t) + F/(1+y)^n, where C = coupon payment, y = yield per period, F = face value, n = total periods
+          2. Computes modified duration numerically: D_mod = -(1/P) * dP/dy, using central difference with Δy = 0.0001
+          3. Computes convexity numerically: Conv = (1/P) * d²P/dy², using central difference
+
+          Test with: $1000 face value, 5% annual coupon (paid semi-annually),
+          10-year maturity, at yields of 3%, 5%, and 7%.
+
+          Then answer:
+          1. Derive from your pricing formula why bond prices move inversely to yields. Why is this relationship nonlinear (convex)?
+          2. Why does a higher coupon rate REDUCE duration? Explain in terms of cash flow timing.
+          3. What practical portfolio management scenario makes duration and convexity important? Why isn't duration alone sufficient?
+
+  - id: "math-amortization"
+    category: math-stats
+    difficulty: medium
+    tags: [python, numerical-methods, finance, recurrence-relation]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Monthly rate r = 0.065/12. Payments n = 360. Monthly
+      payment M ~ $1,580.17. Schedule must show interest decreasing and
+      principal increasing over time (early payments ~70% interest). Extra
+      $200/month from start: payoff ~ 22-23 years, saving ~$90,000+ total
+      interest. Must handle final month correctly and reach exactly $0
+      balance.
+
+      DOMAIN: Extra $200 in year 1 saves more because each dollar of
+      principal reduction prevents ~29 years of compound interest vs ~15
+      years if paid in year 15. Earlier payments have exponentially greater
+      impact. APR includes all costs (origination, points, closing)
+      amortized over the term — enables apples-to-apples comparison vs
+      stated rate. Interest-only rational scenario: real estate developer
+      during construction (no income yet, loan repaid from sale proceeds);
+      also for lumpy-income borrowers investing savings at higher returns.
+
+      TRAPS: "Paying double halves the term" — approximately but better than
+      half due to compounding effect. "Extra payments always worth making" —
+      depends on rate vs alternative investment returns.
+    messages:
+      - role: user
+        content: |
+          Implement a loan amortization schedule in Python that:
+
+          1. Computes the fixed monthly payment: M = P * r(1+r)^n / ((1+r)^n - 1)
+          2. For each month: payment number, beginning balance, scheduled payment, principal portion, interest portion, ending balance
+          3. Handles optional extra monthly payments applied directly to principal
+          4. Returns total interest paid and months to payoff
+
+          Test with: $250,000 loan, 6.5% annual rate, 30-year term. Then show
+          the impact of an extra $200/month payment.
+
+          Then answer:
+          1. Why does paying an extra $200/month in year 1 save far more total interest than the same extra payment starting in year 15? Quantify the difference if you can.
+          2. What is the mathematical relationship between APR and the monthly payment formula? Why is the "stated rate" different from APR for some loans?
+          3. When would an interest-only loan period be financially rational (not predatory)? Give a specific scenario.
+
+  # =========================================================================
+  # PHYSICS / ENGINEERING (6 prompts)
+  # =========================================================================
+
+  - id: "phys-projectile-drag"
+    category: physics-engineering
+    difficulty: hard
+    tags: [python, physics, runge-kutta, fluid-dynamics]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: State vector [x, y, vx, vy]. Derivatives: dx/dt=vx,
+      dy/dt=vy, dvx/dt = -(rho*Cd*A)/(2*m)*v*vx, dvy/dt = -g -
+      (rho*Cd*A)/(2*m)*v*vy where v=sqrt(vx^2+vy^2). Cross-section
+      A=pi*r^2. RK4 must correctly compute k1-k4. With drag: range ~115m
+      vs ~163m without drag. dt <= 0.01s. Must detect ground crossing.
+
+      DOMAIN: Drag grows as v^2 — at 40 m/s for this baseball, drag (~1.26N)
+      is already comparable to gravity (~1.42N). Terminal velocity: v_t =
+      sqrt(2mg/(rho*Cd*A)) ~ 42 m/s. Depends on m/A ratio, not mass alone
+      — bowling ball vs beach ball of same mass. Reynolds number determines
+      regime: Re < ~1 = Stokes (linear), Re > ~1000 = quadratic. Baseball
+      at 40 m/s: Re ~ 200,000, firmly quadratic. Linear drag for: dust,
+      bacteria, viscous fluids.
+
+      TRAPS: "Heavier objects fall faster" — partially true but it's m/A
+      ratio, not mass alone. "Drag is negligible for everyday objects" is
+      WRONG at high speeds.
+    messages:
+      - role: user
+        content: |
+          Implement a projectile motion simulator in Python using the 4th-order
+          Runge-Kutta (RK4) method that:
+
+          1. Models 2D projectile motion with quadratic air resistance: F_drag = -½ρCdAv|v| (opposing velocity)
+          2. Also computes the analytical no-drag trajectory for comparison
+          3. Prints a table of time, x, y for both trajectories at regular intervals until the projectile hits the ground
+
+          Parameters: mass = 0.145 kg (baseball), radius = 0.037 m, Cd = 0.3,
+          ρ = 1.225 kg/m³. Launch at 45° with speed 40 m/s.
+
+          Then answer:
+          1. Why does the no-drag approximation fail for high-velocity objects? At what velocity does drag become the dominant force for this baseball?
+          2. What is terminal velocity? Derive it from your drag formula. Why does it depend on the mass-to-cross-section ratio, not mass alone?
+          3. When is the linear drag model (F ∝ v) valid instead of quadratic (F ∝ v²)? What dimensionless number determines which regime applies?
+
+  - id: "phys-heat-diffusion"
+    category: physics-engineering
+    difficulty: hard
+    tags: [python, physics, finite-difference, pde, thermodynamics]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: FTCS: T_i^{n+1} = T_i^n + alpha*dt/dx^2 *
+      (T_{i-1}^n - 2*T_i^n + T_{i+1}^n). CFL: alpha*dt/dx^2 <= 0.5. With
+      dx=0.01m: max dt = 0.005s. Must show smooth evolution toward linear
+      profile. Unstable dt should show growing oscillations. Must apply
+      boundary conditions each step. At t=25s: approximately linear.
+
+      DOMAIN: CFL: numerical domain of dependence must contain physical
+      domain. If physical diffusion faster than numerical reach, scheme
+      can't represent physics -> instability. Amplification factor of any
+      Fourier mode must have |G| <= 1. Implicit (backward Euler): uses
+      T^{n+1} on right side, tridiagonal solve, amplification always < 1,
+      unconditionally stable. Tradeoff: explicit cheap per step but many
+      small steps; implicit expensive per step but large dt. Steady state:
+      dT/dt=0 -> d^2T/dx^2=0 -> T(x) = ax+b -> linear. Heat flux constant
+      everywhere.
+
+      TRAPS: "Smaller dt always more accurate" is WRONG if dx is coarse.
+      "CFL guarantees accuracy" is WRONG — it guarantees stability only.
+    messages:
+      - role: user
+        content: |
+          Implement a 1D heat equation solver in Python using the explicit
+          finite difference method (FTCS scheme):
+
+          1. Model a 1-meter rod with fixed boundary temperatures: T(0) = 100°C, T(L) = 0°C
+          2. Initial condition: T(x, 0) = 0°C for all interior points
+          3. Thermal diffusivity α = 0.01 m²/s
+          4. Print the temperature profile at t = 0, 1, 5, and 25 seconds
+
+          Choose appropriate spatial and temporal discretization. Show what
+          happens if you violate the stability condition by doubling the time
+          step beyond the CFL limit.
+
+          Then answer:
+          1. What is the CFL condition for this scheme, and derive why it must be satisfied? What does information propagation have to do with it?
+          2. Why is the explicit method conditionally stable while the implicit (backward Euler) method is unconditionally stable? What's the tradeoff?
+          3. Why does the steady-state solution approach a linear temperature profile? Derive this from the heat equation.
+
+  - id: "phys-pendulum-chaos"
+    category: physics-engineering
+    difficulty: hard
+    tags: [python, physics, chaos-theory, nonlinear-dynamics, runge-kutta]
+    contamination_risk: low
+    expected_answer: >
+      CORRECTNESS: Must use correct Lagrangian equations (coupled 2nd-order
+      ODEs involving cos/sin of angle differences). State vector [theta1,
+      theta2, omega1, omega2]. At theta1=theta2=2.0 rad (large angle),
+      system is chaotic. Divergence starts ~0.001 and grows exponentially
+      until trajectories uncorrelated (~10-15s). dt <= 0.001s for accuracy.
+
+      DOMAIN: Positive Lyapunov exponent = exponential divergence of nearby
+      trajectories = chaos = long-term prediction impossible. Single
+      pendulum NOT chaotic: 1 DOF, integrable, 2D phase space, energy
+      constrains to 1D curves — can't cross (uniqueness theorem). Double
+      pendulum: 2 DOF, 4D phase space, trajectories exhibit complexity
+      impossible in 2D. Linearization at small angles gives coupled
+      oscillators (normal modes), but at large angles (2 rad ~ 115°)
+      nonlinear terms dominate — linearized approximation is qualitatively
+      wrong (predicts regular where actual is chaotic).
+
+      TRAPS: "Butterfly effect means small changes always grow" is WRONG —
+      only in chaotic systems. "Chaos means random" is WRONG — deterministic.
+      "Double pendulum is always chaotic" is WRONG — regular at low energy.
+    messages:
+      - role: user
+        content: |
+          Implement a double pendulum simulation in Python using RK4:
+
+          1. Two point masses (m1=m2=1 kg) on rigid massless rods (l1=l2=1 m) under gravity
+          2. Use the Lagrangian-derived equations of motion
+          3. Run two trajectories: θ1=2.0, θ2=2.0 (A) and θ1=2.0, θ2=2.001 (B)
+          4. Print angular positions of the second pendulum for both at t = 0, 5, 10, 15, 20 seconds
+          5. Compute and print the divergence |θ2_A(t) - θ2_B(t)| at each time step
+
+          Then answer:
+          1. Why do the trajectories diverge despite nearly identical initial conditions? What is the Lyapunov exponent and what does a positive value mean?
+          2. Why is a SINGLE pendulum NOT chaotic? What mathematical property distinguishes the two systems?
+          3. What breaks when you linearize the double pendulum equations? Why does linearization fail here but succeed for a single pendulum at small angles?
+
+  - id: "phys-circuit-filter"
+    category: physics-engineering
+    difficulty: medium
+    tags: [python, physics, electrical-engineering, signal-processing]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: Resonant frequency f_0 = 1/(2*pi*sqrt(0.1*1e-6)) ~
+      503.3 Hz. State variables: charge q, current I=dq/dt. Equations:
+      dI/dt = (V_in - R*I - q/C)/L, dq/dt = I. Output V_R = R*I. At
+      resonance V_R ~ V_in. 100 Hz and 2000 Hz attenuated. Run >= 10-20ms
+      for transient decay. dt <= 50us to resolve 2000 Hz.
+
+      DOMAIN: At f_0, L and C impedances cancel (jωL = 1/(jωC)). Energy
+      oscillates between inductor magnetic field and capacitor electric
+      field. Q = (1/R)*sqrt(L/C) ~ 3.16. Bandwidth BW = f_0/Q ~ 159 Hz.
+      Lower R -> higher Q -> narrower bandwidth, sharper peak. Parasitics:
+      inductor parasitic capacitance (turns as plates, self-resonance);
+      capacitor ESL (lead inductance, high-freq resonance); skin effect
+      (current on wire surface at high freq, increasing R); dielectric
+      losses in capacitor.
+
+      TRAPS: "Higher Q always better" is WRONG — narrow bandwidth rejects
+      wanted frequencies, ringing distorts time-domain signals. "Resonant
+      frequency = max output" — true for V_R, but V_L peaks above f_0
+      and V_C peaks below.
+    messages:
+      - role: user
+        content: |
+          Implement a discrete-time simulation of a series RLC bandpass filter
+          in Python:
+
+          1. Components: R = 100 Ω, L = 0.1 H, C = 1 μF in series
+          2. Circuit equation: L·d²q/dt² + R·dq/dt + q/C = V_in(t)
+          3. Drive with a sum of three sinusoids: f = 100 Hz, 503 Hz (near resonance), and 2000 Hz, each amplitude 1V
+          4. After transients decay, measure amplitude of each frequency component in the output voltage across R
+
+          Compute resonant frequency analytically: f₀ = 1/(2π√(LC)) and
+          verify it matches the simulation peak.
+
+          Then answer:
+          1. Why does the RLC circuit resonate? Explain in terms of energy exchange between L and C.
+          2. What is the quality factor Q, how does it relate to bandwidth, and what happens to selectivity as R decreases?
+          3. Why do real circuits deviate from this ideal model at high frequencies? Name at least two parasitic effects.
+
+  - id: "phys-pid-controller"
+    category: physics-engineering
+    difficulty: hard
+    tags: [python, control-theory, pid, anti-windup, robotics]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: P-only: steady-state error present (T never reaches
+      setpoint). PI: integral eliminates error but causes overshoot. PID:
+      derivative reduces overshoot. Anti-windup: when output saturated [0,1],
+      stop integrating. Output must clip to [0,1]. Reasonable gains: Kp ~
+      0.02-0.05, Ki ~ 0.001-0.005, Kd ~ 0.1-0.5 for this system.
+
+      DOMAIN: Integral windup: output saturated but integral keeps
+      accumulating — huge overshoot when error changes sign. Derivative
+      amplifies noise because it computes rate of change — sensor noise
+      (70.1, 69.9, 70.1) creates high-frequency oscillation. Derivative
+      kick: step setpoint change creates huge e(k)-e(k-1) spike. Fix:
+      "derivative on measurement" uses -T(k)+T(k-1) instead. Ziegler-
+      Nichols: increase Kp until sustained oscillation (critical K_u at
+      period P_u), set Kp=0.6*K_u, Ki=2*Kp/P_u, Kd=Kp*P_u/8. Limitations:
+      aggressive tuning (~25% overshoot), requires oscillation (unsafe),
+      assumes linear time-invariant.
+
+      TRAPS: "Higher gains = faster response" — only to critical gain, then
+      unstable. "PID always better than PI" is WRONG — with noisy sensors,
+      D term hurts. "Anti-windup is optional" is WRONG for real systems.
+    messages:
+      - role: user
+        content: |
+          Implement a discrete PID controller in Python for a simulated
+          first-order thermal system:
+
+          1. Plant: T(k+1) = T(k) + dt/τ * (K·u(k) - T(k) + T_ambient), where τ=10s, K=50°C/unit, T_ambient=20°C
+          2. PID: u(k) = Kp·e(k) + Ki·Σe(j)·dt + Kd·(e(k)-e(k-1))/dt, where e = T_setpoint - T
+          3. Include integral anti-windup (clamp integral when output saturates at [0, 1])
+          4. Run three simulations with setpoint=70°C: (a) P-only, (b) PI, (c) PID
+          5. Print temperature every second for 60 seconds
+
+          Choose reasonable gains. Show that P-only has steady-state error,
+          PI eliminates it but overshoots, and PID reduces overshoot.
+
+          Then answer:
+          1. What is integral windup, and demonstrate how your anti-windup prevents it. What would happen without it?
+          2. Why does derivative gain reduce overshoot but amplify sensor noise? What is "derivative kick" and how does "derivative on measurement" solve it?
+          3. How would you tune these gains systematically? Describe the Ziegler-Nichols method and its limitations.
+
+  - id: "phys-kalman-1d"
+    category: physics-engineering
+    difficulty: hard
+    tags: [python, estimation-theory, kalman-filter, signal-processing, robotics]
+    contamination_risk: medium
+    expected_answer: >
+      CORRECTNESS: F = [[1,dt],[0,1]]. H = [1,0]. Q = sigma_accel^2 *
+      [[dt^4/4, dt^3/2],[dt^3/2, dt^2]]. R = sigma_meas^2. Predict:
+      x_pred = F*x, P_pred = F*P*F^T + Q. Update: K = P_pred*H^T *
+      (H*P_pred*H^T + R)^-1, x = x_pred + K*(z - H*x_pred), P =
+      (I-K*H)*P_pred. Gain starts large (~0.5-1.0), converges to small
+      steady-state. During acceleration, visible lag as velocity estimate
+      slowly catches up.
+
+      DOMAIN: Gain decreases because state uncertainty P decreases — filter
+      becomes confident, less responsive. Innovation e(k) = z(k) -
+      H*x_pred(k) should be zero-mean white noise if model correct.
+      Detect mismatch: running mean of innovations drifts from zero; NIS
+      test (e^T*S^-1*e should follow chi-squared); CUSUM detects mean
+      shift. Process noise too low: trusts model too much, can't track
+      maneuvers. Too high: trusts measurements, output noisy. Fundamental
+      tradeoff: model trust vs measurement responsiveness.
+
+      TRAPS: "Lower measurement noise always improves tracking" — only if
+      model correct; with mismatch, trusting measurements more can help.
+      "Kalman filter is optimal" — only under its assumptions. "Increasing
+      process noise fixes model mismatch" — band-aid, not a fix.
+    messages:
+      - role: user
+        content: |
+          Implement a 1D Kalman filter in Python for tracking position from
+          noisy measurements:
+
+          1. State: [position, velocity]. Transition: constant velocity model with process noise
+          2. Measurement: position only, with Gaussian noise (σ_meas = 5 meters)
+          3. Process noise: acceleration disturbance with σ_accel = 0.5 m/s²
+          4. Simulate a target at 2 m/s for 100 steps (dt=1s), then 4 m/s for 50 more steps
+          5. Print: true position, measured position, filtered position, and Kalman gain at intervals of 10 steps
+
+          Then answer:
+          1. Why does the Kalman gain decrease over time? What happens when the target accelerates — does the filter detect the model mismatch?
+          2. What is the innovation sequence, and how would you use it to detect that your process model is wrong? What statistical test would you apply?
+          3. What happens if process noise is set too low? Too high? What is the fundamental tradeoff?
