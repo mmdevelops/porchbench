@@ -1,0 +1,98 @@
+# Calibration examples for frontier-model evaluation sessions.
+#
+# Present these at the start of each evaluation session to anchor the 1-5
+# scale. Examples are drawn from PoC benchmark evaluations (April 2026,
+# scored by Claude Opus 4.6 chatbot). They are NOT independent human ground
+# truth — they anchor self-consistency across sessions within the same model
+# family, not absolute correctness.
+#
+# Include one example at each quality tier: strong (4-5), adequate (3), weak (1-2).
+# Verdict-balanced per AutoRubric finding: don't over-represent any score level.
+
+calibration:
+  source: "PoC benchmark (April 2026), scored by Claude Opus 4.6 chatbot"
+  note: >
+    These scores anchor scale consistency between evaluation sessions.
+    They are from the same model family as the evaluator — useful for
+    intra-rater calibration but not an independent validity check.
+
+  examples:
+
+    - tier: "strong (score 4-5)"
+      model: "gemma4:e4b"
+      prompt_summary: >
+        Cross-domain (biology): implement DNA analysis (GC content, reverse
+        complement, ORFs, most frequent codon) then explain biological
+        implications of ~65% GC content.
+      response_summary: >
+        str.maketrans for reverse complement. Handles ambiguous N bases.
+        Set-based ORF deduplication. Inner loop correctly steps by 3.
+        Biology answer: thermal stability + Tm, CpG islands and epigenetic
+        regulation, hairpin loops impeding RNA polymerase, methylation-driven
+        false ORFs. Correctly reframed: "the algorithm is fine, the biology
+        is the constraint."
+      scores:
+        correctness: 5
+        domain_knowledge: 5
+        reasoning: 5
+        completeness: 5
+        design_quality: 4
+      weighted_score: 4.95
+      rationale: >
+        All four requirements implemented correctly. Biology answer was the
+        standout of the entire benchmark — CpG islands, epigenetic regulation,
+        and methylation-driven false ORFs demonstrate genuine domain expertise.
+        No other model mentioned CpG islands. Only minor deduction: design_quality
+        at 4 rather than 5 due to code organization (functional but not modular).
+
+    - tier: "adequate (score 3)"
+      model: "qwen2.5-coder:14b Q8"
+      prompt_summary: >
+        Cross-domain (biology): same prompt as above — DNA analysis with
+        biological implications.
+      response_summary: >
+        All three reading frames + reverse complement ORF search implemented.
+        Counter for most frequent codon. Biology answer had one factual error:
+        claimed high GC → higher mutation rate (backwards — GC-rich regions
+        are more stable). Missed CpG islands and secondary structure.
+      scores:
+        correctness: 4
+        domain_knowledge: 2
+        reasoning: 3
+        completeness: 4
+        design_quality: 4
+      weighted_score: 3.20
+      rationale: >
+        Code was correct and complete — all four requirements addressed.
+        Correctness high because implementation works. But domain_knowledge
+        scored low: factual error on GC/mutation relationship (a trap —
+        sounds plausible but is backwards), and missed the deeper biological
+        implications (CpG islands, epigenetic regulation). Reasoning adequate
+        but surface-level — connected code to biology but without depth.
+
+    - tier: "weak (score 1-2)"
+      model: "deepseek-r1:14b"
+      prompt_summary: >
+        Cross-domain (biology): same prompt as above — DNA analysis with
+        biological implications.
+      response_summary: >
+        Only implemented ORF finding — ignored GC content, reverse complement,
+        and most frequent codon (3 of 4 requirements missing). ORF inner loop
+        steps by 1 instead of 3 (fundamental in-frame error). No reading frames
+        1 or 2, no reverse strand search. Ignored the biology questions entirely.
+        130 seconds for the least complete answer in the benchmark.
+      scores:
+        correctness: 1
+        domain_knowledge: 1
+        reasoning: 1
+        completeness: 1
+        design_quality: 2
+      weighted_score: 1.15
+      rationale: >
+        Failed on every dimension. Only 1 of 4 code requirements attempted,
+        and that one has a fundamental algorithmic error (stepping by 1 instead
+        of 3 means codons are not read in-frame). Biology reasoning questions
+        completely ignored — not attempted, not "wrong." Design_quality gets 2
+        because what little code exists is structurally coherent, just
+        incomplete. This represents the floor: a response that misunderstands
+        the task and abandons most requirements.
