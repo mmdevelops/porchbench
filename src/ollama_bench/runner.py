@@ -244,7 +244,7 @@ async def run_suite(
 
             results.append(result)
             if on_prompt_complete:
-                on_prompt_complete(prompt.id, True)
+                on_prompt_complete(prompt.id, True, result)
 
         except Exception as exc:
             failed_count += 1

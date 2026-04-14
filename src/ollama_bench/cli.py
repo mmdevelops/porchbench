@@ -63,6 +63,10 @@ def run(
         bool,
         typer.Option("--resume", help="Skip prompts already completed in prior runs of the same suite+model."),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show per-prompt metrics and response preview."),
+    ] = False,
 ) -> None:
     """Run a benchmark suite against one or more Ollama models."""
     # Load and validate suite
@@ -103,9 +107,26 @@ def run(
             ) as progress:
                 task = progress.add_task(f"Running {model}", total=prompt_count)
 
-                def on_complete(prompt_id: str, success: bool) -> None:
+                def on_complete(prompt_id: str, success: bool, result=None) -> None:
                     status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
-                    progress.console.print(f"  {prompt_id}: {status}")
+                    dur = result.metrics.total_duration if result else None
+                    dur_str = f"{dur / 1e9:.1f}s" if dur else ""
+
+                    if verbose and result:
+                        tps = result.metrics.tokens_per_second
+                        toks = result.metrics.eval_count
+                        done = result.response.done_reason or "?"
+                        tps_str = f"{tps:.1f} tok/s" if tps else "n/a"
+                        toks_str = f"{toks} tokens" if toks else "n/a"
+                        progress.console.print(
+                            f"  {prompt_id}: {status}  "
+                            f"[dim]{dur_str}, {toks_str}, {tps_str}, done={done}[/dim]"
+                        )
+                        preview = result.response.message.content[:200].replace("\n", " ")
+                        progress.console.print(f"    [dim]{preview}...[/dim]")
+                    else:
+                        time_part = f"  [dim]{dur_str}[/dim]" if dur_str else ""
+                        progress.console.print(f"  {prompt_id}: {status}{time_part}")
                     progress.advance(task)
 
                 result = asyncio.run(
