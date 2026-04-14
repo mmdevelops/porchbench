@@ -31,9 +31,14 @@ The argument is: `$ARGUMENTS`
      - `rubrics/reasoning.yaml` → category "reasoning"
      - `rubrics/cross-domain.yaml` → category "cross-domain"
      - `rubrics/default.yaml` → fallback for unmatched categories
-4. Count total prompts to evaluate — include both `done_reason: "stop"` and
+4. Load calibration examples from `rubrics/calibration-examples.yaml` (if it
+   exists). Review the three-tier examples (strong/adequate/weak) to anchor the
+   1-5 scale before scoring. This is the single highest-impact accuracy control
+   (AutoRubric, 2025: +3pp with few-shot calibration). State briefly: "Calibration
+   reviewed — a 5 looks like [X], a 3 looks like [Y], a 1 looks like [Z]."
+5. Count total prompts to evaluate — include both `done_reason: "stop"` and
    `done_reason: "length"` (truncated but still has content)
-5. Present the evaluation plan to the user:
+6. Present the evaluation plan to the user:
    - Model name, suite name, prompt count
    - Category breakdown (how many coding, reasoning, cross-domain)
    - Ask user to confirm before proceeding
@@ -48,7 +53,9 @@ Before scoring, scan all responses to identify:
 
 ## Evaluation Protocol
 
-Process prompts in batches of 5-7 to manage context.
+Process prompts in batches of 3-5 to manage context. Smaller batches reduce
+scoring drift from context accumulation (Chroma context rot study: accuracy
+drops >30% for content in mid-context positions).
 
 ### Triage: fast-track vs deep-review
 
@@ -125,6 +132,12 @@ After reasoning, assign a score on the 1-5 scale:
 4 — Good. Solid work with minor issues. Would pass code review.
 5 — Excellent. Thorough, correct, and demonstrates genuine understanding.
 ```
+
+**Use the full scale.** LLM judges exhibit central tendency bias — compressing
+scores into a narrow 3-4 range (IRT reliability study, 2025). A response that
+ignores half the prompt requirements is a 1-2, not a 3. A response that nails
+every requirement with genuine insight is a 5, not a 4. If your scores for a
+run cluster within a 1.5-point range, you are likely under-differentiating.
 
 ### Step 6: Compute weighted score
 Calculate the weighted score for this prompt using the rubric weights.
@@ -222,6 +235,21 @@ After scoring all prompts, compute aggregates:
 - **Contamination-filtered (_clean)**: exclude prompts with `contamination_risk: "high"`,
   recompute means
 
+## Post-Hoc Diagnostics
+
+After scoring all prompts, run these quick checks before presenting results:
+
+- **Score distribution**: compute mean, std, min, max of weighted_scores. Flag if
+  std < 0.5 (scores too compressed — central tendency bias likely active) or if
+  all scores fall within a 1.5-point range.
+- **Criterion independence**: for each pair of criteria, note if scores move in
+  lockstep across all prompts. If two criteria always get the same score, the
+  halo effect may be dominating — one criterion is not adding signal. Report
+  any suspicious pairs.
+
+These are quick mental checks, not formal statistics. Note findings when
+presenting results.
+
 ## Presenting Results
 
 After writing the scorecard, present a summary table to the user showing:
@@ -230,3 +258,4 @@ After writing the scorecard, present a summary table to the user showing:
 - Normalized scores
 - Clean vs unfiltered comparison
 - Any notable findings (e.g., patterns in failures, truncation effects, domain gaps)
+- Diagnostic flags (score compression, criterion lockstep) if any
