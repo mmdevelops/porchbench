@@ -1,22 +1,192 @@
 # Calibration examples for frontier-model evaluation sessions.
 #
-# Present these at the start of each evaluation session to anchor the 1-5
-# scale. Examples are drawn from PoC benchmark evaluations (April 2026,
-# scored by Claude Opus 4.6 chatbot). They are NOT independent human ground
-# truth — they anchor self-consistency across sessions within the same model
-# family, not absolute correctness.
+# Present the RELEVANT set at the start of each evaluation session to anchor
+# the 1-5 scale. Organized by rubric type — use the set matching the suite
+# being evaluated (or the dominant category if mixed).
 #
-# Include one example at each quality tier: strong (4-5), adequate (3), weak (1-2).
-# Verdict-balanced per AutoRubric finding: don't over-represent any score level.
+# Examples are drawn from PoC benchmark evaluations (April 2026, scored by
+# Claude Opus 4.6 chatbot). They are NOT independent human ground truth —
+# they anchor self-consistency across sessions within the same model family.
+#
+# Each set has one example per quality tier: strong (4-5), adequate (3),
+# weak (1-2). Verdict-balanced per AutoRubric finding.
 
 calibration:
   source: "PoC benchmark (April 2026), scored by Claude Opus 4.6 chatbot"
   note: >
     These scores anchor scale consistency between evaluation sessions.
-    They are from the same model family as the evaluator — useful for
-    intra-rater calibration but not an independent validity check.
+    Same model family as evaluator — useful for intra-rater calibration
+    but not an independent validity check.
 
-  examples:
+  # ===========================================================================
+  # CODING RUBRIC calibration
+  # Weights: correctness(0.40), completeness(0.20), code_quality(0.20),
+  #          reasoning(0.10), domain_knowledge(0.10)
+  # ===========================================================================
+
+  coding:
+
+    - tier: "strong (score 4-5)"
+      model: "gemma4:e4b"
+      prompt_summary: >
+        Coding (easy): Write parse_log_entries that groups log messages by
+        level with (timestamp, message) tuples sorted ascending. Handle
+        malformed lines under UNPARSEABLE key.
+      response_summary: >
+        str.maketrans / .translate for level bracket stripping — most
+        elegant approach. defaultdict(list) with proper sorted() at end.
+        Handles empty lines, case-insensitive input, ambiguous bases.
+        Type hints, docstring, empty sequence guard. Code runs correctly.
+      scores:
+        correctness: 5
+        completeness: 5
+        code_quality: 5
+        reasoning: 4
+        domain_knowledge: 4
+      weighted_score: 4.80
+      rationale: >
+        All requirements met. Correct parsing, correct sorting, UNPARSEABLE
+        handling. Code quality excellent — Pythonic idioms, clean structure.
+        Reasoning solid but not exceptional for an easy prompt (explanation
+        is clear but not deep). This is what a 5 in correctness looks like:
+        code runs, handles edge cases, produces correct output for all inputs.
+
+    - tier: "adequate (score 3)"
+      model: "deepseek-r1:8b"
+      prompt_summary: >
+        Coding (easy): same parse_log_entries prompt as above.
+      response_summary: >
+        Correctly strips brackets with parts[0][1:-1]. Verbose "Approach /
+        Solution / Explanation" structure. But timestamp validation is
+        convoluted (startswith('20') heuristic). Thinking overhead visible
+        in output structure. Code works for standard inputs.
+      scores:
+        correctness: 4
+        completeness: 3
+        code_quality: 3
+        reasoning: 3
+        domain_knowledge: 2
+      weighted_score: 3.30
+      rationale: >
+        Code works — parses correctly for standard inputs. But completeness
+        loses a point for fragile timestamp validation that would break on
+        non-standard formats. Code quality adequate but not Pythonic —
+        over-engineered for the task. This is what a 3 in code_quality looks
+        like: functional but unnecessarily complex, would prompt questions in
+        code review.
+
+    - tier: "weak (score 1-2)"
+      model: "qwen2:7b"
+      prompt_summary: >
+        Coding (easy): same parse_log_entries prompt as above.
+      response_summary: >
+        Splits on spaces expecting 3 parts, leaving trailing ':' on
+        timestamp and '[' on level — fundamental parsing failure. Reaches
+        for datetime, defaultdict (more sophisticated than 3B) but the
+        core logic is broken. Code does not produce correct output.
+      scores:
+        correctness: 1
+        completeness: 2
+        code_quality: 3
+        reasoning: 2
+        domain_knowledge: 2
+      weighted_score: 1.70
+      rationale: >
+        Fundamental correctness failure — level is "[ERROR" not "ERROR",
+        timestamp has trailing ":". Output is wrong for every input. Code
+        quality is ironically decent (clean structure, good imports) which
+        is why it scores 3 there. This is what a 1 in correctness looks
+        like: the code runs but produces wrong output due to a logic error
+        that affects every case, not just edge cases.
+
+  # ===========================================================================
+  # REASONING RUBRIC calibration
+  # Weights: accuracy(0.35), clarity(0.30), depth(0.20), completeness(0.15)
+  # ===========================================================================
+
+  reasoning:
+
+    - tier: "strong (score 4-5)"
+      model: "gemma4:e4b"
+      prompt_summary: >
+        Reasoning (hard): distributed system bug — requests processed twice.
+        Diagnose from logs, then write production-ready Python fix using Redis.
+      response_summary: >
+        Fully diagnosed logs before writing code. Named the pattern: "At-Least-
+        Once Delivery / Timeout Ambiguity." Called out specific timestamps: retry
+        at 849ms before first attempt completed at ~1.1s. Used setex (atomic
+        set+TTL, avoiding r1:14b's race condition). Namespaced Redis keys.
+        Marks success after business logic, not before. Explicitly handles
+        failure case (does NOT mark as processed on failure). Included
+        simulation scenarios. Acknowledged remaining TOCTOU limitation.
+      scores:
+        accuracy: 5
+        clarity: 5
+        depth: 5
+        completeness: 5
+      weighted_score: 5.00
+      rationale: >
+        The only model to diagnose the log timeline before jumping to code.
+        Named the distributed systems pattern correctly. Implementation
+        avoids the specific race condition other models fell into (setnx +
+        separate expire). This is what a 5 looks like across the board: root
+        cause identified with evidence, named correctly, fix addresses the
+        actual problem, limitations acknowledged.
+
+    - tier: "adequate (score 3)"
+      model: "qwen2.5-coder:14b Q8"
+      prompt_summary: >
+        Reasoning (hard): same distributed systems duplicate processing prompt.
+      response_summary: >
+        Jumped to code without diagnosing the log timeline. Used mutex lock
+        (releases after completion) rather than idempotency key (persists
+        after completion). A late retry after lock release would reprocess —
+        wrong tool for the problem. Code is clean and would work for a
+        different problem (concurrent access, not duplicate delivery).
+      scores:
+        accuracy: 2
+        clarity: 4
+        depth: 2
+        completeness: 3
+      weighted_score: 2.75
+      rationale: >
+        Clarity is high — the code is well-written and the explanation is
+        clear. But accuracy is low because the fix addresses the wrong root
+        cause (concurrency vs. duplicate delivery). Never diagnosed the log
+        timeline. This is what a 2 in accuracy looks like: a confident,
+        well-explained answer to the wrong question. Depth also low — no
+        analysis of why the retry happened or what the correct pattern is.
+
+    - tier: "weak (score 1-2)"
+      model: "deepseek-r1:14b"
+      prompt_summary: >
+        Reasoning (hard): same distributed systems duplicate processing prompt.
+      response_summary: >
+        setnx + expire as two separate commands — non-atomic, can deadlock if
+        process crashes between them. self.log defined as a method but called
+        as self.log.info() — throws AttributeError at runtime. Didn't diagnose
+        logs. 53 seconds of thinking produced a broken solution.
+      scores:
+        accuracy: 1
+        clarity: 3
+        depth: 1
+        completeness: 2
+      weighted_score: 1.60
+      rationale: >
+        Two critical bugs: non-atomic setnx+expire (the exact race condition
+        the fix should prevent), and self.log method/attribute confusion (code
+        crashes at runtime). Didn't diagnose the problem before coding. This
+        is what a 1 in accuracy looks like: the fix introduces the same class
+        of bug it's supposed to prevent, and has additional runtime errors.
+        Clarity gets 3 because the explanation reads well despite being wrong.
+
+  # ===========================================================================
+  # CROSS-DOMAIN SCIENCE RUBRIC calibration
+  # Weights: domain_knowledge(0.30), correctness(0.25), reasoning(0.25),
+  #          completeness(0.15), design_quality(0.05)
+  # ===========================================================================
+
+  cross-domain-science:
 
     - tier: "strong (score 4-5)"
       model: "gemma4:e4b"
@@ -32,67 +202,149 @@ calibration:
         false ORFs. Correctly reframed: "the algorithm is fine, the biology
         is the constraint."
       scores:
-        correctness: 5
         domain_knowledge: 5
+        correctness: 5
         reasoning: 5
         completeness: 5
         design_quality: 4
       weighted_score: 4.95
       rationale: >
-        All four requirements implemented correctly. Biology answer was the
-        standout of the entire benchmark — CpG islands, epigenetic regulation,
-        and methylation-driven false ORFs demonstrate genuine domain expertise.
-        No other model mentioned CpG islands. Only minor deduction: design_quality
-        at 4 rather than 5 due to code organization (functional but not modular).
+        All four code requirements implemented correctly. Biology answer was
+        the standout — CpG islands, epigenetic regulation, methylation-driven
+        false ORFs demonstrate genuine domain expertise. No other model
+        mentioned CpG islands. This is what a 5 in domain_knowledge looks
+        like: goes beyond the obvious (thermal stability) to domain-specific
+        mechanisms (methylation, epigenetic regulation) that require genuine
+        understanding, not pattern matching.
 
     - tier: "adequate (score 3)"
       model: "qwen2.5-coder:14b Q8"
       prompt_summary: >
-        Cross-domain (biology): same prompt as above — DNA analysis with
-        biological implications.
+        Cross-domain (biology): same DNA analysis prompt as above.
       response_summary: >
         All three reading frames + reverse complement ORF search implemented.
         Counter for most frequent codon. Biology answer had one factual error:
         claimed high GC → higher mutation rate (backwards — GC-rich regions
         are more stable). Missed CpG islands and secondary structure.
       scores:
-        correctness: 4
         domain_knowledge: 2
+        correctness: 4
         reasoning: 3
         completeness: 4
         design_quality: 4
       weighted_score: 3.20
       rationale: >
-        Code was correct and complete — all four requirements addressed.
-        Correctness high because implementation works. But domain_knowledge
-        scored low: factual error on GC/mutation relationship (a trap —
-        sounds plausible but is backwards), and missed the deeper biological
-        implications (CpG islands, epigenetic regulation). Reasoning adequate
-        but surface-level — connected code to biology but without depth.
+        Code correct and complete. But domain_knowledge low: factual error
+        on GC/mutation relationship (a trap — sounds plausible but is
+        backwards), missed deeper implications. This is what a split score
+        looks like: correctness 4 (code works) but domain_knowledge 2
+        (factual error on the key domain question). The criteria are
+        measuring different things — that's good.
 
     - tier: "weak (score 1-2)"
       model: "deepseek-r1:14b"
       prompt_summary: >
-        Cross-domain (biology): same prompt as above — DNA analysis with
-        biological implications.
+        Cross-domain (biology): same DNA analysis prompt as above.
       response_summary: >
         Only implemented ORF finding — ignored GC content, reverse complement,
         and most frequent codon (3 of 4 requirements missing). ORF inner loop
         steps by 1 instead of 3 (fundamental in-frame error). No reading frames
         1 or 2, no reverse strand search. Ignored the biology questions entirely.
-        130 seconds for the least complete answer in the benchmark.
+        130 seconds for the least complete answer.
       scores:
-        correctness: 1
         domain_knowledge: 1
+        correctness: 1
         reasoning: 1
         completeness: 1
         design_quality: 2
       weighted_score: 1.15
       rationale: >
-        Failed on every dimension. Only 1 of 4 code requirements attempted,
-        and that one has a fundamental algorithmic error (stepping by 1 instead
-        of 3 means codons are not read in-frame). Biology reasoning questions
-        completely ignored — not attempted, not "wrong." Design_quality gets 2
-        because what little code exists is structurally coherent, just
-        incomplete. This represents the floor: a response that misunderstands
-        the task and abandons most requirements.
+        Failed on every dimension. 1 of 4 code requirements attempted with
+        a fundamental error (step by 1, not 3). Biology questions completely
+        ignored. This is the floor: a response that misunderstands the task
+        and abandons most requirements. Design_quality gets 2 because what
+        code exists is structurally coherent, just incomplete.
+
+  # ===========================================================================
+  # CROSS-DOMAIN (ARCHITECTURE) RUBRIC calibration
+  # Weights: domain_knowledge(0.30), design_quality(0.25), reasoning(0.25),
+  #          completeness(0.15), correctness(0.05)
+  # Used for coding-basics cross-domain prompts (auth design, SQL vs NoSQL, etc.)
+  # ===========================================================================
+
+  cross-domain:
+
+    - tier: "strong (score 4-5)"
+      model: "gemma4:e4b"
+      prompt_summary: >
+        Cross-domain (security): review a Flask password reset endpoint.
+        Identify vulnerabilities, explain why each is dangerous, rewrite to
+        be production-safe.
+      response_summary: >
+        Caught SQL injection, weak token, hardcoded credentials, rate limiting,
+        user enumeration. Only model to explicitly name user enumeration and
+        implement constant-time response. No hallucinated APIs. Coherent single
+        rewrite (not fragmented snippets). Missed SMTP TLS implementation and
+        timing side-channel.
+      scores:
+        domain_knowledge: 5
+        design_quality: 5
+        reasoning: 5
+        completeness: 4
+        correctness: 5
+      weighted_score: 4.85
+      rationale: >
+        Comprehensive vulnerability identification with no hallucinated APIs.
+        The user enumeration finding with constant-time mitigation demonstrates
+        genuine security expertise. Rewrite is coherent and deployable. Only
+        deduction: missed SMTP TLS and timing side-channel (completeness 4).
+
+    - tier: "adequate (score 3)"
+      model: "deepseek-r1:14b"
+      prompt_summary: >
+        Cross-domain (security): same Flask password reset prompt as above.
+      response_summary: >
+        Found the most vulnerabilities of any model (8 distinct issues).
+        Suggested token hashing with itsdangerous — conceptually correct.
+        But TimedJSONWebToken does not exist in the library — confident
+        hallucination that would fail on import. Most knowledgeable on paper
+        but least reliable in practice.
+      scores:
+        domain_knowledge: 4
+        design_quality: 2
+        reasoning: 3
+        completeness: 4
+        correctness: 1
+      weighted_score: 2.90
+      rationale: >
+        Paradoxical case: high domain_knowledge (found 8 issues, more than
+        any other model) but low correctness (hallucinated API that crashes
+        on import). Design_quality low because the rewrite is fragmented
+        snippets, not a coherent deployable solution. This is what a confident
+        hallucination looks like: knowledgeable-sounding but the code literally
+        doesn't run. Correctness must be scored on whether the code works, not
+        whether the reasoning sounds right.
+
+    - tier: "weak (score 1-2)"
+      prompt_summary: >
+        Cross-domain (security): same Flask password reset prompt. Hypothetical
+        weak response for scale anchoring (no PoC model produced a truly weak
+        security response — all found at least some issues).
+      response_summary: >
+        Only identifies "use HTTPS" and "add a password" without specifics.
+        Misses SQL injection, hardcoded credentials, user enumeration. No
+        code rewrite — just bullet points. Suggests using MD5 for token
+        hashing (insecure choice presented as a fix).
+      scores:
+        domain_knowledge: 1
+        design_quality: 1
+        reasoning: 1
+        completeness: 2
+        correctness: 1
+      weighted_score: 1.10
+      rationale: >
+        Hypothetical anchor for the floor of this rubric. Misses critical
+        vulnerabilities, suggests an insecure fix (MD5), provides no working
+        code. This tier exists so that partially-correct responses like r1:14b's
+        (which at least found real issues) are clearly distinguished from
+        responses that demonstrate no domain understanding at all.

@@ -32,10 +32,16 @@ The argument is: `$ARGUMENTS`
      - `rubrics/cross-domain.yaml` → category "cross-domain"
      - `rubrics/default.yaml` → fallback for unmatched categories
 4. Load calibration examples from `rubrics/calibration-examples.yaml` (if it
-   exists). Review the three-tier examples (strong/adequate/weak) to anchor the
-   1-5 scale before scoring. This is the single highest-impact accuracy control
-   (AutoRubric, 2025: +3pp with few-shot calibration). State briefly: "Calibration
-   reviewed — a 5 looks like [X], a 3 looks like [Y], a 1 looks like [Z]."
+   exists). Select the calibration set matching the rubric being used:
+   - `coding` set → for coding-basics or coding-heavy suites
+   - `reasoning` set → for reasoning-focused prompts
+   - `cross-domain-science` set → for the cross-domain science suite
+   - `cross-domain` set → for coding-basics cross-domain prompts (architecture)
+   - If the suite mixes categories, read the set matching the dominant category
+   Review the three-tier examples (strong/adequate/weak) to anchor the 1-5 scale.
+   This is the single highest-impact accuracy control (AutoRubric, 2025: +3pp
+   with few-shot calibration). State briefly: "Calibration reviewed — a 5 looks
+   like [X], a 3 looks like [Y], a 1 looks like [Z]."
 5. Count total prompts to evaluate — include both `done_reason: "stop"` and
    `done_reason: "length"` (truncated but still has content)
 6. Present the evaluation plan to the user:

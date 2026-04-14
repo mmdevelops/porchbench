@@ -49,7 +49,11 @@ The arguments are: `$ARGUMENTS`
 Before scoring any benchmark responses, review the calibration examples:
 
 1. Read `rubrics/calibration-examples.yaml`
-2. For each tier (strong, adequate, weak):
+2. Select the calibration set matching the rubric being used (e.g., `coding` for
+   coding-basics, `cross-domain-science` for the cross-domain science suite,
+   `reasoning` for reasoning-focused prompts). If the suite mixes categories,
+   use the set matching the dominant category.
+3. For each tier (strong, adequate, weak):
    - Read the response summary and the assigned scores
    - Internalize the scale: what does a 5 look like? A 3? A 1?
 3. State aloud: "Calibration reviewed. Scale anchors: [brief restatement of what
