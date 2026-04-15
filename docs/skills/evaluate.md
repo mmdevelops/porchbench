@@ -1,6 +1,6 @@
 ---
 name: evaluate
-description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with feral compare and analysis tools. Use when the user wants to evaluate benchmark run results.
+description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with ollama-bench compare and analysis tools. Use when the user wants to evaluate benchmark run results.
 disable-model-invocation: true
 ---
 
@@ -20,38 +20,69 @@ The argument is: `$ARGUMENTS`
 
 ## Setup
 
-1. Read the result file at the path provided in `$ARGUMENTS`
-2. Parse it as a `RunResult` JSON (schema: `src/feral/schemas.py`)
-3. Load rubrics from `rubrics/` directory:
-   - First read the suite YAML (at `run.suite.file`) and check for a `rubric`
-     field in the `suite` header. If present, use `rubrics/{rubric}.yaml` for
-     ALL prompts in the run — this overrides per-category matching.
-   - Otherwise, match by category:
-     - `rubrics/coding.yaml` → category "coding"
-     - `rubrics/reasoning.yaml` → category "reasoning"
-     - `rubrics/cross-domain.yaml` → category "cross-domain"
-     - `rubrics/default.yaml` → fallback for unmatched categories
-4. Load calibration examples from `rubrics/calibration-examples.yaml` (if it
-   exists). Select the calibration set matching the rubric being used:
-   - `coding` set → for coding-basics or coding-heavy suites
-   - `reasoning` set → for reasoning-focused prompts
-   - `cross-domain-science` set → for the cross-domain science suite
-   - `cross-domain` set → for coding-basics cross-domain prompts (architecture)
-   - If the suite mixes categories, read the set matching the dominant category
-   Review the three-tier examples (strong/adequate/weak) to anchor the 1-5 scale.
-   This is the single highest-impact accuracy control (AutoRubric, 2025: +3pp
-   with few-shot calibration). State briefly: "Calibration reviewed — a 5 looks
-   like [X], a 3 looks like [Y], a 1 looks like [Z]."
-5. Count total prompts to evaluate — include both `done_reason: "stop"` and
-   `done_reason: "length"` (truncated but still has content)
-6. Present the evaluation plan to the user:
-   - Model name, suite name, prompt count
-   - Category breakdown (how many coding, reasoning, cross-domain)
-   - Ask user to confirm before proceeding
+### Step 1: Extract compact evaluation data
+
+Run the extraction command to produce a lightweight file with only the fields
+needed for scoring. This avoids repeated partial reads of a large result file.
+
+```bash
+python -m feral eval-extract "$ARGUMENTS" --output .claude/eval-data.json
+```
+
+Then **read `.claude/eval-data.json`** to get:
+- `header`: run_id, model_name, suite_name, suite_file, total_prompts,
+  truncated_count, categories, difficulties
+- `prompts`: list of `{prompt_id, category, difficulty, done_reason,
+  contamination_risk, prompt_text, response_text, expected_answer}`
+
+This replaces all partial reads of the original result JSON. You should not
+need to read the original result file again during scoring.
+
+### Step 2: Load rubrics
+
+Load rubrics from `rubrics/` directory:
+- First read the suite YAML (at `header.suite_file`) and check for a `rubric`
+  field in the `suite` header. If present, use `rubrics/{rubric}.yaml` for
+  ALL prompts in the run — this overrides per-category matching.
+- Otherwise, match by category:
+  - `rubrics/coding.yaml` → category "coding"
+  - `rubrics/reasoning.yaml` → category "reasoning"
+  - `rubrics/cross-domain.yaml` → category "cross-domain"
+  - `rubrics/default.yaml` → fallback for unmatched categories
+
+### Step 3: Load calibration examples
+
+Load calibration examples from `rubrics/calibration-examples.yaml` (if it
+exists). Select the calibration set matching the rubric being used:
+- `coding` set → for coding-basics or coding-heavy suites
+- `reasoning` set → for reasoning-focused prompts
+- `cross-domain-science` set → for the cross-domain science suite
+- `cross-domain` set → for coding-basics cross-domain prompts (architecture)
+- If the suite mixes categories, read the set matching the dominant category
+
+Review the three-tier examples (strong/adequate/weak) to anchor the 1-5 scale.
+This is the single highest-impact accuracy control (AutoRubric, 2025: +3pp
+with few-shot calibration). State briefly: "Calibration reviewed — a 5 looks
+like [X], a 3 looks like [Y], a 1 looks like [Z]."
+
+### Step 4: Initialize scores file
+
+Delete any stale scores file from a previous run:
+```bash
+rm -f .claude/eval-scores.jsonl
+```
+
+### Step 5: Present evaluation plan
+
+Present the plan to the user using data from the extracted header:
+- Model name, suite name, prompt count
+- Category breakdown (how many coding, reasoning, cross-domain)
+- Truncated responses
+- Ask user to confirm before proceeding
 
 ## Pre-scan
 
-Before scoring, scan all responses to identify:
+Before scoring, scan the extracted prompts to identify:
 - **Truncated responses** (`done_reason: "length"`) — list them upfront so you
   know where to expect completeness gaps
 - **Coding prompts with testable code** — flag these for execution verification
@@ -77,10 +108,13 @@ Not every prompt needs the same depth of analysis:
 Spend your analysis budget where it creates signal, not on confirming obvious passes.
 
 ### Step 1: Read the prompt and response
-- Read the original prompt (`request.messages`)
-- Read the model's response (`response.message.content`)
-- Note if truncated (`done_reason: "length"`)
-- Read the `expected_answer` correctness hints if present
+
+Read each prompt from the extracted eval data (`.claude/eval-data.json`).
+The fields you need are already extracted:
+- `prompt_text` — the original prompt
+- `response_text` — the model's response
+- `done_reason` — "stop" or "length" (truncated)
+- `expected_answer` — correctness hints if present
 
 ### Step 2: Select the rubric
 - If the suite declares a `rubric` field, use that rubric for all prompts
@@ -157,59 +191,55 @@ for cross-model comparison. "Sequence has bug" is useless. "Produces 0,1,2,3,5
 instead of 0,1,1,2,3,5 due to state update skipping second iteration" is
 actionable. When deducting, name the specific failure.
 
-## Output Format
+### Step 8: Stream the score to disk
 
-After evaluating all prompts, write a scorecard JSON file to the `scorecards/`
-directory. The file must match the `Scorecard` schema in `src/feral/schemas.py`:
-
-```json
-{
-  "evaluation": {
-    "run_id": "<from result file>",
-    "evaluator": "claude-code/claude-opus-4-6",
-    "rubric": "category-aware (Coding Rubric, Reasoning Rubric, Cross-Domain Rubric)",
-    "timestamp": "<ISO 8601>"
-  },
-  "scores": [
-    {
-      "prompt_id": "code-fizzbuzz",
-      "criteria": {
-        "correctness": {"score": 5, "rationale": "..."},
-        "completeness": {"score": 4, "rationale": "..."}
-      },
-      "weighted_score": 4.35,
-      "summary": "..."
-    }
-  ],
-  "aggregate": {
-    "overall_weighted": 4.12,
-    "by_category": {"coding": 4.25, "reasoning": 3.90},
-    "by_difficulty": {"easy": 4.50, "medium": 4.10, "hard": 3.80},
-    "overall_normalized": 78.0,
-    "by_difficulty_normalized": {"easy": 87.5, "medium": 77.5, "hard": 70.0},
-    "overall_weighted_clean": 4.05,
-    "by_category_clean": {},
-    "by_difficulty_clean": {}
-  }
-}
-```
-
-Use Bash to run a short Python script that computes aggregates from your scored
-data and writes the scorecard JSON. Build the scores list as a Python literal
-in the script — do not write a separate helper file. Example pattern:
+After scoring each prompt, immediately append the score to the JSONL file.
+Run a short Python snippet:
 
 ```python
 python -c "
-import json, os
-from datetime import datetime, timezone
-scores = [...]  # your scored data
-# ... compute aggregates ...
-os.makedirs('scorecards', exist_ok=True)
-# ... write JSON ...
+from feral.evaluator import append_score
+from feral.schemas import PromptScore, CriterionScore
+append_score(PromptScore(
+    prompt_id='<id>',
+    criteria={
+        '<criterion>': CriterionScore(score=<N>, rationale='<text>'),
+        ...
+    },
+    weighted_score=<float>,
+    summary='<text>'
+), '.claude/eval-scores.jsonl')
 "
 ```
 
-Naming convention: `scorecards/{timestamp}_{run_id_first_8_chars}.json`
+This persists progress incrementally. If the evaluation is interrupted,
+completed scores are preserved and you can resume by checking what prompt_ids
+are already in the JSONL.
+
+**Important**: Keep rationale strings short (1-2 sentences) and avoid special
+characters that break shell quoting (use straight quotes, no backslashes).
+If a rationale is complex, simplify it to the key finding.
+
+## Finalize: Write the Scorecard
+
+After scoring all prompts, run the finalize command. This reads the JSONL
+scores, loads the original result file for category/difficulty metadata,
+computes all aggregates, and writes the scorecard JSON:
+
+```bash
+python -m feral eval-finalize "$ARGUMENTS" \
+    --scores .claude/eval-scores.jsonl \
+    --evaluator "claude-code/claude-opus-4-6" \
+    --rubric "<rubric description>"
+```
+
+This replaces all inline Python for aggregation and scorecard writing.
+The finalize command handles:
+- Reading scores from the JSONL file
+- Computing overall, by-category, by-difficulty means
+- Normalizing to 0-100 scale
+- Filtering contamination_risk: "high" for clean aggregates
+- Writing timestamped scorecard to `scorecards/`
 
 ## Methodology Notes
 
@@ -229,21 +259,9 @@ Naming convention: `scorecards/{timestamp}_{run_id_first_8_chars}.json`
   aggregation time, not scoring time. `contamination_risk: None` means "not
   tagged" — treat as non-contaminated for clean scoring.
 
-## Aggregation
-
-After scoring all prompts, compute aggregates:
-
-- **overall_weighted**: mean of all weighted_scores
-- **by_category**: mean weighted_score per category
-- **by_difficulty**: mean weighted_score per difficulty
-- **overall_normalized**: normalize each difficulty mean from 1-5 scale to 0-100
-  (where 1→0, 5→100), then average across difficulties (equal weight per level)
-- **Contamination-filtered (_clean)**: exclude prompts with `contamination_risk: "high"`,
-  recompute means
-
 ## Post-Hoc Diagnostics
 
-After scoring all prompts, run these quick checks before presenting results:
+After scoring all prompts and before presenting results, run these quick checks:
 
 - **Score distribution**: compute mean, std, min, max of weighted_scores. Flag if
   std < 0.5 (scores too compressed — central tendency bias likely active) or if
@@ -265,3 +283,10 @@ After writing the scorecard, present a summary table to the user showing:
 - Clean vs unfiltered comparison
 - Any notable findings (e.g., patterns in failures, truncation effects, domain gaps)
 - Diagnostic flags (score compression, criterion lockstep) if any
+
+## Cleanup
+
+After successful evaluation, clean up the working files:
+```bash
+rm -f .claude/eval-data.json .claude/eval-scores.jsonl
+```

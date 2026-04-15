@@ -25,24 +25,52 @@ The arguments are: `$ARGUMENTS`
 
 ## Setup
 
-1. Read ALL result files from `$ARGUMENTS` (split on spaces)
-2. Parse each as `RunResult` JSON (schema: `src/feral/schemas.py`)
-3. **Verify prompt alignment**: all result files must contain the same set of
-   `prompt_id` values. If mismatched, report which prompts are missing from which
-   files and ask the user how to proceed (evaluate only the intersection, or abort).
-4. Load rubric:
-   - Read the suite YAML (at `run.suite.file` from any result) for a `rubric` field
-   - If present, use `rubrics/{rubric}.yaml` for all prompts
-   - Otherwise fall back to per-category matching (see `/evaluate` skill)
-5. Load calibration examples from `rubrics/calibration-examples.yaml`
-6. **Generate evaluation plan**:
-   - List models, prompt count, category breakdown
-   - Generate a randomized prompt order (use a fixed seed for reproducibility —
-     seed = sum of ASCII values of all model names, so the order is deterministic
-     for the same model set but varies across different comparisons)
-   - Generate a randomized model order **per prompt** (different shuffle per prompt,
-     same seed basis)
-   - Present the plan and ask user to confirm
+### Step 1: Extract compact evaluation data for each model
+
+For each result file in `$ARGUMENTS` (split on spaces), run:
+```bash
+python -m feral eval-extract "<result_file>" --output ".claude/eval-data-<N>.json"
+```
+
+Name the output files sequentially (e.g., `.claude/eval-data-1.json`,
+`.claude/eval-data-2.json`). Then read each extracted file — these contain
+only the fields needed for scoring (prompt text, response text, expected
+answers, metadata). You should not need to read the original result files
+again during scoring.
+
+### Step 2: Verify prompt alignment
+
+All result files must contain the same set of `prompt_id` values. If
+mismatched, report which prompts are missing from which files and ask the
+user how to proceed (evaluate only the intersection, or abort).
+
+### Step 3: Load rubric
+
+- Read the suite YAML (at `header.suite_file` from any extracted file) for
+  a `rubric` field
+- If present, use `rubrics/{rubric}.yaml` for all prompts
+- Otherwise fall back to per-category matching (see `/evaluate` skill)
+
+### Step 4: Load calibration examples
+
+Load from `rubrics/calibration-examples.yaml`.
+
+### Step 5: Initialize scores files
+
+Delete stale scores from prior runs and create one JSONL file per model:
+```bash
+rm -f .claude/eval-scores-*.jsonl
+```
+
+### Step 6: Generate evaluation plan
+
+- List models, prompt count, category breakdown
+- Generate a randomized prompt order (use a fixed seed for reproducibility —
+  seed = sum of ASCII values of all model names, so the order is deterministic
+  for the same model set but varies across different comparisons)
+- Generate a randomized model order **per prompt** (different shuffle per prompt,
+  same seed basis)
+- Present the plan and ask user to confirm
 
 ## Phase 1: Calibration Priming
 
@@ -74,7 +102,7 @@ does a good answer to this specific prompt look like" is identical across models
 ### For each prompt:
 
 #### Step 1: Read the prompt
-- Read the original prompt (`request.messages`) — same across all models
+- Read the original prompt (`prompt_text`) from the extracted eval data — same across all models
 - Read `expected_answer` correctness hints
 - Read the rubric criteria and weights
 
@@ -83,7 +111,7 @@ does a good answer to this specific prompt look like" is identical across models
 For each model (in the per-prompt randomized order):
 
 **a. Read the response**
-- Read `response.message.content`
+- Read `response_text` from the extracted eval data for this model
 - Note `done_reason` (stop vs length)
 - **Do NOT look at the model name** while reasoning about quality. The model
   name is recorded for scorecard assembly but should not influence scoring.
@@ -117,6 +145,31 @@ rationalize after.
 
 **f. Write one-sentence summary** capturing the key quality signal.
 
+**g. Stream the score to disk**
+
+After scoring each model's response, immediately append the score to the
+model's JSONL file:
+
+```python
+python -c "
+from feral.evaluator import append_score
+from feral.schemas import PromptScore, CriterionScore
+append_score(PromptScore(
+    prompt_id='<id>',
+    criteria={
+        '<criterion>': CriterionScore(score=<N>, rationale='<text>'),
+        ...
+    },
+    weighted_score=<float>,
+    summary='<text>'
+), '.claude/eval-scores-<model_N>.jsonl')
+"
+```
+
+Use one JSONL file per model (e.g., `.claude/eval-scores-1.jsonl`,
+`.claude/eval-scores-2.jsonl`). Keep rationale strings short (1-2 sentences)
+and avoid special characters that break shell quoting.
+
 **Rationale specificity rule:** Rationales must name specific failures. "Domain
 knowledge is weak" is useless. "Claims high GC → higher mutation rate, which is
 backwards — GC-rich regions are more stable" is actionable.
@@ -140,38 +193,20 @@ is getting long (>15 prompts scored). This prevents late-session drift.
 
 ## Phase 3: Scorecard Assembly
 
-After all prompts are scored, assemble one scorecard JSON per model.
+After all prompts are scored, finalize one scorecard per model using the
+`eval-finalize` command. For each model (with its corresponding result file
+and scores JSONL):
 
-Use Bash to run a Python script that:
-1. Takes the scored data as a Python literal
-2. Computes per-model aggregates (overall, by_category, by_difficulty, normalized, clean)
-3. Writes each scorecard to `scorecards/{timestamp}_{run_id_first_8}.json`
-
-Scorecard schema must match `src/feral/schemas.py` Scorecard model.
-Set `evaluator` field to `"claude-code/claude-opus-4-6/paired"` to distinguish
-from single-model /evaluate scorecards.
-
-```json
-{
-  "evaluation": {
-    "run_id": "<from result file>",
-    "evaluator": "claude-code/claude-opus-4-6/paired",
-    "rubric": "<rubric name>",
-    "timestamp": "<ISO 8601>"
-  },
-  "scores": [...],
-  "aggregate": {
-    "overall_weighted": 0.0,
-    "by_category": {},
-    "by_difficulty": {},
-    "overall_normalized": 0.0,
-    "by_difficulty_normalized": {},
-    "overall_weighted_clean": 0.0,
-    "by_category_clean": {},
-    "by_difficulty_clean": {}
-  }
-}
+```bash
+python -m feral eval-finalize "<result_file_N>" \
+    --scores .claude/eval-scores-<N>.jsonl \
+    --evaluator "claude-code/claude-opus-4-6/paired" \
+    --rubric "<rubric description>"
 ```
+
+This reads the streamed scores, loads the original result for category/difficulty
+metadata, computes all aggregates (overall, by-category, by-difficulty, normalized,
+contamination-filtered), and writes each scorecard to `scorecards/`.
 
 ## Phase 4: Comparison Summary
 
@@ -288,6 +323,13 @@ by > 1.5 points (flag for investigation).
 - **Contamination awareness**: Prompts tagged `contamination_risk: high` get
   scored normally but excluded from `_clean` aggregates. Note contamination
   risk in summaries but don't deduct.
+
+## Cleanup
+
+After successful evaluation, clean up the working files:
+```bash
+rm -f .claude/eval-data-*.json .claude/eval-scores-*.jsonl
+```
 
 ## When NOT to use this skill
 
