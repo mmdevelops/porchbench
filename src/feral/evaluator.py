@@ -1,13 +1,15 @@
 """LLM-as-judge evaluation pass.
 
 Sends each prompt+response pair from a run result to an evaluator model
-along with a scoring rubric. Supports two backends:
+along with a scoring rubric. Supports three backends:
 
 - **ollama** (default): uses a local Ollama model as judge. Free, fast,
   good for iteration. Use a different model family than the models under
   test to avoid self-preference bias (e.g., judge qwen with deepseek-r1).
 - **api**: uses Claude via Anthropic API. Higher quality but costs per token.
   Requires ANTHROPIC_API_KEY.
+- **claude-code**: uses Claude Code CLI (claude -p). Frontier quality,
+  uses existing subscription, no per-token API cost.
 
 Methodology notes (see METHODOLOGY.md):
 - Rubric-based absolute scoring on 1-5 scales with explicit criteria
@@ -19,11 +21,13 @@ Methodology notes (see METHODOLOGY.md):
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Protocol
 
 import yaml
+from pydantic import BaseModel
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -51,6 +55,13 @@ from feral.schemas import (
 console = Console()
 
 DEFAULT_OLLAMA_EVALUATOR = "gemma4:e4b"
+
+# Per-backend default models — used when --evaluator is not explicitly set
+EVAL_BACKEND_DEFAULTS: dict[str, str] = {
+    "ollama": "gemma4:e4b",
+    "api": "claude-sonnet-4-6-20250514",
+    "claude-code": "sonnet",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +110,52 @@ class AnthropicEvalBackend:
             messages=[{"role": "user", "content": prompt}],
         )
         return response.content[0].text
+
+
+class ClaudeCodeEvalBackend:
+    """Evaluator backend using Claude Code CLI (claude -p).
+
+    Uses the user's Claude Code subscription — no per-token API cost.
+    Requires 'claude' on PATH.
+    """
+
+    def __init__(self, model: str = "sonnet", timeout_s: int = 120):
+        self.model = model
+        self.timeout_s = timeout_s
+
+    async def generate(self, prompt: str) -> str:
+        cmd = [
+            "claude", "-p",
+            "--model", self.model,
+            "--output-format", "text",
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode("utf-8")),
+                timeout=self.timeout_s,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(
+                f"claude -p timed out after {self.timeout_s}s"
+            )
+
+        if proc.returncode != 0:
+            err_msg = stderr.decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(
+                f"claude -p failed (exit {proc.returncode}): {err_msg}"
+            )
+
+        return stdout.decode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -487,3 +544,161 @@ def write_scorecard(scorecard: Scorecard, output_dir: str | Path = "scorecards")
     path = output_dir / filename
     path.write_text(scorecard.model_dump_json(indent=2), encoding="utf-8")
     return path
+
+
+# ---------------------------------------------------------------------------
+# Claude Code /evaluate skill helpers
+#
+# These functions support the interactive /evaluate workflow where Claude Code
+# scores prompts one at a time and streams results to disk, rather than the
+# automated evaluate_run() pipeline above.
+# ---------------------------------------------------------------------------
+
+
+class EvalPromptSummary(BaseModel):
+    """Compact representation of a prompt+response for evaluation.
+
+    Strips metrics, options, and raw Ollama fields to reduce context
+    consumption when reading responses during interactive evaluation.
+    """
+
+    prompt_id: str
+    category: str
+    difficulty: str
+    done_reason: str | None = None
+    contamination_risk: str | None = None
+    prompt_text: str  # flattened from request.messages
+    response_text: str  # from response.message.content
+    expected_answer: str | None = None
+
+
+class EvalRunHeader(BaseModel):
+    """Run-level metadata extracted alongside prompt summaries."""
+
+    run_id: str
+    model_name: str
+    suite_name: str
+    suite_file: str
+    total_prompts: int
+    truncated_count: int
+    categories: dict[str, int]
+    difficulties: dict[str, int]
+
+
+class EvalData(BaseModel):
+    """Complete pre-extracted evaluation data: header + compact prompts."""
+
+    header: EvalRunHeader
+    prompts: list[EvalPromptSummary]
+
+
+def extract_eval_data(result_path: str | Path) -> EvalData:
+    """Pre-extract compact evaluation data from a RunResult JSON file.
+
+    Reads the full result file once and returns a lightweight EvalData
+    object containing only the fields needed for scoring. This avoids
+    repeated partial reads of a large result file during evaluation.
+    """
+    result_path = Path(result_path)
+    raw = json.loads(result_path.read_text(encoding="utf-8"))
+    run_result = RunResult.model_validate(raw)
+
+    prompts: list[EvalPromptSummary] = []
+    categories: dict[str, int] = {}
+    difficulties: dict[str, int] = {}
+    truncated = 0
+
+    for r in run_result.results:
+        if not r.response.message.content:
+            continue
+
+        prompt_text = "\n\n".join(
+            f"[{m.role}]: {m.content}" for m in r.request.messages
+        )
+
+        prompts.append(EvalPromptSummary(
+            prompt_id=r.prompt_id,
+            category=r.category,
+            difficulty=r.difficulty,
+            done_reason=r.response.done_reason,
+            contamination_risk=r.contamination_risk,
+            prompt_text=prompt_text,
+            response_text=r.response.message.content,
+            expected_answer=r.expected_answer,
+        ))
+
+        categories[r.category] = categories.get(r.category, 0) + 1
+        difficulties[r.difficulty] = difficulties.get(r.difficulty, 0) + 1
+        if r.response.done_reason == "length":
+            truncated += 1
+
+    header = EvalRunHeader(
+        run_id=run_result.run.id,
+        model_name=run_result.run.model.name,
+        suite_name=run_result.run.suite.name,
+        suite_file=run_result.run.suite.file,
+        total_prompts=len(prompts),
+        truncated_count=truncated,
+        categories=categories,
+        difficulties=difficulties,
+    )
+
+    return EvalData(header=header, prompts=prompts)
+
+
+def append_score(score: PromptScore, scores_path: str | Path) -> None:
+    """Append a single PromptScore as one JSON line to a JSONL file.
+
+    Called after scoring each prompt so progress is persisted to disk
+    incrementally. If the evaluation is interrupted, completed scores
+    are preserved.
+    """
+    scores_path = Path(scores_path)
+    scores_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(scores_path, "a", encoding="utf-8") as f:
+        f.write(score.model_dump_json() + "\n")
+
+
+def load_scores(scores_path: str | Path) -> list[PromptScore]:
+    """Read all PromptScores from a JSONL file written by append_score()."""
+    scores_path = Path(scores_path)
+    scores: list[PromptScore] = []
+    for line in scores_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            scores.append(PromptScore.model_validate_json(line))
+    return scores
+
+
+def build_scorecard_from_scores(
+    scores_path: str | Path,
+    result_path: str | Path,
+    evaluator: str = "claude-code/claude-opus-4-6",
+    rubric_label: str = "",
+    output_dir: str | Path = "scorecards",
+) -> Path:
+    """Read streamed scores + original results, compute aggregates, write scorecard.
+
+    This is the final step of the /evaluate skill workflow:
+    1. extract_eval_data() ran at the start to produce compact eval data
+    2. Scores were streamed to scores_path via append_score() during evaluation
+    3. This function reads them back, computes aggregates, and writes the
+       final scorecard JSON.
+    """
+    scores = load_scores(scores_path)
+    raw = json.loads(Path(result_path).read_text(encoding="utf-8"))
+    run_result = RunResult.model_validate(raw)
+
+    aggregates = compute_aggregates(scores, run_result.results)
+
+    scorecard = Scorecard(
+        evaluation=EvaluationMetadata(
+            run_id=run_result.run.id,
+            evaluator=evaluator,
+            rubric=rubric_label,
+        ),
+        scores=scores,
+        aggregate=aggregates,
+    )
+
+    return write_scorecard(scorecard, output_dir)

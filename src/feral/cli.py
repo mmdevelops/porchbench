@@ -1,6 +1,7 @@
 """CLI entry point for feral.
 
 Uses typer for argument parsing and rich for terminal output.
+Loads .env from the working directory for persistent configuration.
 """
 
 from __future__ import annotations
@@ -8,6 +9,10 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Annotated, Optional
+
+from dotenv import load_dotenv
+
+load_dotenv()  # load .env before typer reads envvar defaults
 
 import typer
 from rich.console import Console
@@ -180,16 +185,16 @@ def evaluate(
         typer.Option("--result", "-r", help="Path to a run result JSON file."),
     ],
     rubric_path: Annotated[
-        Path,
-        typer.Option("--rubric", "-R", help="Path to a rubric YAML file."),
-    ] = Path("rubrics/default.yaml"),
+        Optional[Path],
+        typer.Option("--rubric", "-R", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
+    ] = None,
     evaluator_model: Annotated[
-        str,
-        typer.Option("--evaluator", "-e", help="Model to use as judge."),
-    ] = "gemma4:e4b",
+        Optional[str],
+        typer.Option("--evaluator", "-e", envvar="FERAL_EVAL_MODEL", help="Model to use as judge. Defaults per backend: ollama=gemma4:e4b, api=claude-sonnet-4-6, claude-code=sonnet."),
+    ] = None,
     backend: Annotated[
         str,
-        typer.Option("--backend", "-b", help="Evaluation backend: 'ollama' (default) or 'api'."),
+        typer.Option("--backend", "-b", envvar="FERAL_EVAL_BACKEND", help="Evaluation backend: 'ollama' (default), 'api', or 'claude-code'."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -207,16 +212,26 @@ def evaluate(
         Optional[Path],
         typer.Option("--rubric-dir", help="Directory of category-specific rubrics (coding.yaml, reasoning.yaml, cross-domain.yaml)."),
     ] = None,
+    eval_timeout: Annotated[
+        int,
+        typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
+    ] = 120,
 ) -> None:
-    """Score a run result using an LLM judge (local Ollama model or Claude API)."""
+    """Score a run result using an LLM judge (local Ollama model, Claude API, or Claude Code CLI)."""
     from feral.evaluator import (
+        EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
+        ClaudeCodeEvalBackend,
         OllamaEvalBackend,
         evaluate_run,
         load_rubric,
         load_rubric_dir,
         write_scorecard,
     )
+
+    # Resolve evaluator model: explicit --evaluator > env var > per-backend default
+    if evaluator_model is None:
+        evaluator_model = EVAL_BACKEND_DEFAULTS.get(backend, "gemma4:e4b")
 
     # Load inputs
     try:
@@ -225,6 +240,15 @@ def evaluate(
     except Exception as exc:
         console.print(f"[red]Failed to load run result: {exc}[/red]")
         raise typer.Exit(code=1)
+
+    # Resolve rubric: explicit --rubric > suite hint > default
+    if rubric_path is None:
+        suite_rubric_hint = run_result.run.suite.rubric
+        if suite_rubric_hint:
+            rubric_path = Path(f"rubrics/{suite_rubric_hint}.yaml")
+            console.print(f"Rubric (from suite): [bold]{rubric_path}[/bold]")
+        else:
+            rubric_path = Path("rubrics/default.yaml")
 
     try:
         rubric = load_rubric(rubric_path)
@@ -252,8 +276,11 @@ def evaluate(
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
         backend_label = f"api/{evaluator_model}"
+    elif backend == "claude-code":
+        eval_backend = ClaudeCodeEvalBackend(model=evaluator_model, timeout_s=eval_timeout)
+        backend_label = f"claude-code/{evaluator_model}"
     else:
-        console.print(f"[red]Unknown backend: {backend}. Use 'ollama' or 'api'.[/red]")
+        console.print(f"[red]Unknown backend: {backend}. Use 'ollama', 'api', or 'claude-code'.[/red]")
         raise typer.Exit(code=1)
 
     console.print(f"Run: [bold]{run_result.run.model.name}[/bold] ({run_result.run.id[:8]})")
@@ -474,6 +501,82 @@ def profile(
     console.print(f"\n[green]Profile written to {path}[/green]\n")
 
     print_profile_summary(sys_profile)
+
+
+@app.command("eval-extract")
+def eval_extract(
+    result_path: Annotated[
+        Path,
+        typer.Argument(help="Path to a run result JSON file."),
+    ],
+    output: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Output path for extracted data JSON. Defaults to .claude/eval-data.json."),
+    ] = None,
+) -> None:
+    """Pre-extract compact evaluation data from a run result file.
+
+    Reads the full result JSON once and writes a lightweight file containing
+    only prompt text, response text, expected answers, and metadata. Used by
+    the /evaluate skill to avoid repeated partial reads of large result files.
+    """
+    from feral.evaluator import extract_eval_data
+
+    eval_data = extract_eval_data(result_path)
+
+    out_path = output or Path(".claude/eval-data.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(eval_data.model_dump_json(indent=2), encoding="utf-8")
+
+    console.print(f"[green]Extracted {eval_data.header.total_prompts} prompts to {out_path}[/green]")
+    console.print(f"  Model: {eval_data.header.model_name}")
+    console.print(f"  Suite: {eval_data.header.suite_name}")
+    console.print(f"  Categories: {eval_data.header.categories}")
+    console.print(f"  Difficulties: {eval_data.header.difficulties}")
+    if eval_data.header.truncated_count:
+        console.print(f"  [yellow]Truncated: {eval_data.header.truncated_count}[/yellow]")
+
+
+@app.command("eval-finalize")
+def eval_finalize(
+    result_path: Annotated[
+        Path,
+        typer.Argument(help="Path to the original run result JSON file."),
+    ],
+    scores_path: Annotated[
+        Path,
+        typer.Option("--scores", "-s", help="Path to the JSONL scores file."),
+    ] = Path(".claude/eval-scores.jsonl"),
+    evaluator: Annotated[
+        str,
+        typer.Option("--evaluator", "-e", help="Evaluator label for the scorecard."),
+    ] = "claude-code/claude-opus-4-6",
+    rubric_label: Annotated[
+        str,
+        typer.Option("--rubric", "-R", help="Rubric description for the scorecard."),
+    ] = "",
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for scorecard JSON files."),
+    ] = Path("scorecards"),
+) -> None:
+    """Finalize evaluation: read streamed scores, compute aggregates, write scorecard.
+
+    Reads the JSONL scores file produced during /evaluate scoring, combines
+    with the original run result for category/difficulty metadata, computes
+    all aggregates (by-category, by-difficulty, normalized, contamination-
+    filtered), and writes the final scorecard JSON.
+    """
+    from feral.evaluator import build_scorecard_from_scores
+
+    path = build_scorecard_from_scores(
+        scores_path=scores_path,
+        result_path=result_path,
+        evaluator=evaluator,
+        rubric_label=rubric_label,
+        output_dir=output_dir,
+    )
+    console.print(f"[green]Scorecard written to {path}[/green]")
 
 
 if __name__ == "__main__":
