@@ -46,6 +46,7 @@ def make_suite_reference(path: str | Path, suite: Suite) -> SuiteReference:
         version=suite.suite.version,
         file=str(path),
         sha256=compute_suite_hash(path),
+        rubric=suite.suite.rubric,
     )
 
 

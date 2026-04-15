@@ -48,6 +48,7 @@ class SuiteMetadata(BaseModel):
     version: str
     description: str = ""
     categories: list[str] = []
+    rubric: str | None = None  # e.g. "coding", "cross-domain-science" → rubrics/{rubric}.yaml
 
 
 class SuiteDefaults(BaseModel):
@@ -116,6 +117,7 @@ class SuiteReference(BaseModel):
     version: str
     file: str
     sha256: str
+    rubric: str | None = None  # rubric hint from suite metadata, auto-resolves at eval time
 
 
 class ModelDetails(BaseModel):
@@ -321,6 +323,8 @@ class EvaluationMetadata(BaseModel):
     evaluator: str
     rubric: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    model_name: str | None = None
+    suite_name: str | None = None
 
 
 class Scorecard(BaseModel):

@@ -503,6 +503,55 @@ def profile(
     print_profile_summary(sys_profile)
 
 
+@app.command()
+def leaderboard(
+    scorecard_paths: Annotated[
+        Optional[list[Path]],
+        typer.Option("--scorecard", "-S", help="Scorecard JSON files. Repeat for each."),
+    ] = None,
+    scorecard_dir: Annotated[
+        Path,
+        typer.Option("--dir", "-d", help="Directory to scan for scorecard JSON files."),
+    ] = Path("scorecards"),
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Require same evaluator in addition to same rubric."),
+    ] = False,
+    top_n: Annotated[
+        int,
+        typer.Option("--top-n", "-n", help="Number of best/worst prompts to show per model."),
+    ] = 3,
+) -> None:
+    """Rank models from comparable scorecards in a leaderboard table."""
+    from feral.leaderboard import (
+        discover_scorecards,
+        filter_comparable,
+        load_scorecard,
+        print_leaderboard,
+    )
+
+    scorecards = []
+    if scorecard_paths:
+        for p in scorecard_paths:
+            try:
+                scorecards.append(load_scorecard(p))
+            except Exception as exc:
+                console.print(f"[red]Failed to load {p}: {exc}[/red]")
+                raise typer.Exit(code=1)
+    else:
+        if not scorecard_dir.is_dir():
+            console.print(f"[red]Scorecard directory not found: {scorecard_dir}[/red]")
+            raise typer.Exit(code=1)
+        scorecards = discover_scorecards(scorecard_dir)
+
+    if not scorecards:
+        console.print("[yellow]No scorecards found.[/yellow]")
+        raise typer.Exit(code=1)
+
+    comparable = filter_comparable(scorecards, strict=strict)
+    print_leaderboard(comparable, top_n=top_n)
+
+
 @app.command("eval-extract")
 def eval_extract(
     result_path: Annotated[
