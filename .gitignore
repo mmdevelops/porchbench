@@ -1,6 +1,10 @@
-# Claude Code
-.claude/settings.local.json
-.claude/handoff-*.md
+# Platform folders (personal config — skills are templated in docs/skills/)
+.claude/
+.github/
+.codex/
+
+# Project internal
+docs/design/
 
 # Python
 __pycache__/
