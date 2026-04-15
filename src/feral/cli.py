@@ -628,5 +628,151 @@ def eval_finalize(
     console.print(f"[green]Scorecard written to {path}[/green]")
 
 
+@app.command()
+def overnight(
+    models: Annotated[
+        list[str],
+        typer.Option("--model", "-m", help="Ollama model name(s). Repeat for multiple."),
+    ],
+    suite_paths: Annotated[
+        Optional[list[Path]],
+        typer.Option("--suite", "-s", help="Specific suite YAML files. Omit to auto-discover."),
+    ] = None,
+    repeats: Annotated[
+        int,
+        typer.Option("--repeats", "-n", help="Repeats per standard suite (discovery suites expand by strategy)."),
+    ] = 3,
+    host: Annotated[
+        Optional[str],
+        typer.Option("--host", "-H", help="Ollama server URL."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
+    ] = Path("results"),
+    suite_dir: Annotated[
+        Path,
+        typer.Option("--suite-dir", help="Directory to auto-discover suites from."),
+    ] = Path("suites"),
+    do_profile: Annotated[
+        bool,
+        typer.Option("--profile", help="Run system profiling before benchmarks."),
+    ] = False,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", help="Skip already-completed runs."),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip confirmation prompt."),
+    ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show per-prompt metrics."),
+    ] = False,
+) -> None:
+    """Run an unattended overnight benchmark across suites and models."""
+    import time as _time
+
+    from feral.overnight import (
+        build_plan,
+        discover_suites,
+        execute_plan,
+        print_plan,
+        print_summary,
+        run_preflight,
+    )
+
+    # 1. Discover or use provided suites
+    if suite_paths:
+        paths = list(suite_paths)
+    else:
+        try:
+            paths = discover_suites(suite_dir)
+        except FileNotFoundError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1)
+
+    # 2. Build plan
+    try:
+        plan = build_plan(paths, models, repeats)
+    except Exception as exc:
+        console.print(f"[red]Failed to build plan: {exc}[/red]")
+        raise typer.Exit(code=1)
+
+    # 3. Display plan
+    console.print()
+    print_plan(plan, models)
+
+    # 4. Preflight checks
+    console.print("[bold]Preflight checks[/bold]")
+    checks = asyncio.run(run_preflight(host, models))
+    ollama_ok = True
+    for name, passed, msg in checks:
+        status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
+        console.print(f"  {status} {name}: {msg}")
+        if name == "Ollama server" and not passed:
+            ollama_ok = False
+
+    if not ollama_ok:
+        console.print("\n[red]Ollama server not reachable. Aborting.[/red]")
+        raise typer.Exit(code=1)
+
+    console.print()
+
+    # 5. Confirm
+    if not yes:
+        if not typer.confirm("Start overnight run?"):
+            raise typer.Exit()
+
+    # 6. Optional profiling
+    if do_profile:
+        console.rule("[bold]System Profile[/bold]")
+        from feral.profiler import profile_system, write_profile, print_profile_summary
+
+        sys_profile = asyncio.run(profile_system(models, host=host))
+        path = write_profile(sys_profile, output_dir)
+        console.print(f"[green]Profile written to {path}[/green]\n")
+        print_profile_summary(sys_profile)
+        console.print()
+
+    # 7. Execute
+    console.rule("[bold]Running benchmarks[/bold]")
+    start = _time.monotonic()
+
+    def on_start(task, model, repeat):
+        repeat_str = f" repeat {repeat}/{task.repeats}" if repeat else ""
+        console.rule(f"[bold]{task.suite.suite.name}[/bold] / {model}{repeat_str}")
+
+    def on_done(result):
+        if result.success:
+            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s)")
+        else:
+            console.print(f"  [red]Failed: {result.error}[/red]")
+
+    try:
+        results = asyncio.run(
+            execute_plan(
+                plan=plan,
+                host=host,
+                output_dir=output_dir,
+                resume=resume,
+                verbose=verbose,
+                on_task_start=on_start,
+                on_task_done=on_done,
+            )
+        )
+    except KeyboardInterrupt:
+        elapsed = _time.monotonic() - start
+        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        console.print(f"Elapsed: {elapsed:.0f}s")
+        raise typer.Exit(code=130)
+
+    elapsed = _time.monotonic() - start
+
+    # 8. Summary
+    print_summary(results, elapsed)
+
+
 if __name__ == "__main__":
     app()

@@ -1,6 +1,6 @@
 ---
 name: evaluate
-description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with ollama-bench compare and analysis tools. Use when the user wants to evaluate benchmark run results.
+description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with feral compare and analysis tools. Use when the user wants to evaluate benchmark run results.
 disable-model-invocation: true
 ---
 
