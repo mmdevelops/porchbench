@@ -678,6 +678,30 @@ def overnight(
         bool,
         typer.Option("--verbose", "-v", help="Show per-prompt metrics."),
     ] = False,
+    do_evaluate: Annotated[
+        bool,
+        typer.Option("--evaluate", help="Score each run after inference completes."),
+    ] = False,
+    eval_backend: Annotated[
+        str,
+        typer.Option("--eval-backend", envvar="FERAL_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
+    ] = "ollama",
+    eval_model: Annotated[
+        Optional[str],
+        typer.Option("--eval-model", envvar="FERAL_EVAL_MODEL", help="Judge model. Defaults per backend."),
+    ] = None,
+    rubric_path: Annotated[
+        Optional[Path],
+        typer.Option("--rubric", "-R", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
+    ] = None,
+    rubric_dir: Annotated[
+        Optional[Path],
+        typer.Option("--rubric-dir", help="Directory of category-specific rubrics."),
+    ] = None,
+    eval_timeout: Annotated[
+        int,
+        typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
+    ] = 120,
 ) -> None:
     """Run an unattended overnight benchmark across suites and models."""
     import time as _time
@@ -744,7 +768,70 @@ def overnight(
         print_profile_summary(sys_profile)
         console.print()
 
-    # 7. Execute
+    # 7. Build eval callback if --evaluate is set
+    on_run_eval = None
+    if do_evaluate:
+        from feral.evaluator import (
+            EVAL_BACKEND_DEFAULTS,
+            AnthropicEvalBackend,
+            ClaudeCodeEvalBackend,
+            OllamaEvalBackend,
+            evaluate_run,
+            load_calibration_examples,
+            load_rubric,
+            load_rubric_dir,
+            write_scorecard,
+        )
+
+        resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get(eval_backend, "gemma4:e4b")
+
+        if eval_backend == "ollama":
+            eval_be = OllamaEvalBackend(model=resolved_eval_model, host=host)
+        elif eval_backend == "api":
+            eval_be = AnthropicEvalBackend(model=resolved_eval_model)
+        elif eval_backend == "claude-code":
+            eval_be = ClaudeCodeEvalBackend(model=resolved_eval_model, timeout_s=eval_timeout)
+        else:
+            console.print(f"[red]Unknown eval backend: {eval_backend}[/red]")
+            raise typer.Exit(code=1)
+
+        eval_backend_label = f"{eval_backend}/{resolved_eval_model}"
+
+        # Pre-load rubrics and calibration
+        eval_rubrics_by_cat = None
+        if rubric_dir:
+            eval_rubrics_by_cat = load_rubric_dir(rubric_dir)
+        cal_data = load_calibration_examples(Path("rubrics/calibration-examples.yaml"))
+
+        console.print(f"[bold]Post-run evaluation:[/bold] {eval_backend_label}")
+        console.print()
+
+        async def on_run_eval(run_result):
+            """Evaluate a completed run and write its scorecard."""
+            # Resolve rubric from suite hint or explicit flag
+            suite_hint = run_result.run.suite.rubric
+            if rubric_path:
+                r_path = rubric_path
+            elif suite_hint:
+                r_path = Path(f"rubrics/{suite_hint}.yaml")
+            else:
+                r_path = Path("rubrics/default.yaml")
+
+            r = load_rubric(r_path)
+            scorecard = await evaluate_run(
+                run_result, r, eval_be,
+                evaluator_label=eval_backend_label,
+                rubrics_by_category=eval_rubrics_by_cat,
+                calibration_data=cal_data or None,
+            )
+            write_scorecard(scorecard)
+            console.print(
+                f"  [green]Eval:[/green] {scorecard.aggregate.overall_weighted:.2f} "
+                f"({r.rubric.name})"
+            )
+            return scorecard.aggregate.overall_weighted
+
+    # 8. Execute
     console.rule("[bold]Running benchmarks[/bold]")
     start = _time.monotonic()
 
@@ -754,7 +841,8 @@ def overnight(
 
     def on_done(result):
         if result.success:
-            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s)")
+            eval_str = f"  score: {result.eval_score:.2f}" if result.eval_score is not None else ""
+            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s){eval_str}")
         else:
             console.print(f"  [red]Failed: {result.error}[/red]")
 
@@ -768,6 +856,7 @@ def overnight(
                 verbose=verbose,
                 on_task_start=on_start,
                 on_task_done=on_done,
+                on_run_eval=on_run_eval,
             )
         )
     except KeyboardInterrupt:

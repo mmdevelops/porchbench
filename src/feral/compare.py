@@ -82,29 +82,51 @@ def print_comparison_table(runs: list[RunResult], scorecards: list[Scorecard | N
                 score_lookups.append({})
     has_scores = bool(score_lookups) and any(score_lookups)
 
-    # Per-prompt comparison
+    # Per-prompt comparison — metrics grouped with models side-by-side
     table = Table(title="Per-Prompt Comparison", title_style="bold")
     table.add_column("Prompt", style="bold")
+
+    # Tokens columns (one per model)
+    for name in model_names:
+        table.add_column(f"{name}\ntokens", justify="right")
+    # Time columns (one per model)
+    for name in model_names:
+        table.add_column(f"{name}\nsecs", justify="right")
+    # Tok/s columns (one per model)
     for name in model_names:
         table.add_column(f"{name}\ntok/s", justify="right")
-        table.add_column(f"{name}\ntokens", justify="right")
-        if has_scores:
+    # Score columns (one per model, if available)
+    if has_scores:
+        for name in model_names:
             table.add_column(f"{name}\nscore", justify="right")
 
     for pid, results_row in aligned.items():
         row: list[str] = [pid]
-        for i, pr in enumerate(results_row):
-            if pr is not None and pr.metrics.tokens_per_second is not None:
-                row.append(f"{pr.metrics.tokens_per_second:.1f}")
-            else:
-                row.append("-")
 
+        # Tokens
+        for pr in results_row:
             if pr is not None and pr.metrics.eval_count is not None:
                 row.append(str(pr.metrics.eval_count))
             else:
                 row.append("-")
 
-            if has_scores:
+        # Time (seconds)
+        for pr in results_row:
+            if pr is not None and pr.metrics.total_duration is not None:
+                row.append(f"{pr.metrics.total_duration / 1e9:.1f}")
+            else:
+                row.append("-")
+
+        # Tok/s
+        for pr in results_row:
+            if pr is not None and pr.metrics.tokens_per_second is not None:
+                row.append(f"{pr.metrics.tokens_per_second:.1f}")
+            else:
+                row.append("-")
+
+        # Scores
+        if has_scores:
+            for i, pr in enumerate(results_row):
                 score = score_lookups[i].get(pid) if i < len(score_lookups) else None
                 row.append(f"{score:.2f}" if score is not None else "-")
 

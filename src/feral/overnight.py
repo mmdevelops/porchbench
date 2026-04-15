@@ -58,6 +58,7 @@ class OvernightResult:
     success: bool
     error: str | None = None
     duration_s: float = 0.0
+    eval_score: float | None = None  # weighted aggregate from post-run evaluation
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +258,14 @@ async def execute_plan(
     verbose: bool,
     on_task_start: Callable[[OvernightTask, str, int | None], None] | None = None,
     on_task_done: Callable[[OvernightResult], None] | None = None,
+    on_run_eval: Callable | None = None,
 ) -> list[OvernightResult]:
-    """Execute the overnight plan with error resilience."""
+    """Execute the overnight plan with error resilience.
+
+    When on_run_eval is provided, it is called after each successful standard
+    run with the RunResult. It should be an async callable returning a float
+    (the aggregate eval score) or None on failure.
+    """
     results: list[OvernightResult] = []
 
     for task in plan:
@@ -302,8 +309,9 @@ async def execute_plan(
                         on_task_start(task, model, repeat_i)
 
                     start = time.monotonic()
+                    run_result = None
                     try:
-                        await run_suite(
+                        run_result = await run_suite(
                             suite=task.suite,
                             suite_ref=task.suite_ref,
                             model=model,
@@ -326,6 +334,15 @@ async def execute_plan(
                             success=False, error=str(exc),
                             duration_s=time.monotonic() - start,
                         )
+
+                    # Post-run evaluation (skip on failure or discovery)
+                    if on_run_eval and result.success and run_result is not None:
+                        try:
+                            result.eval_score = await on_run_eval(run_result)
+                        except KeyboardInterrupt:
+                            raise
+                        except Exception as exc:
+                            console.print(f"  [yellow]Eval failed: {exc}[/yellow]")
 
                     results.append(result)
                     if on_task_done:
@@ -362,7 +379,8 @@ def print_summary(results: list[OvernightResult], total_elapsed: float) -> None:
             repeat_str = f" repeat {r.repeat}" if r.repeat else ""
             if r.success:
                 dur = f"{r.duration_s:.0f}s"
-                console.print(f"  [green]OK[/green]  {r.model}{repeat_str} ({dur})")
+                eval_str = f"  score: {r.eval_score:.2f}" if r.eval_score is not None else ""
+                console.print(f"  [green]OK[/green]  {r.model}{repeat_str} ({dur}){eval_str}")
             else:
                 console.print(f"  [red]FAIL[/red] {r.model}{repeat_str}: {r.error}")
                 failures.append(r)
