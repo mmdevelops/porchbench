@@ -224,6 +224,7 @@ def evaluate(
         ClaudeCodeEvalBackend,
         OllamaEvalBackend,
         evaluate_run,
+        load_calibration_examples,
         load_rubric,
         load_rubric_dir,
         write_scorecard,
@@ -265,6 +266,12 @@ def evaluate(
         except Exception as exc:
             console.print(f"[yellow]Warning: could not load rubric dir: {exc}[/yellow]")
 
+    # Load calibration examples for few-shot priming
+    calibration_path = rubric_path.parent / "calibration-examples.yaml" if rubric_path else None
+    calibration_data = load_calibration_examples(calibration_path) if calibration_path else {}
+    if calibration_data:
+        console.print(f"Calibration: {', '.join(calibration_data.keys())}")
+
     # Create backend
     if backend == "ollama":
         eval_backend = OllamaEvalBackend(model=evaluator_model, host=host)
@@ -294,6 +301,7 @@ def evaluate(
             run_result, rubric, eval_backend,
             evaluator_label=backend_label,
             rubrics_by_category=rubrics_by_category,
+            calibration_data=calibration_data or None,
         )
     )
 

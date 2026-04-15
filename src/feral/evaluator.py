@@ -216,6 +216,91 @@ def select_rubric(
 
 
 # ---------------------------------------------------------------------------
+# Calibration examples
+# ---------------------------------------------------------------------------
+
+
+def load_calibration_examples(path: str | Path) -> dict[str, list[dict]]:
+    """Load calibration examples from YAML, keyed by rubric name.
+
+    Returns e.g. {"coding": [...], "reasoning": [...], "cross-domain-science": [...]}.
+    Returns empty dict if the file doesn't exist or can't be parsed.
+    """
+    path = Path(path)
+    if not path.exists():
+        return {}
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return data.get("calibration", {})
+    except Exception:
+        return {}
+
+
+# Mapping from rubric name to calibration key. The calibration YAML uses
+# rubric-style keys; suite rubric hints may differ slightly.
+_CALIBRATION_KEY_MAP = {
+    "coding": "coding",
+    "reasoning": "reasoning",
+    "cross-domain": "cross-domain",
+    "cross-domain-science": "cross-domain-science",
+    "default": "coding",  # fallback
+}
+
+
+def _resolve_calibration_key(rubric: Rubric) -> str:
+    """Determine which calibration set matches a rubric."""
+    name = rubric.rubric.name.lower().replace(" rubric", "").replace(" ", "-")
+    return _CALIBRATION_KEY_MAP.get(name, name)
+
+
+def format_calibration_preamble(
+    calibration_data: dict[str, list[dict]],
+    rubric: Rubric,
+) -> str:
+    """Format calibration examples as a few-shot preamble for the scoring prompt.
+
+    Selects the calibration set matching the rubric, then formats each tier
+    (strong, adequate, weak) as a scored example with rationale.
+    """
+    key = _resolve_calibration_key(rubric)
+    examples = calibration_data.get(key)
+    if not examples:
+        return ""
+
+    lines = [
+        "## Calibration Examples",
+        "",
+        "Before scoring, review these reference examples to anchor the 1-5 scale.",
+        "Each shows a scored response at a different quality tier.",
+        "",
+    ]
+
+    for ex in examples:
+        tier = ex.get("tier", "unknown")
+        scores = ex.get("scores", {})
+        weighted = ex.get("weighted_score", "n/a")
+        rationale = ex.get("rationale", "").strip()
+        prompt_summary = ex.get("prompt_summary", "").strip()
+        response_summary = ex.get("response_summary", "").strip()
+
+        score_strs = [f"{k}: {v}" for k, v in scores.items()]
+
+        lines.append(f"### {tier.title()}")
+        lines.append(f"**Prompt:** {prompt_summary}")
+        lines.append(f"**Response:** {response_summary}")
+        lines.append(f"**Scores:** {', '.join(score_strs)} → weighted {weighted}")
+        lines.append(f"**Why:** {rationale}")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("Now score the following response using the same scale anchoring.")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Scoring prompt construction
 # ---------------------------------------------------------------------------
 
@@ -223,6 +308,7 @@ def select_rubric(
 def build_scoring_prompt(
     prompt_result: PromptResult,
     rubric: Rubric,
+    calibration_preamble: str = "",
 ) -> str:
     """Construct the evaluation prompt sent to the judge model."""
     criteria_block = "\n".join(
@@ -252,7 +338,7 @@ valid approaches that meet these criteria.
 """
 
     return f"""You are an expert evaluator assessing the quality of an AI model's response.
-
+{calibration_preamble}
 ## Original Prompt
 {user_messages}
 
@@ -287,9 +373,10 @@ async def score_prompt(
     prompt_result: PromptResult,
     rubric: Rubric,
     backend: EvalBackend,
+    calibration_preamble: str = "",
 ) -> PromptScore:
     """Score a single prompt result against a rubric via the evaluator backend."""
-    scoring_prompt = build_scoring_prompt(prompt_result, rubric)
+    scoring_prompt = build_scoring_prompt(prompt_result, rubric, calibration_preamble)
     response_text = await backend.generate(scoring_prompt)
 
     parsed = _parse_scoring_response(response_text, rubric)
@@ -467,12 +554,14 @@ async def evaluate_run(
     backend: EvalBackend,
     evaluator_label: str = "",
     rubrics_by_category: dict[str, Rubric] | None = None,
+    calibration_data: dict[str, list[dict]] | None = None,
 ) -> Scorecard:
     """Score all prompts in a run result. Returns a complete Scorecard.
 
     When rubrics_by_category is provided, each prompt is scored with the
     rubric matching its category. Falls back to the rubric parameter for
-    unmatched categories.
+    unmatched categories. When calibration_data is provided, few-shot
+    calibration examples are prepended to each scoring prompt.
     """
     # Include responses that completed (stop) or were truncated (length)
     # — truncated responses still have real content worth evaluating
@@ -481,6 +570,17 @@ async def evaluate_run(
         if r.response.done_reason in ("stop", "length", None)
         and r.response.message.content
     ]
+
+    # Pre-compute calibration preambles per rubric to avoid reformatting each prompt
+    _preamble_cache: dict[str, str] = {}
+
+    def _get_preamble(prompt_rubric: Rubric) -> str:
+        if not calibration_data:
+            return ""
+        key = _resolve_calibration_key(prompt_rubric)
+        if key not in _preamble_cache:
+            _preamble_cache[key] = format_calibration_preamble(calibration_data, prompt_rubric)
+        return _preamble_cache[key]
 
     scores: list[PromptScore] = []
 
@@ -503,7 +603,8 @@ async def evaluate_run(
                 else:
                     prompt_rubric = rubric
 
-                score = await score_prompt(prompt_result, prompt_rubric, backend)
+                preamble = _get_preamble(prompt_rubric)
+                score = await score_prompt(prompt_result, prompt_rubric, backend, preamble)
                 scores.append(score)
                 progress.console.print(
                     f"  {prompt_result.prompt_id}: "
