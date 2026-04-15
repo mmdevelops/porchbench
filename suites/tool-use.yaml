@@ -1,6 +1,7 @@
 suite:
   name: "Tool Use Discovery"
   version: "1.0"
+  rubric: coding
   description: >
     Tool-use benchmarking across three tiers: mechanics (can the model call
     tools?), multi-step (can it plan and execute?), error recovery (can it

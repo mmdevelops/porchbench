@@ -1,6 +1,7 @@
 suite:
   name: "Coding Basics"
   version: "2.0"
+  rubric: coding
   description: >
     Curated prompts for LLM-as-judge evaluation. Focuses on tasks where
     quality, style, reasoning depth, and design judgment matter — not just

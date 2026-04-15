@@ -1,6 +1,7 @@
 suite:
   name: "Routing Discovery"
   version: "2.0"
+  rubric: reasoning
   description: >
     Systematic exploration of prompt strategy x model scale interactions.
     100+ prompts across answer types, reasoning depths, and difficulties.
