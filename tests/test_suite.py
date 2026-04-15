@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from ollama_bench.schemas import Message, ModelOptions, Prompt, Strategy
-from ollama_bench.suite import (
+from feral.schemas import Message, ModelOptions, Prompt, Strategy
+from feral.suite import (
     compute_suite_hash,
     load_suite,
     make_suite_reference,

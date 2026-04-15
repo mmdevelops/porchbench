@@ -2,9 +2,9 @@
 
 import pytest
 
-from ollama_bench.sandbox import SubprocessSandbox, SandboxConfig
-from ollama_bench.sandbox.base import FileContent
-from ollama_bench.sandbox.validators import (
+from feral.sandbox import SubprocessSandbox, SandboxConfig
+from feral.sandbox.base import FileContent
+from feral.sandbox.validators import (
     CsvSortValidator,
     CsvRowCountValidator,
     ContentContainsValidator,

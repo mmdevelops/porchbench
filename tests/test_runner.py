@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ollama_bench.harness.harness import HarnessResult, Outcome, ToolUseMetrics
-from ollama_bench.runner import _run_tool_use_prompt, find_completed_prompt_ids
-from ollama_bench.schemas import (
+from feral.harness.harness import HarnessResult, Outcome, ToolUseMetrics
+from feral.runner import _run_tool_use_prompt, find_completed_prompt_ids
+from feral.schemas import (
     Message,
     ModelInfo,
     ModelOptions,
@@ -74,7 +74,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "ollama_bench.tool_runner.run_tool_use_prompt",
+            "feral.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -105,7 +105,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "ollama_bench.tool_runner.run_tool_use_prompt",
+            "feral.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -128,7 +128,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "ollama_bench.tool_runner.run_tool_use_prompt",
+            "feral.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -156,7 +156,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "ollama_bench.tool_runner.run_tool_use_prompt",
+            "feral.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):

@@ -2,7 +2,7 @@
 
 import pytest
 
-from ollama_bench.statistics import (
+from feral.statistics import (
     ConfidenceInterval,
     PairedTestResult,
     auto_ci,

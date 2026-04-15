@@ -2,7 +2,7 @@
 
 import pytest
 
-from ollama_bench.metrics import (
+from feral.metrics import (
     describe,
     extract_tokens_per_second,
     extract_time_to_first_token,
@@ -12,8 +12,8 @@ from ollama_bench.metrics import (
     group_by_difficulty,
     summarize_run,
 )
-from ollama_bench.evaluator import compute_aggregates, normalize_score
-from ollama_bench.schemas import (
+from feral.evaluator import compute_aggregates, normalize_score
+from feral.schemas import (
     CriterionScore,
     Message,
     ModelDetails,

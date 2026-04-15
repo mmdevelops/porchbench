@@ -2,8 +2,8 @@
 
 import pytest
 
-from ollama_bench.sandbox import SubprocessSandbox, SandboxConfig
-from ollama_bench.sandbox.base import ExecutionRequest, FileContent
+from feral.sandbox import SubprocessSandbox, SandboxConfig
+from feral.sandbox.base import ExecutionRequest, FileContent
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ollama_bench.schemas import (
+from feral.schemas import (
     AggregateScores,
     Criterion,
     EvaluationMetadata,
