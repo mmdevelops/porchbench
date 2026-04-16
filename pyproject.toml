@@ -45,6 +45,12 @@ dependencies = [
     "beaupy>=3.5",
 ]
 
+[project.urls]
+Homepage = "https://github.com/mmdevelops/feral"
+Repository = "https://github.com/mmdevelops/feral"
+Issues = "https://github.com/mmdevelops/feral/issues"
+Changelog = "https://github.com/mmdevelops/feral/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 api = [
     "anthropic>=0.40",
