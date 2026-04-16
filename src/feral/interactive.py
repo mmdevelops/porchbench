@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 import typer
-from beaupy import select, select_multiple
+from beaupy import prompt, select, select_multiple
 from rich.console import Console
 
 from feral.backend import InferenceBackend
@@ -20,17 +20,34 @@ from feral.suite import discover_suites
 console = Console()
 
 
+def _prompt_models_manually() -> list[str]:
+    """Fall back to text input when model discovery isn't available."""
+    console.print("[yellow]Could not discover models from server.[/yellow]")
+    console.print("[bold]Enter model name(s)[/bold] (empty line to finish):")
+    models: list[str] = []
+    while True:
+        value = prompt("  Model: ", raise_type_conversion_fail=False)
+        if not value or not value.strip():
+            break
+        models.append(value.strip())
+    if not models:
+        console.print("[red]No models entered.[/red]")
+        raise typer.Exit(code=1)
+    return models
+
+
 def select_models(backend: InferenceBackend) -> list[str]:
-    """Prompt user to pick one or more models from the backend's available list."""
+    """Prompt user to pick one or more models from the backend's available list.
+
+    Falls back to manual text entry when the backend cannot list models.
+    """
     try:
         models = asyncio.run(backend.list_available_models())
-    except Exception as exc:
-        console.print(f"[red]Failed to list models: {exc}[/red]")
-        raise typer.Exit(code=1)
+    except Exception:
+        models = []
 
     if not models:
-        console.print("[red]No models available. Pull a model first.[/red]")
-        raise typer.Exit(code=1)
+        return _prompt_models_manually()
 
     console.print("[bold]Select model(s)[/bold] (space to toggle, enter to confirm):")
     selected = select_multiple(
@@ -156,3 +173,65 @@ def select_results(result_dir: Path = Path("results")) -> list[Path]:
         raise typer.Exit(code=1)
 
     return [entries[labels.index(s)][1] for s in selected]
+
+
+# ---------------------------------------------------------------------------
+# Options screens
+# ---------------------------------------------------------------------------
+
+_RUN_TOGGLES = [
+    ("Verbose output", "verbose"),
+    ("Resume (skip completed)", "resume"),
+    ("Profile VRAM during inference", "profile_vram"),
+]
+
+_OVERNIGHT_TOGGLES = [
+    ("Evaluate after each run", "evaluate"),
+    ("Profile system first", "profile"),
+    ("Profile VRAM during inference", "profile_vram"),
+    ("Resume (skip completed)", "resume"),
+    ("Verbose output", "verbose"),
+]
+
+
+def _prompt_repeats(default: int) -> int:
+    """Ask user for repeat count, validating as a positive integer."""
+    console.print(f"[bold]Repeats per suite[/bold] (default {default}):")
+    value = prompt(
+        "  > ",
+        target_type=int,
+        initial_value=str(default),
+        validator=lambda v: v >= 1,
+        raise_validation_fail=False,
+        raise_type_conversion_fail=False,
+    )
+    if value is None or value < 1:
+        return default
+    return value
+
+
+def _prompt_toggles(toggles: list[tuple[str, str]]) -> dict[str, bool]:
+    """Show a multi-select of toggle options, return map of key -> enabled."""
+    labels = [label for label, _ in toggles]
+    console.print("[bold]Options[/bold] (space to toggle, enter to confirm):")
+    selected = select_multiple(options=labels)
+    selected_set = set(selected)
+    return {key: label in selected_set for label, key in toggles}
+
+
+def select_run_options(
+    default_repeats: int = 1,
+) -> dict:
+    """Interactive options screen for the run command."""
+    repeats = _prompt_repeats(default_repeats)
+    toggles = _prompt_toggles(_RUN_TOGGLES)
+    return {"repeats": repeats, **toggles}
+
+
+def select_overnight_options(
+    default_repeats: int = 3,
+) -> dict:
+    """Interactive options screen for the overnight command."""
+    repeats = _prompt_repeats(default_repeats)
+    toggles = _prompt_toggles(_OVERNIGHT_TOGGLES)
+    return {"repeats": repeats, **toggles}

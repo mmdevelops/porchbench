@@ -82,15 +82,26 @@ def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
 def check_models_or_exit(
     backend: InferenceBackend, models: list[str], backend_name: str,
 ) -> None:
-    """Verify all models exist, exit with helpful message if not."""
+    """Verify all models exist. Hard exit for Ollama, soft warning for other backends."""
     for model in models:
         try:
             asyncio.run(backend.get_model_info(model))
-        except Exception:
+        except LookupError:
+            # Server confirmed model doesn't exist
             console.print(f"[red]Model not found: {model}[/red]")
             if backend_name == "ollama":
                 console.print(f"  Run [bold]ollama pull {model}[/bold] to download it.")
             raise typer.Exit(code=1)
+        except Exception:
+            if backend_name == "ollama":
+                console.print(f"[red]Model not found: {model}[/red]")
+                console.print(f"  Run [bold]ollama pull {model}[/bold] to download it.")
+                raise typer.Exit(code=1)
+            # Non-Ollama backend couldn't verify — warn and continue
+            console.print(
+                f"[yellow]Could not verify model \"{model}\" "
+                f"(server does not support model lookups)[/yellow]"
+            )
 
 
 @app.command()
@@ -145,15 +156,24 @@ def run(
     ] = False,
 ) -> None:
     """Run a benchmark suite against one or more models."""
-    from feral.interactive import select_models, select_suite
+    interactive = models is None or suite_path is None
 
     # Interactive selection when args omitted (model first, then suite)
     if models is None:
+        from feral.interactive import select_models
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
         models = select_models(backend)
     if suite_path is None:
+        from feral.interactive import select_suite
         suite_path = select_suite()
+    if interactive:
+        from feral.interactive import select_run_options
+        opts = select_run_options(default_repeats=repeats)
+        repeats = opts["repeats"]
+        verbose = opts["verbose"]
+        resume = opts["resume"]
+        profile_vram = opts["profile_vram"]
 
     # Load and validate suite
     try:
@@ -876,6 +896,8 @@ def overnight(
     )
     from feral.suite import discover_suites
 
+    interactive = models is None or suite_paths is None
+
     # Interactive selection when args omitted
     if models is None:
         from feral.interactive import select_models
@@ -889,6 +911,17 @@ def overnight(
     else:
         from feral.interactive import select_suites
         paths = select_suites(suite_dir)
+
+    # Interactive options screen
+    if interactive:
+        from feral.interactive import select_overnight_options
+        opts = select_overnight_options(default_repeats=repeats)
+        repeats = opts["repeats"]
+        do_evaluate = opts["evaluate"]
+        do_profile = opts["profile"]
+        profile_vram = opts["profile_vram"]
+        resume = opts["resume"]
+        verbose = opts["verbose"]
 
     # 2. Build plan
     try:

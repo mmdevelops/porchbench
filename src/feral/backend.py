@@ -278,8 +278,29 @@ class OpenAICompatBackend:
         return self._to_chat_result(data, wall_elapsed)
 
     async def get_model_info(self, model: str) -> ModelInfo:
-        """Best-effort model metadata from /v1/models. Most fields will be None."""
-        return ModelInfo(name=model)
+        """Best-effort model lookup via /v1/models/{id}.
+
+        Returns ModelInfo on success. Raises LookupError if the server
+        confirms the model doesn't exist (404). Returns a stub ModelInfo
+        if the endpoint isn't supported (lets callers degrade gracefully).
+        """
+        try:
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            async with httpx.AsyncClient() as http:
+                resp = await http.get(
+                    f"{self.base_url}/v1/models/{model}",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                if resp.status_code == 404:
+                    raise LookupError(f"Model not found: {model}")
+                resp.raise_for_status()
+                return ModelInfo(name=model)
+        except LookupError:
+            raise
+        except Exception:
+            # Server doesn't support model lookups — return stub
+            return ModelInfo(name=model)
 
     async def get_server_health(self) -> tuple[bool, str]:
         """Check reachability by listing models at /v1/models."""
