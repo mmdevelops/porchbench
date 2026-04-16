@@ -754,9 +754,12 @@ def leaderboard(
     groups = group_scorecards(scorecards)
     if len(groups) > 1 and scorecard_paths is None:
         from feral.interactive import select_rubric_group
-        comparable = select_rubric_group(groups)
+        selected = select_rubric_group(groups)
     else:
-        comparable = filter_comparable(scorecards, strict=strict)
+        selected = scorecards
+
+    # Evaluator consistency check + --strict filtering on the selected group
+    comparable = filter_comparable(selected, strict=strict)
 
     print_leaderboard(comparable, top_n=top_n, result_dir=result_dir)
 
