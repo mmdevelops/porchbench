@@ -176,6 +176,38 @@ def select_results(result_dir: Path = Path("results")) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
+# Scorecard / rubric group selection
+# ---------------------------------------------------------------------------
+
+
+def select_rubric_group(
+    groups: dict[str, list],
+) -> list:
+    """Prompt user to pick a rubric group when multiple exist.
+
+    groups is a dict of normalized_rubric_key -> list[Scorecard].
+    Returns the selected group's scorecards. If only one group, returns it directly.
+    """
+    if len(groups) == 1:
+        return list(groups.values())[0]
+
+    labels = [f"{key} ({len(scs)} scorecards)" for key, scs in groups.items()]
+    keys = list(groups.keys())
+
+    console.print("[bold]Multiple rubric groups found. Select one:[/bold]")
+    chosen = select(
+        options=labels,
+        pagination=len(labels) > 15,
+        page_size=15,
+    )
+    if chosen is None:
+        console.print("[red]No rubric group selected.[/red]")
+        raise typer.Exit(code=1)
+
+    return groups[keys[labels.index(chosen)]]
+
+
+# ---------------------------------------------------------------------------
 # Options screens
 # ---------------------------------------------------------------------------
 

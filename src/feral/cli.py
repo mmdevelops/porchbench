@@ -687,6 +687,10 @@ def leaderboard(
         Path,
         typer.Option("--dir", "-d", help="Directory to scan for scorecard JSON files."),
     ] = Path("scorecards"),
+    result_dir: Annotated[
+        Path,
+        typer.Option("--result-dir", help="Directory of run results for model name lookup."),
+    ] = Path("results"),
     strict: Annotated[
         bool,
         typer.Option("--strict", help="Require same evaluator in addition to same rubric."),
@@ -695,11 +699,16 @@ def leaderboard(
         int,
         typer.Option("--top-n", "-n", help="Number of best/worst prompts to show per model."),
     ] = 3,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show details of skipped files during discovery."),
+    ] = False,
 ) -> None:
     """Rank scored models in a leaderboard table."""
     from feral.leaderboard import (
         discover_scorecards,
         filter_comparable,
+        group_scorecards,
         load_scorecard,
         print_leaderboard,
     )
@@ -716,14 +725,21 @@ def leaderboard(
         if not scorecard_dir.is_dir():
             console.print(f"[red]Scorecard directory not found: {scorecard_dir}[/red]")
             raise typer.Exit(code=1)
-        scorecards = discover_scorecards(scorecard_dir)
+        scorecards = discover_scorecards(scorecard_dir, verbose=verbose)
 
     if not scorecards:
         console.print("[yellow]No scorecards found.[/yellow]")
         raise typer.Exit(code=1)
 
-    comparable = filter_comparable(scorecards, strict=strict)
-    print_leaderboard(comparable, top_n=top_n)
+    # Interactive rubric group selection when multiple groups exist
+    groups = group_scorecards(scorecards)
+    if len(groups) > 1 and scorecard_paths is None:
+        from feral.interactive import select_rubric_group
+        comparable = select_rubric_group(groups)
+    else:
+        comparable = filter_comparable(scorecards, strict=strict)
+
+    print_leaderboard(comparable, top_n=top_n, result_dir=result_dir)
 
 
 @app.command("eval-extract", hidden=True)
