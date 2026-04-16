@@ -81,12 +81,16 @@ class OllamaEvalBackend:
         self.host = host
 
     async def generate(self, prompt: str) -> str:
-        from feral import client
+        from feral.backend import OllamaBackend
 
-        messages = [Message(role="user", content=prompt)]
+        backend = OllamaBackend(host=self.host)
         options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=8192)
-        response = await client.chat(messages, self.model, options, host=self.host)
-        return response.message.content or ""
+        result = await backend.chat(
+            messages=[{"role": "user", "content": prompt}],
+            model=self.model,
+            options=options,
+        )
+        return result.content
 
 
 class AnthropicEvalBackend:

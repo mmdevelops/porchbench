@@ -188,6 +188,9 @@ class PromptMetrics(BaseModel):
     tokens_per_second: float | None = None
     time_to_first_token_ms: float | None = None
 
+    # VRAM profiling (opt-in via --profile-vram)
+    peak_vram_bytes: int | None = None
+
 
 def compute_derived_metrics(metrics: PromptMetrics) -> PromptMetrics:
     """Populate computed fields from raw Ollama timing data. Returns a new instance."""

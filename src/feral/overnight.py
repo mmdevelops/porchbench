@@ -16,12 +16,12 @@ from typing import Callable
 from rich.console import Console
 from rich.table import Table
 
-from feral import client
+from feral.backend import InferenceBackend, OllamaBackend
 from feral.profiler import detect_gpu
 from feral.runner import run_suite
 from feral.routing import count_discovery_runs, run_discovery
 from feral.schemas import RunResult, Suite, SuiteReference
-from feral.suite import load_suite, make_suite_reference
+from feral.suite import discover_suites, load_suite, make_suite_reference
 
 console = Console()
 
@@ -65,15 +65,6 @@ class OvernightResult:
 # Suite discovery and classification
 # ---------------------------------------------------------------------------
 
-
-def discover_suites(suite_dir: Path) -> list[Path]:
-    """Find all .yaml suite files in a directory, sorted by name."""
-    if not suite_dir.is_dir():
-        raise FileNotFoundError(f"Suite directory not found: {suite_dir}")
-    paths = sorted(suite_dir.glob("*.yaml"))
-    if not paths:
-        raise FileNotFoundError(f"No .yaml files found in {suite_dir}")
-    return paths
 
 
 def classify_suite(suite: Suite) -> str:
@@ -143,18 +134,16 @@ def format_estimate(seconds: float) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def check_ollama_health(host: str | None) -> tuple[bool, str]:
-    """Check if Ollama server is reachable."""
-    version = await client.get_server_version(host)
-    if version == "unknown":
-        return False, "Ollama server not reachable"
-    return True, f"Ollama v{version}"
+async def check_ollama_health(backend: InferenceBackend) -> tuple[bool, str]:
+    """Check if the inference backend is reachable."""
+    return await backend.get_server_health()
 
 
-async def check_gpu_status(host: str | None, model: str) -> tuple[bool, str]:
-    """Check GPU detection and acceleration via Ollama API.
+async def check_gpu_status(backend: InferenceBackend, model: str) -> tuple[bool, str]:
+    """Check GPU detection and acceleration.
 
     Runs a 1-token warmup inference then checks if the model loaded into VRAM.
+    VRAM check requires an OllamaBackend; other backends skip it.
     """
     # Static GPU detection
     gpu_name, vram_gb = detect_gpu()
@@ -165,44 +154,51 @@ async def check_gpu_status(host: str | None, model: str) -> tuple[bool, str]:
     if vram_gb:
         gpu_label += f" ({vram_gb:.0f} GB)"
 
-    # Warmup: 1-token inference to force model load
+    # Warmup: 1-token inference to force model load (timeout prevents hanging)
     try:
-        from feral.schemas import Message, ModelOptions
+        from feral.schemas import ModelOptions
 
-        await client.chat(
-            messages=[Message(role="user", content="ok")],
-            model=model,
-            options=ModelOptions(num_predict=1),
-            host=host,
+        await asyncio.wait_for(
+            backend.chat(
+                messages=[{"role": "user", "content": "ok"}],
+                model=model,
+                options=ModelOptions(num_predict=1),
+            ),
+            timeout=120,
         )
+    except asyncio.TimeoutError:
+        return False, f"GPU check failed — warmup timed out after 120s"
     except Exception as exc:
         return False, f"GPU check failed — warmup error: {exc}"
 
-    # Check VRAM usage via Ollama ps()
-    try:
-        running = await client.list_running_models(host)
-        for m in running:
-            if m.get("size_vram") and m["size_vram"] > 0:
-                vram_used_gb = m["size_vram"] / (1024**3)
-                return True, f"{gpu_label} — {vram_used_gb:.1f} GB VRAM in use"
-        return False, f"{gpu_label} detected but model not using VRAM (CPU inference)"
-    except Exception:
-        return True, f"{gpu_label} detected (could not verify VRAM usage)"
+    # Check VRAM usage via Ollama ps() — only available on OllamaBackend
+    if isinstance(backend, OllamaBackend):
+        try:
+            running = await backend.list_running_models()
+            for m in running:
+                if m.get("size_vram") and m["size_vram"] > 0:
+                    vram_used_gb = m["size_vram"] / (1024**3)
+                    return True, f"{gpu_label} — {vram_used_gb:.1f} GB VRAM in use"
+            return False, f"{gpu_label} detected but model not using VRAM (CPU inference)"
+        except Exception:
+            return True, f"{gpu_label} detected (could not verify VRAM usage)"
+
+    return True, f"{gpu_label} detected (VRAM check not available for this backend)"
 
 
 async def run_preflight(
-    host: str | None,
+    backend: InferenceBackend,
     models: list[str],
 ) -> list[tuple[str, bool, str]]:
     """Run all preflight checks. Returns list of (name, passed, message)."""
     checks: list[tuple[str, bool, str]] = []
 
-    ok, msg = await check_ollama_health(host)
-    checks.append(("Ollama server", ok, msg))
+    ok, msg = await check_ollama_health(backend)
+    checks.append(("Server", ok, msg))
     if not ok:
         return checks  # no point continuing
 
-    ok, msg = await check_gpu_status(host, models[0])
+    ok, msg = await check_gpu_status(backend, models[0])
     checks.append(("GPU acceleration", ok, msg))
 
     return checks
@@ -252,13 +248,14 @@ def print_plan(plan: list[OvernightTask], models: list[str]) -> None:
 
 async def execute_plan(
     plan: list[OvernightTask],
-    host: str | None,
+    backend: InferenceBackend,
     output_dir: Path,
     resume: bool,
     verbose: bool,
     on_task_start: Callable[[OvernightTask, str, int | None], None] | None = None,
     on_task_done: Callable[[OvernightResult], None] | None = None,
     on_run_eval: Callable | None = None,
+    profile_vram: bool = False,
 ) -> list[OvernightResult]:
     """Execute the overnight plan with error resilience.
 
@@ -280,7 +277,7 @@ async def execute_plan(
                     suite=task.suite,
                     suite_ref=task.suite_ref,
                     models=task.models,
-                    host=host,
+                    backend=backend,
                     output_dir=output_dir,
                     suite_dir=task.suite_path.parent,
                 )
@@ -315,12 +312,13 @@ async def execute_plan(
                             suite=task.suite,
                             suite_ref=task.suite_ref,
                             model=model,
-                            host=host,
+                            backend=backend,
                             output_dir=output_dir,
                             suite_dir=task.suite_path.parent,
                             repeat_index=repeat_i if task.repeats > 1 else None,
                             total_repeats=task.repeats if task.repeats > 1 else None,
                             resume=resume,
+                            profile_vram=profile_vram,
                         )
                         result = OvernightResult(
                             task=task, model=model, repeat=repeat_i,

@@ -26,35 +26,102 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from feral.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from feral.runner import run_suite
 from feral.suite import load_suite, make_suite_reference
 from feral.schemas import RunResult
 
 app = typer.Typer(
     name="feral",
-    help="Deterministic benchmarking of local LLMs via Ollama.",
+    help="Deterministic benchmarking of local LLMs.",
     no_args_is_help=True,
 )
+routes_app = typer.Typer(
+    name="routes",
+    help="Find which model handles each prompt type best.",
+    no_args_is_help=True,
+)
+app.add_typer(routes_app)
 console = Console()
+
+
+def construct_backend(
+    backend: str,
+    host: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+) -> InferenceBackend:
+    """Build an InferenceBackend from CLI flags."""
+    if backend == "ollama":
+        return OllamaBackend(host=host)
+    elif backend == "openai-compat":
+        if not base_url:
+            console.print("[red]--base-url is required for openai-compat backend.[/red]")
+            raise typer.Exit(code=1)
+        return OpenAICompatBackend(base_url=base_url, api_key=api_key or "not-needed")
+    else:
+        console.print(f"[red]Unknown backend: {backend}. Use 'ollama' or 'openai-compat'.[/red]")
+        raise typer.Exit(code=1)
+
+
+def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
+    """Verify the inference server is reachable, exit with helpful message if not."""
+    healthy, health_msg = asyncio.run(backend.get_server_health())
+    if not healthy:
+        console.print(f"[red]Cannot reach inference server: {health_msg}[/red]")
+        if backend_name == "ollama":
+            console.print(
+                "\n[yellow]Troubleshooting:[/yellow]\n"
+                "  1. Install Ollama from https://ollama.com\n"
+                "  2. Start the server: [bold]ollama serve[/bold]\n"
+                "  3. Pull a model: [bold]ollama pull <model>[/bold]"
+            )
+        raise typer.Exit(code=1)
+
+
+def check_models_or_exit(
+    backend: InferenceBackend, models: list[str], backend_name: str,
+) -> None:
+    """Verify all models exist, exit with helpful message if not."""
+    for model in models:
+        try:
+            asyncio.run(backend.get_model_info(model))
+        except Exception:
+            console.print(f"[red]Model not found: {model}[/red]")
+            if backend_name == "ollama":
+                console.print(f"  Run [bold]ollama pull {model}[/bold] to download it.")
+            raise typer.Exit(code=1)
 
 
 @app.command()
 def run(
     suite_path: Annotated[
-        Path,
-        typer.Option("--suite", "-s", help="Path to a test suite YAML file."),
-    ],
+        Optional[Path],
+        typer.Option("--suite", "-s", help="Path to a test suite YAML file. Interactive picker if omitted."),
+    ] = None,
     models: Annotated[
-        list[str],
-        typer.Option("--model", "-m", help="Ollama model name(s). Repeat for multiple models."),
-    ],
+        Optional[list[str]],
+        typer.Option("--model", "-m", help="Model name(s). Repeat for multiple. Interactive picker if omitted."),
+    ] = None,
     prompt_ids: Annotated[
         Optional[list[str]],
         typer.Option("--prompt-id", "-p", help="Run only these prompt IDs."),
     ] = None,
+    backend_name: Annotated[
+        str,
+        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' (default) or 'openai-compat'."),
+    ] = "ollama",
     host: Annotated[
         Optional[str],
-        typer.Option("--host", "-H", help="Ollama server URL."),
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
+    ] = None,
+    base_url: Annotated[
+        Optional[str],
+        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+    ] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -72,8 +139,22 @@ def run(
         bool,
         typer.Option("--verbose", "-v", help="Show per-prompt metrics and response preview."),
     ] = False,
+    profile_vram: Annotated[
+        bool,
+        typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
+    ] = False,
 ) -> None:
-    """Run a benchmark suite against one or more Ollama models."""
+    """Run a benchmark suite against one or more models."""
+    from feral.interactive import select_models, select_suite
+
+    # Interactive selection when args omitted (model first, then suite)
+    if models is None:
+        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+        check_server_or_exit(backend, backend_name)
+        models = select_models(backend)
+    if suite_path is None:
+        suite_path = select_suite()
+
     # Load and validate suite
     try:
         suite = load_suite(suite_path)
@@ -94,7 +175,12 @@ def run(
 
     console.print()
 
-    # Run each model × repeat
+    # Build backend and verify connectivity
+    backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+
+    check_server_or_exit(backend, backend_name)
+    check_models_or_exit(backend, models, backend_name)
+
     for model in models:
         for repeat_i in range(1, repeats + 1):
             repeat_label = f" (repeat {repeat_i}/{repeats})" if repeats > 1 else ""
@@ -123,9 +209,11 @@ def run(
                         done = result.response.done_reason or "?"
                         tps_str = f"{tps:.1f} tok/s" if tps else "n/a"
                         toks_str = f"{toks} tokens" if toks else "n/a"
+                        vram = result.metrics.peak_vram_bytes
+                        vram_str = f", {vram / (1024**3):.2f}GB VRAM" if vram else ""
                         progress.console.print(
                             f"  {prompt_id}: {status}  "
-                            f"[dim]{dur_str}, {toks_str}, {tps_str}, done={done}[/dim]"
+                            f"[dim]{dur_str}, {toks_str}, {tps_str}, done={done}{vram_str}[/dim]"
                         )
                         preview = result.response.message.content[:200].replace("\n", " ")
                         progress.console.print(f"    [dim]{preview}...[/dim]")
@@ -139,7 +227,7 @@ def run(
                         suite=suite,
                         suite_ref=suite_ref,
                         model=model,
-                        host=host,
+                        backend=backend,
                         prompt_ids=prompt_ids,
                         output_dir=output_dir,
                         on_prompt_complete=on_complete,
@@ -147,6 +235,7 @@ def run(
                         repeat_index=repeat_i if repeats > 1 else None,
                         total_repeats=repeats if repeats > 1 else None,
                         resume=resume,
+                        profile_vram=profile_vram,
                     )
                 )
 
@@ -181,9 +270,9 @@ def _print_summary(result) -> None:
 @app.command()
 def evaluate(
     result_path: Annotated[
-        Path,
-        typer.Option("--result", "-r", help="Path to a run result JSON file."),
-    ],
+        Optional[Path],
+        typer.Option("--result", "-r", help="Path to a run result JSON file. Interactive picker if omitted."),
+    ] = None,
     rubric_path: Annotated[
         Optional[Path],
         typer.Option("--rubric", "-R", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
@@ -217,7 +306,7 @@ def evaluate(
         typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
     ] = 120,
 ) -> None:
-    """Score a run result using an LLM judge (local Ollama model, Claude API, or Claude Code CLI)."""
+    """Score model responses for quality using an LLM-as-judge evaluator."""
     from feral.evaluator import (
         EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
@@ -229,6 +318,11 @@ def evaluate(
         load_rubric_dir,
         write_scorecard,
     )
+
+    # Interactive selection when args omitted
+    if result_path is None:
+        from feral.interactive import select_result
+        result_path = select_result()
 
     # Resolve evaluator model: explicit --evaluator > env var > per-backend default
     if evaluator_model is None:
@@ -324,16 +418,21 @@ def evaluate(
 @app.command()
 def compare(
     result_paths: Annotated[
-        list[Path],
-        typer.Option("--result", "-r", help="Run result JSON files to compare. Repeat for each."),
-    ],
+        Optional[list[Path]],
+        typer.Option("--result", "-r", help="Run result JSON files to compare. Interactive picker if omitted."),
+    ] = None,
     scorecard_paths: Annotated[
         Optional[list[Path]],
         typer.Option("--scorecard", "-S", help="Scorecard JSON files (same order as results)."),
     ] = None,
 ) -> None:
-    """Compare results across models side-by-side."""
+    """Compare metrics and scores across models side-by-side."""
     from feral.compare import load_run_result, load_scorecard, print_comparison_table
+
+    # Interactive selection when args omitted
+    if result_paths is None:
+        from feral.interactive import select_results
+        result_paths = select_results()
 
     runs = []
     for p in result_paths:
@@ -356,27 +455,47 @@ def compare(
     print_comparison_table(runs, scorecards)
 
 
-@app.command("discover-routes")
+@routes_app.command("discover")
 def discover_routes(
     suite_path: Annotated[
-        Path,
-        typer.Option("--suite", "-s", help="Path to a routing discovery suite YAML."),
-    ],
+        Optional[Path],
+        typer.Option("--suite", "-s", help="Path to a routing discovery suite YAML. Interactive picker if omitted."),
+    ] = None,
     models: Annotated[
-        list[str],
-        typer.Option("--model", "-m", help="Ollama model name(s). Repeat for each."),
-    ],
+        Optional[list[str]],
+        typer.Option("--model", "-m", help="Model name(s). Repeat for each. Interactive picker if omitted."),
+    ] = None,
+    backend_name: Annotated[
+        str,
+        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
+    ] = "ollama",
     host: Annotated[
         Optional[str],
-        typer.Option("--host", "-H", help="Ollama server URL."),
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
+    ] = None,
+    base_url: Annotated[
+        Optional[str],
+        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+    ] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
         typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
     ] = Path("results"),
 ) -> None:
-    """Run routing discovery: every prompt x strategy x model."""
+    """Run all prompt x strategy x model combinations to map capabilities."""
+    from feral.interactive import select_models, select_suite
     from feral.routing import count_discovery_runs, run_discovery
+
+    if suite_path is None:
+        suite_path = select_suite()
+    if models is None:
+        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+        check_server_or_exit(backend, backend_name)
+        models = select_models(backend)
 
     try:
         suite = load_suite(suite_path)
@@ -394,9 +513,13 @@ def discover_routes(
     console.print(f"Total runs: [bold]{total}[/bold]")
     console.print()
 
+    backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+    check_server_or_exit(backend, backend_name)
+    check_models_or_exit(backend, models, backend_name)
+
     results = asyncio.run(
         run_discovery(
-            suite, suite_ref, models, host=host, output_dir=output_dir,
+            suite, suite_ref, models, backend=backend, output_dir=output_dir,
             suite_dir=suite_path.parent,
         )
     )
@@ -412,12 +535,12 @@ def discover_routes(
         )
 
 
-@app.command("analyze-routes")
+@routes_app.command("analyze")
 def analyze_routes_cmd(
     result_paths: Annotated[
-        list[Path],
-        typer.Option("--result", "-r", help="Routing discovery result JSON files."),
-    ],
+        Optional[list[Path]],
+        typer.Option("--result", "-r", help="Routing discovery result files. Interactive picker if omitted."),
+    ] = None,
     output_dir: Annotated[
         Path,
         typer.Option("--output-dir", "-o", help="Directory for analysis output."),
@@ -427,8 +550,13 @@ def analyze_routes_cmd(
         typer.Option("--summary", help="Print summary only, don't write full analysis."),
     ] = False,
 ) -> None:
-    """Analyze routing discovery results and produce a routing analysis."""
+    """Analyze discovery results to find optimal routing strategies."""
     from feral.routing import analyze_routes
+
+    # Interactive selection when args omitted
+    if result_paths is None:
+        from feral.interactive import select_results
+        result_paths = select_results()
 
     runs = []
     for p in result_paths:
@@ -488,22 +616,40 @@ def analyze_routes_cmd(
 @app.command()
 def profile(
     models: Annotated[
-        list[str],
-        typer.Option("--model", "-m", help="Ollama model name(s) to profile."),
-    ],
+        Optional[list[str]],
+        typer.Option("--model", "-m", help="Ollama model name(s) to profile. Interactive picker if omitted."),
+    ] = None,
+    backend_name: Annotated[
+        str,
+        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
+    ] = "ollama",
     host: Annotated[
         Optional[str],
-        typer.Option("--host", "-H", help="Ollama server URL."),
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
     ] = None,
     output_dir: Annotated[
         Path,
         typer.Option("--output-dir", "-o", help="Directory for profile output."),
     ] = Path("results"),
 ) -> None:
-    """Profile local system: model load times, VRAM, swap costs, co-residency."""
+    """Measure GPU memory, model load times, and swap costs (Ollama only)."""
+    from feral.interactive import select_models
     from feral.profiler import profile_system, write_profile, print_profile_summary
 
-    sys_profile = asyncio.run(profile_system(models, host=host))
+    if backend_name != "ollama":
+        console.print(
+            f"[red]Profile requires Ollama backend (got '{backend_name}'). "
+            f"VRAM and swap profiling are Ollama-specific.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    backend = OllamaBackend(host=host)
+
+    if models is None:
+        check_server_or_exit(backend, "ollama")
+        models = select_models(backend)
+
+    sys_profile = asyncio.run(profile_system(models, backend=backend))
 
     path = write_profile(sys_profile, output_dir)
     console.print(f"\n[green]Profile written to {path}[/green]\n")
@@ -530,7 +676,7 @@ def leaderboard(
         typer.Option("--top-n", "-n", help="Number of best/worst prompts to show per model."),
     ] = 3,
 ) -> None:
-    """Rank models from comparable scorecards in a leaderboard table."""
+    """Rank scored models in a leaderboard table."""
     from feral.leaderboard import (
         discover_scorecards,
         filter_comparable,
@@ -560,7 +706,7 @@ def leaderboard(
     print_leaderboard(comparable, top_n=top_n)
 
 
-@app.command("eval-extract")
+@app.command("eval-extract", hidden=True)
 def eval_extract(
     result_path: Annotated[
         Path,
@@ -594,7 +740,7 @@ def eval_extract(
         console.print(f"  [yellow]Truncated: {eval_data.header.truncated_count}[/yellow]")
 
 
-@app.command("eval-finalize")
+@app.command("eval-finalize", hidden=True)
 def eval_finalize(
     result_path: Annotated[
         Path,
@@ -639,9 +785,9 @@ def eval_finalize(
 @app.command()
 def overnight(
     models: Annotated[
-        list[str],
-        typer.Option("--model", "-m", help="Ollama model name(s). Repeat for multiple."),
-    ],
+        Optional[list[str]],
+        typer.Option("--model", "-m", help="Model name(s). Repeat for multiple. Interactive picker if omitted."),
+    ] = None,
     suite_paths: Annotated[
         Optional[list[Path]],
         typer.Option("--suite", "-s", help="Specific suite YAML files. Omit to auto-discover."),
@@ -650,9 +796,21 @@ def overnight(
         int,
         typer.Option("--repeats", "-n", help="Repeats per standard suite (discovery suites expand by strategy)."),
     ] = 3,
+    backend_name: Annotated[
+        str,
+        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
+    ] = "ollama",
     host: Annotated[
         Optional[str],
-        typer.Option("--host", "-H", help="Ollama server URL."),
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
+    ] = None,
+    base_url: Annotated[
+        Optional[str],
+        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+    ] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -702,28 +860,35 @@ def overnight(
         int,
         typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
     ] = 120,
+    profile_vram: Annotated[
+        bool,
+        typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
+    ] = False,
 ) -> None:
-    """Run an unattended overnight benchmark across suites and models."""
+    """Queue multiple suites and models for unattended batch benchmarking."""
     import time as _time
 
     from feral.overnight import (
         build_plan,
-        discover_suites,
         execute_plan,
         print_plan,
         print_summary,
-        run_preflight,
     )
+    from feral.suite import discover_suites
+
+    # Interactive selection when args omitted
+    if models is None:
+        from feral.interactive import select_models
+        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+        check_server_or_exit(backend, backend_name)
+        models = select_models(backend)
 
     # 1. Discover or use provided suites
     if suite_paths:
         paths = list(suite_paths)
     else:
-        try:
-            paths = discover_suites(suite_dir)
-        except FileNotFoundError as exc:
-            console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(code=1)
+        from feral.interactive import select_suites
+        paths = select_suites(suite_dir)
 
     # 2. Build plan
     try:
@@ -737,18 +902,25 @@ def overnight(
     print_plan(plan, models)
 
     # 4. Preflight checks
-    console.print("[bold]Preflight checks[/bold]")
-    checks = asyncio.run(run_preflight(host, models))
-    ollama_ok = True
-    for name, passed, msg in checks:
-        status = "[green]PASS[/green]" if passed else "[red]FAIL[/red]"
-        console.print(f"  {status} {name}: {msg}")
-        if name == "Ollama server" and not passed:
-            ollama_ok = False
+    backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
 
-    if not ollama_ok:
-        console.print("\n[red]Ollama server not reachable. Aborting.[/red]")
+    console.print("[bold]Preflight checks[/bold]")
+
+    with console.status("  Checking server connectivity..."):
+        server_ok, server_msg = asyncio.run(backend.get_server_health())
+    status = "[green]PASS[/green]" if server_ok else "[red]FAIL[/red]"
+    console.print(f"  {status} Server: {server_msg}")
+
+    if not server_ok:
+        console.print("\n[red]Inference server not reachable. Aborting.[/red]")
         raise typer.Exit(code=1)
+
+    from feral.overnight import check_gpu_status
+
+    with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
+        gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
+    status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
+    console.print(f"  {status} GPU acceleration: {gpu_msg}")
 
     console.print()
 
@@ -757,16 +929,19 @@ def overnight(
         if not typer.confirm("Start overnight run?"):
             raise typer.Exit()
 
-    # 6. Optional profiling
+    # 6. Optional profiling (Ollama only)
     if do_profile:
-        console.rule("[bold]System Profile[/bold]")
-        from feral.profiler import profile_system, write_profile, print_profile_summary
+        if not isinstance(backend, OllamaBackend):
+            console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
+        else:
+            console.rule("[bold]System Profile[/bold]")
+            from feral.profiler import profile_system, write_profile, print_profile_summary
 
-        sys_profile = asyncio.run(profile_system(models, host=host))
-        path = write_profile(sys_profile, output_dir)
-        console.print(f"[green]Profile written to {path}[/green]\n")
-        print_profile_summary(sys_profile)
-        console.print()
+            sys_profile = asyncio.run(profile_system(models, backend=backend))
+            path = write_profile(sys_profile, output_dir)
+            console.print(f"[green]Profile written to {path}[/green]\n")
+            print_profile_summary(sys_profile)
+            console.print()
 
     # 7. Build eval callback if --evaluate is set
     on_run_eval = None
@@ -850,13 +1025,14 @@ def overnight(
         results = asyncio.run(
             execute_plan(
                 plan=plan,
-                host=host,
+                backend=backend,
                 output_dir=output_dir,
                 resume=resume,
                 verbose=verbose,
                 on_task_start=on_start,
                 on_task_done=on_done,
                 on_run_eval=on_run_eval,
+                profile_vram=profile_vram,
             )
         )
     except KeyboardInterrupt:

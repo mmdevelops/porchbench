@@ -154,18 +154,31 @@ def summarize_run(run: RunResult) -> dict:
             "count": len(group),
         }
 
+    # Peak VRAM (only present when --profile-vram was used)
+    vram_values = [
+        r.metrics.peak_vram_bytes
+        for r in results
+        if r.metrics.peak_vram_bytes is not None
+    ]
+    peak_vram_bytes = max(vram_values) if vram_values else None
+
+    overall_dict = {
+        "tokens_per_second": _stats_dict(overall_tps),
+        "time_to_first_token_ms": _stats_dict(overall_ttft),
+        "tokens_generated": _stats_dict(overall_tokens),
+        "duration_s": _stats_dict(overall_duration),
+        "prompts_completed": run.summary.completed,
+        "prompts_failed": run.summary.failed,
+    }
+    if peak_vram_bytes is not None:
+        overall_dict["peak_vram_bytes"] = peak_vram_bytes
+        overall_dict["peak_vram_gb"] = round(peak_vram_bytes / (1024 ** 3), 2)
+
     return {
         "model": run.run.model.name,
         "quantization": run.run.model.details.quantization_level,
         "kv_cache_type": run.run.system.kv_cache_type,
-        "overall": {
-            "tokens_per_second": _stats_dict(overall_tps),
-            "time_to_first_token_ms": _stats_dict(overall_ttft),
-            "tokens_generated": _stats_dict(overall_tokens),
-            "duration_s": _stats_dict(overall_duration),
-            "prompts_completed": run.summary.completed,
-            "prompts_failed": run.summary.failed,
-        },
+        "overall": overall_dict,
         "by_category": by_category,
         "by_difficulty": by_difficulty,
     }

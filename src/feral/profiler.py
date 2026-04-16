@@ -7,17 +7,19 @@ routing analysis cost model.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import platform
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from itertools import combinations
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
-from feral import client
+from feral.backend import OllamaBackend
 from feral.schemas import (
     CoexistenceTest,
     ModelProfile,
@@ -162,7 +164,6 @@ def _detect_gpu_dxdiag() -> tuple[str, float | None]:
 
 def _estimate_vram_total(
     profiles: dict[str, ModelProfile],
-    host: str | None = None,
 ) -> float | None:
     """Estimate total VRAM from model loading behavior.
 
@@ -182,16 +183,77 @@ def _estimate_vram_total(
     return round(max_vram * 1.3, 1)  # fallback for very large GPUs
 
 
+# ---------------------------------------------------------------------------
+# VRAM polling during inference
+# ---------------------------------------------------------------------------
+
+
+class VramSample:
+    """Accumulates peak VRAM observed during a polling window."""
+
+    def __init__(self) -> None:
+        self.peak_bytes: int = 0
+
+    def update(self, size_vram: int) -> None:
+        if size_vram > self.peak_bytes:
+            self.peak_bytes = size_vram
+
+
+@asynccontextmanager
+async def measure_peak_vram(
+    backend: OllamaBackend,
+    model: str,
+    poll_interval_s: float = 0.1,
+):
+    """Poll ollama.ps() in the background and track peak VRAM for a model.
+
+    Usage::
+
+        async with measure_peak_vram(backend, "qwen3:8b") as sample:
+            await backend.chat(...)
+        print(sample.peak_bytes)
+
+    Yields a VramSample whose peak_bytes is updated continuously.
+    Returns 0 if the model isn't found or polling fails.
+    """
+    sample = VramSample()
+    stop = asyncio.Event()
+
+    async def _poll() -> None:
+        while not stop.is_set():
+            try:
+                running = await backend.list_running_models()
+                for m in running:
+                    if model in m.get("name", ""):
+                        vram = m.get("size_vram")
+                        if vram and isinstance(vram, int):
+                            sample.update(vram)
+                        break
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=poll_interval_s)
+            except asyncio.TimeoutError:
+                pass
+
+    task = asyncio.create_task(_poll())
+    try:
+        yield sample
+    finally:
+        stop.set()
+        await task
+
+
 # Standard prompt used for inference baseline measurement
 BASELINE_PROMPT = "Explain in one paragraph what a hash table is and why it is useful."
 
 
 async def profile_system(
     models: list[str],
-    host: str | None = None,
+    backend: OllamaBackend,
 ) -> SystemProfile:
-    """Run the full system profiling suite."""
-    ollama_version = await client.get_server_version(host)
+    """Run the full system profiling suite. Requires OllamaBackend for VRAM introspection."""
+    ollama_version = await backend.get_server_version()
     gpu_name, vram_total_gb = detect_gpu()
 
     console.print(f"Ollama version: {ollama_version}")
@@ -208,7 +270,7 @@ async def profile_system(
     model_profiles: dict[str, ModelProfile] = {}
     for model_name in models:
         console.print(f"[bold]Profiling {model_name}...[/bold]")
-        profile = await _profile_single_model(model_name, host)
+        profile = await _profile_single_model(model_name, backend)
         model_profiles[model_name] = profile
 
         vram_str = f"{profile.vram_gb:.1f}GB" if profile.vram_gb else "?"
@@ -223,18 +285,18 @@ async def profile_system(
         for i, model_a in enumerate(models):
             for model_b in models[i + 1:]:
                 # A -> B
-                swap_ab = await _measure_swap_time(model_a, model_b, host)
+                swap_ab = await _measure_swap_time(model_a, model_b, backend)
                 swap_times.append(swap_ab)
                 console.print(f"  {model_a} -> {model_b}: {swap_ab.swap_time_s:.1f}s")
 
                 # B -> A
-                swap_ba = await _measure_swap_time(model_b, model_a, host)
+                swap_ba = await _measure_swap_time(model_b, model_a, backend)
                 swap_times.append(swap_ba)
                 console.print(f"  {model_b} -> {model_a}: {swap_ba.swap_time_s:.1f}s")
 
     # Estimate total VRAM if not detected
     if vram_total_gb is None:
-        vram_total_gb = _estimate_vram_total(model_profiles, host)
+        vram_total_gb = _estimate_vram_total(model_profiles)
         if vram_total_gb:
             console.print(f"[yellow]Estimated VRAM total: ~{vram_total_gb} GB[/yellow]")
 
@@ -263,25 +325,24 @@ async def profile_system(
     )
 
 
-async def _profile_single_model(model_name: str, host: str | None) -> ModelProfile:
+async def _profile_single_model(model_name: str, backend: OllamaBackend) -> ModelProfile:
     """Profile a single model: load time, inference throughput, VRAM usage."""
-    from feral.schemas import Message, ModelOptions
+    from feral.schemas import ModelOptions
 
-    messages = [Message(role="user", content=BASELINE_PROMPT)]
+    messages = [{"role": "user", "content": BASELINE_PROMPT}]
     options = ModelOptions(temperature=0, seed=42, num_predict=256, num_ctx=4096)
 
     # First call may load the model — captures load_duration
-    response = await client.chat(messages, model_name, options, host=host)
-    metrics = client.extract_metrics(response)
-    computed = compute_derived_metrics(metrics)
+    result = await backend.chat(messages, model_name, options)
+    computed = compute_derived_metrics(result.metrics)
 
-    load_time_s = metrics.load_duration / 1e9 if metrics.load_duration else None
+    load_time_s = result.metrics.load_duration / 1e9 if result.metrics.load_duration else None
 
     # Check VRAM usage via ps()
     vram_bytes = None
     vram_gb = None
     try:
-        running = await client.list_running_models(host)
+        running = await backend.list_running_models()
         for m in running:
             if model_name in m.get("name", ""):
                 vram_bytes = m.get("size_vram")
@@ -299,23 +360,23 @@ async def _profile_single_model(model_name: str, host: str | None) -> ModelProfi
     )
 
 
-async def _measure_swap_time(from_model: str, to_model: str, host: str | None) -> SwapMeasurement:
+async def _measure_swap_time(from_model: str, to_model: str, backend: OllamaBackend) -> SwapMeasurement:
     """Measure time to swap from one model to another.
 
     Ensures from_model is loaded, then times a request to to_model
     (which forces the swap).
     """
-    from feral.schemas import Message, ModelOptions
+    from feral.schemas import ModelOptions
 
-    messages = [Message(role="user", content="Hi")]
+    messages = [{"role": "user", "content": "Hi"}]
     options = ModelOptions(temperature=0, seed=42, num_predict=1, num_ctx=2048)
 
     # Ensure from_model is loaded
-    await client.chat(messages, from_model, options, host=host)
+    await backend.chat(messages, from_model, options)
 
     # Time the swap: request to to_model triggers unload + load
     start = time.monotonic()
-    response = await client.chat(messages, to_model, options, host=host)
+    await backend.chat(messages, to_model, options)
     elapsed = time.monotonic() - start
 
     return SwapMeasurement(

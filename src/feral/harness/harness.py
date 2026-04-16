@@ -15,8 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from ollama import AsyncClient
-
+from feral.backend import InferenceBackend
 from feral.sandbox.base import (
     ExecutionRequest,
     ExecutionResult,
@@ -159,15 +158,15 @@ class Harness:
         self,
         model: str,
         sandbox: Sandbox,
+        backend: InferenceBackend,
         dispatch: dict[str, Callable] | None = None,
         tools: list[dict] | None = None,
-        host: str | None = None,
     ):
         self.model = model
         self.sandbox = sandbox
+        self.backend = backend
         self.dispatch = dispatch or build_default_dispatch(sandbox)
         self.tools = tools or STANDARD_TOOLS
-        self.host = host
 
     async def run(
         self,
@@ -177,8 +176,7 @@ class Harness:
         max_turns: int = 20,
     ) -> HarnessResult:
         """Run the agent loop to completion."""
-        client = AsyncClient(host=self.host)
-        opts = (options or ModelOptions()).model_dump()
+        opts = options or ModelOptions()
 
         transcript: list[dict] = list(messages)
         metrics = ToolUseMetrics()
@@ -190,23 +188,20 @@ class Harness:
             turn_count += 1
             metrics.conversation_turns = turn_count
 
-            response = await client.chat(
-                model=self.model,
+            result = await self.backend.chat(
                 messages=transcript,
-                tools=self.tools,
+                model=self.model,
                 options=opts,
+                tools=self.tools,
             )
 
-            msg = response.message
-
-            # Check for tool calls
-            tool_calls = getattr(msg, "tool_calls", None) or []
+            tool_calls = result.tool_calls or []
 
             if not tool_calls:
                 # Model responded with text, no tool calls -> done
                 transcript.append({
                     "role": "assistant",
-                    "content": msg.content or "",
+                    "content": result.content,
                 })
                 return HarnessResult(
                     transcript=transcript,
@@ -218,17 +213,17 @@ class Harness:
             # Process tool calls
             transcript.append({
                 "role": "assistant",
-                "content": msg.content or "",
+                "content": result.content,
                 "tool_calls": [
-                    {"function": {"name": tc.function.name,
-                                  "arguments": tc.function.arguments}}
+                    {"function": {"name": tc.name,
+                                  "arguments": tc.arguments}}
                     for tc in tool_calls
                 ],
             })
 
             for tc in tool_calls:
-                tool_name = tc.function.name
-                tool_args = tc.function.arguments or {}
+                tool_name = tc.name
+                tool_args = tc.arguments
 
                 tool_call_count += 1
                 metrics.total_tool_calls = tool_call_count

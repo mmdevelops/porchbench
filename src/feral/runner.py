@@ -25,7 +25,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from feral import client
+from feral.backend import InferenceBackend, OllamaBackend
 from feral.schemas import (
     Message,
     ModelInfo,
@@ -78,21 +78,41 @@ async def run_prompt(
     messages: list[Message],
     model: str,
     options: ModelOptions,
-    host: str | None = None,
+    backend: InferenceBackend,
+    profile_vram: bool = False,
 ) -> tuple[ResponseData, PromptMetrics]:
     """Run a single prompt against a model. Returns response data and raw metrics."""
-    response = await client.chat(messages, model, options, host=host)
+    peak_vram: int | None = None
+
+    if profile_vram and isinstance(backend, OllamaBackend):
+        from feral.profiler import measure_peak_vram
+
+        async with measure_peak_vram(backend, model) as sample:
+            result = await backend.chat(
+                messages=[{"role": m.role, "content": m.content} for m in messages],
+                model=model,
+                options=options,
+            )
+        if sample.peak_bytes > 0:
+            peak_vram = sample.peak_bytes
+    else:
+        result = await backend.chat(
+            messages=[{"role": m.role, "content": m.content} for m in messages],
+            model=model,
+            options=options,
+        )
 
     response_data = ResponseData(
         message=ResponseMessage(
-            role=response.message.role or "assistant",
-            content=response.message.content or "",
+            role=result.role,
+            content=result.content,
         ),
-        done_reason=getattr(response, "done_reason", None),
+        done_reason=result.done_reason,
     )
 
-    raw_metrics = client.extract_metrics(response)
-    metrics = compute_derived_metrics(raw_metrics)
+    metrics = compute_derived_metrics(result.metrics)
+    if peak_vram is not None:
+        metrics = metrics.model_copy(update={"peak_vram_bytes": peak_vram})
 
     return response_data, metrics
 
@@ -103,7 +123,7 @@ async def _run_tool_use_prompt(
     options: ModelOptions,
     messages: list[Message],
     suite_dir: Path | None,
-    host: str | None,
+    backend: InferenceBackend,
 ) -> PromptResult:
     """Dispatch a tool-use prompt through the sandbox harness and package the result."""
     from feral.tool_runner import run_tool_use_prompt
@@ -114,7 +134,7 @@ async def _run_tool_use_prompt(
         options=options,
         messages=messages,
         suite_dir=suite_dir,
-        host=host,
+        backend=backend,
     )
 
     harness_result = result["harness_result"]
@@ -157,7 +177,7 @@ async def run_suite(
     suite: Suite,
     suite_ref: SuiteReference,
     model: str,
-    host: str | None = None,
+    backend: InferenceBackend,
     prompt_ids: list[str] | None = None,
     output_dir: str | Path = "results",
     on_prompt_complete: Callable[[str, bool], None] | None = None,
@@ -165,14 +185,15 @@ async def run_suite(
     repeat_index: int | None = None,
     total_repeats: int | None = None,
     resume: bool = False,
+    profile_vram: bool = False,
 ) -> RunResult:
     """Run a full suite against a single model.
 
     Args:
         suite: Validated suite definition.
         suite_ref: Suite reference with file path and hash.
-        model: Ollama model name (e.g. "qwen2.5-coder:7b").
-        host: Ollama server URL. None for localhost default.
+        model: Model name (e.g. "qwen2.5-coder:7b").
+        backend: Inference backend to use.
         prompt_ids: Optional filter — only run these prompt IDs.
         output_dir: Directory for writing result JSON.
         on_prompt_complete: Optional callback(prompt_id, success) for progress reporting.
@@ -184,8 +205,8 @@ async def run_suite(
         The completed RunResult (also written to disk).
     """
     # Gather model and system metadata
-    model_info = await _get_model_info_safe(model, host)
-    system_info = await _get_system_info(host)
+    model_info = await _get_model_info_safe(model, backend)
+    system_info = await _get_system_info(backend)
 
     run_meta = RunMetadata(
         suite=suite_ref,
@@ -225,10 +246,12 @@ async def run_suite(
         try:
             if prompt.mode == "tool-use":
                 result = await _run_tool_use_prompt(
-                    prompt, model, options, messages, suite_dir, host,
+                    prompt, model, options, messages, suite_dir, backend,
                 )
             else:
-                response_data, metrics = await run_prompt(messages, model, options, host=host)
+                response_data, metrics = await run_prompt(
+                    messages, model, options, backend=backend, profile_vram=profile_vram,
+                )
                 result = PromptResult(
                     prompt_id=prompt.id,
                     category=prompt.category,
@@ -313,23 +336,21 @@ def _write_result(run_result: RunResult, output_dir: str | Path) -> Path:
     return path
 
 
-async def _get_model_info_safe(model: str, host: str | None) -> ModelInfo:
+async def _get_model_info_safe(model: str, backend: InferenceBackend) -> ModelInfo:
     """Fetch model info, falling back to just the name on error."""
     try:
-        return await client.get_model_info(model, host)
+        return await backend.get_model_info(model)
     except Exception as exc:
         console.print(f"[yellow]Warning: could not fetch model details: {exc}[/yellow]")
         return ModelInfo(name=model)
 
 
-async def _get_system_info(host: str | None) -> SystemInfo:
+async def _get_system_info(backend: InferenceBackend) -> SystemInfo:
     """Gather system metadata for the run result."""
-    ollama_version = await client.get_server_version(host)
+    healthy, label = await backend.get_server_health()
     kv_cache_type = os.environ.get("OLLAMA_KV_CACHE_TYPE")
     return SystemInfo(
-        ollama_version=ollama_version,
+        ollama_version=label,
         os=f"{platform.system()} {platform.release()}",
         kv_cache_type=kv_cache_type,
-        # GPU detection is platform-specific and best-effort.
-        # For now we capture OS; GPU info can be added via ollama.ps() or nvidia-smi.
     )

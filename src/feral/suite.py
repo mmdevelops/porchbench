@@ -50,6 +50,16 @@ def make_suite_reference(path: str | Path, suite: Suite) -> SuiteReference:
     )
 
 
+def discover_suites(suite_dir: Path) -> list[Path]:
+    """Find all .yaml suite files in a directory, sorted by name."""
+    if not suite_dir.is_dir():
+        raise FileNotFoundError(f"Suite directory not found: {suite_dir}")
+    paths = sorted(suite_dir.glob("*.yaml"))
+    if not paths:
+        raise FileNotFoundError(f"No .yaml files found in {suite_dir}")
+    return paths
+
+
 def resolve_options(suite_defaults: ModelOptions, prompt: Prompt) -> ModelOptions:
     """Merge per-prompt option overrides over suite defaults.
 

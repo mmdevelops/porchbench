@@ -15,7 +15,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from feral import client
+from feral.backend import InferenceBackend
 from feral.schemas import (
     BestRoute,
     DefaultComparison,
@@ -62,7 +62,7 @@ async def _run_tool_use_discovery_cell(
     messages: list[Message],
     strategy_name: str,
     suite_dir: Path | None,
-    host: str | None,
+    backend: InferenceBackend,
 ) -> PromptResult:
     """Run a single tool-use prompt for routing discovery and package as PromptResult."""
     from feral.tool_runner import run_tool_use_prompt
@@ -73,7 +73,7 @@ async def _run_tool_use_discovery_cell(
         options=options,
         messages=messages,
         suite_dir=suite_dir,
-        host=host,
+        backend=backend,
     )
 
     harness_result = result["harness_result"]
@@ -117,7 +117,7 @@ async def run_discovery(
     suite: Suite,
     suite_ref: SuiteReference,
     models: list[str],
-    host: str | None = None,
+    backend: InferenceBackend,
     output_dir: str | Path = "results",
     on_cell_complete: callable | None = None,
     suite_dir: Path | None = None,
@@ -134,8 +134,8 @@ async def run_discovery(
     for model_name in models:
         console.print(f"\n[bold]Model: {model_name}[/bold]")
 
-        model_info = await client.get_model_info(model_name, host)
-        system_info_data = await client.get_server_version(host)
+        model_info = await backend.get_model_info(model_name)
+        _healthy, health_label = await backend.get_server_health()
 
         from feral.schemas import SystemInfo
         import platform
@@ -144,7 +144,7 @@ async def run_discovery(
             suite=suite_ref,
             model=model_info,
             system=SystemInfo(
-                ollama_version=system_info_data,
+                ollama_version=health_label,
                 os=f"{platform.system()} {platform.release()}",
             ),
         )
@@ -165,25 +165,28 @@ async def run_discovery(
                     if prompt.mode == "tool-use":
                         pr = await _run_tool_use_discovery_cell(
                             prompt, model_name, options, messages,
-                            strategy_name, suite_dir, host,
+                            strategy_name, suite_dir, backend,
                         )
                         correct = pr.validation_passed
                     else:
-                        response = await client.chat(messages, model_name, options, host=host)
+                        chat_result = await backend.chat(
+                            messages=[{"role": m.role, "content": m.content} for m in messages],
+                            model=model_name,
+                            options=options,
+                        )
 
-                        raw_metrics = client.extract_metrics(response)
-                        metrics = compute_derived_metrics(raw_metrics)
+                        metrics = compute_derived_metrics(chat_result.metrics)
 
                         response_data = ResponseData(
                             message=ResponseMessage(
-                                role=response.message.role or "assistant",
-                                content=response.message.content or "",
+                                role=chat_result.role,
+                                content=chat_result.content,
                             ),
-                            done_reason=getattr(response, "done_reason", None),
+                            done_reason=chat_result.done_reason,
                         )
 
                         correct = check_correctness(
-                            response.message.content or "",
+                            chat_result.content,
                             prompt.expected_answer,
                         )
 

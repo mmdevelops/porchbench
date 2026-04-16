@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from feral.backend import InferenceBackend
 from feral.harness import Harness, HarnessResult
 from feral.sandbox import SubprocessSandbox, SandboxConfig
 from feral.sandbox.base import FileContent
@@ -27,7 +28,7 @@ async def run_tool_use_prompt(
     options: ModelOptions,
     messages: list[Message],
     suite_dir: Path | None = None,
-    host: str | None = None,
+    backend: InferenceBackend | None = None,
 ) -> dict[str, Any]:
     """Run a single tool-use prompt through the sandbox and harness.
 
@@ -50,7 +51,7 @@ async def run_tool_use_prompt(
     try:
         await _load_fixtures(sandbox, prompt, suite_dir)
 
-        harness = Harness(model=model, sandbox=sandbox, host=host)
+        harness = Harness(model=model, sandbox=sandbox, backend=backend)
 
         harness_result = await harness.run(
             messages=[{"role": m.role, "content": m.content} for m in messages],
