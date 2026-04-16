@@ -27,13 +27,14 @@ ollama pull qwen2.5:3b
 feral run --suite coding-basics --model qwen2.5:3b
 ```
 
-That's it. A summary table prints to your terminal, and a structured JSON is written to `results/` with a predictable name:
+That's it. A summary table prints to your terminal, and a structured JSON is written to `results/`:
 
 ```
-results/run-result_<suite>_<model>.json      # e.g. run-result_coding-basics_qwen2.5-3b.json
+results/<timestamp>_<suite>_<model>.json
+  e.g. results/2026-04-16T21-29-46_coding-basics_qwen2.5-3b.json
 ```
 
-Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If you forget a filename, `ls results/` will show them, or pass no `--result` flag to any command to pick one interactively.
+Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If you don't want to type the filename, pass no `--result` flag to any command and you'll get an interactive picker.
 
 ### Evaluate quality with an LLM judge
 
@@ -43,7 +44,7 @@ Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If yo
 feral evaluate --result results/<your-result-file>.json
 ```
 
-Scorecards are written to `scorecards/` and follow the same naming pattern as results.
+Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
 ### Compare models
 

@@ -148,3 +148,23 @@ class TestLoadSuite:
         assert ref.name == "Coding Basics"
         assert ref.version == "2.0"
         assert len(ref.sha256) == 64
+
+    def test_suite_reference_file_is_portable_for_packaged(self):
+        # Packaged suites should produce a portable `<bundled>/...` identifier
+        # so result JSONs don't leak absolute local paths.
+        path = find_suite("coding-basics")
+        suite = load_suite(path)
+        ref = make_suite_reference(path, suite)
+        assert ref.file == "<bundled>/coding-basics.yaml"
+
+    def test_suite_reference_file_is_basename_for_local(self, tmp_path):
+        # Non-packaged paths fall back to basename only (no absolute-path leak).
+        local = tmp_path / "my-custom.yaml"
+        local.write_text(
+            "suite:\n  name: Local\n  version: '1.0'\n"
+            "defaults:\n  options: {}\nprompts: []\n",
+            encoding="utf-8",
+        )
+        suite = load_suite(local)
+        ref = make_suite_reference(local, suite)
+        assert ref.file == "my-custom.yaml"

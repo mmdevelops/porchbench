@@ -47,10 +47,10 @@ def is_pathlike(ref: str | Path) -> bool:
 
     Bare names like `coding-basics` are looked up by name; anything with a
     separator, `.yaml` extension, or absolute prefix is treated as a path.
+    Note: Path("coding-basics") is NOT pathlike — typer wraps CLI args in
+    Path regardless of whether the user typed a path or a bare name.
     """
     s = str(ref)
-    if isinstance(ref, Path):
-        return True
     return (
         "/" in s
         or "\\" in s

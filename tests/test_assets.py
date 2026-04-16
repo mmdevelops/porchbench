@@ -55,8 +55,13 @@ class TestIsPathlike:
     def test_absolute_path_is_pathlike(self):
         assert is_pathlike(str(PACKAGED_SUITES_DIR / "coding-basics.yaml"))
 
-    def test_path_object_is_pathlike(self):
-        assert is_pathlike(Path("coding-basics"))
+    def test_bare_name_in_path_object_is_not_pathlike(self):
+        # typer wraps CLI args in Path even when user typed a bare name.
+        # Path("coding-basics") with no separators should still resolve as a name.
+        assert not is_pathlike(Path("coding-basics"))
+
+    def test_path_object_with_separator_is_pathlike(self):
+        assert is_pathlike(Path("suites/coding-basics.yaml"))
 
 
 # ---------------------------------------------------------------------------

@@ -39,15 +39,36 @@ def compute_suite_hash(path: str | Path) -> str:
 
 
 def make_suite_reference(path: str | Path, suite: Suite) -> SuiteReference:
-    """Build a SuiteReference for embedding in run results."""
+    """Build a SuiteReference for embedding in run results.
+
+    The `file` field uses a portable identifier instead of the absolute path
+    so result JSONs don't leak local filesystem layout. The sha256 is the
+    real reproducibility anchor.
+    """
     path = Path(path)
     return SuiteReference(
         name=suite.suite.name,
         version=suite.suite.version,
-        file=str(path),
+        file=_portable_suite_id(path),
         sha256=compute_suite_hash(path),
         rubric=suite.suite.rubric,
     )
+
+
+def _portable_suite_id(path: Path) -> str:
+    """Format a suite path for result metadata without leaking absolute paths.
+
+    Packaged defaults → `<bundled>/<name>.yaml`.
+    Anything else → basename only. The sha256 in SuiteReference is the
+    reproducibility anchor; this string is informational.
+    """
+    from feral.assets import PACKAGED_SUITES_DIR
+
+    try:
+        rel = path.resolve().relative_to(PACKAGED_SUITES_DIR.resolve())
+        return f"<bundled>/{rel.as_posix()}"
+    except ValueError:
+        return path.name
 
 
 def discover_suites(suite_dir: Path) -> list[Path]:
