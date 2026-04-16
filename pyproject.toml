@@ -5,8 +5,35 @@ build-backend = "hatchling.build"
 [project]
 name = "feral"
 version = "0.1.0"
-description = "Deterministic benchmarking of local LLMs via Ollama"
+description = "Rigorous quality benchmarking for local LLMs with paired statistics, LLM-as-judge scoring, and reproducible runs."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [
+    { name = "Michael Miller", email = "mmdevelops@gmail.com" },
+]
+keywords = [
+    "llm",
+    "benchmark",
+    "ollama",
+    "evaluation",
+    "local-ai",
+    "quantization",
+    "routing",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Benchmark",
+]
 dependencies = [
     "ollama>=0.4",
     "pydantic>=2.0",

@@ -25,6 +25,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from feral.assets import feral_version
 from feral.backend import InferenceBackend, OllamaBackend
 from feral.schemas import (
     Message,
@@ -214,6 +215,7 @@ async def run_suite(
         system=system_info,
         repeat_index=repeat_index,
         total_repeats=total_repeats,
+        feral_version=feral_version(),
     )
 
     # Filter prompts if specific IDs requested

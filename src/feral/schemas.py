@@ -153,6 +153,7 @@ class RunMetadata(BaseModel):
     system: SystemInfo = Field(default_factory=SystemInfo)
     repeat_index: int | None = None  # 1-based repeat number when using --repeats
     total_repeats: int | None = None
+    feral_version: str | None = None  # set at run time; None on pre-0.1 result files
 
 
 class RequestData(BaseModel):
@@ -233,7 +234,7 @@ class PromptResult(BaseModel):
     contamination_risk: str | None = None  # high, medium, low — copied from Prompt
 
     # --- Routing discovery extensions ---
-    strategy: str | None = None  # strategy name when run via discover-routes
+    strategy: str | None = None  # strategy name when run via routes discover
     correct: bool | None = None  # automated correctness check result
     expected_answer: str | None = None  # ground truth copied from prompt for analysis
 

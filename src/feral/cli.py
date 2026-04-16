@@ -26,6 +26,12 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from feral.assets import (
+    find_rubric,
+    find_suite,
+    resolve_rubric_dir,
+    resolve_suite_dir,
+)
 from feral.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from feral.runner import run_suite
 from feral.suite import load_suite, make_suite_reference
@@ -108,7 +114,7 @@ def check_models_or_exit(
 def run(
     suite_path: Annotated[
         Optional[Path],
-        typer.Option("--suite", "-s", help="Path to a test suite YAML file. Interactive picker if omitted."),
+        typer.Option("--suite", "-s", help="Suite name (e.g. 'coding-basics') or path to a YAML file. Interactive picker if omitted."),
     ] = None,
     models: Annotated[
         Optional[list[str]],
@@ -174,6 +180,13 @@ def run(
         verbose = opts["verbose"]
         resume = opts["resume"]
         profile_vram = opts["profile_vram"]
+
+    # Resolve bare names and relative paths against cwd/packaged defaults
+    try:
+        suite_path = find_suite(suite_path)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
 
     # Load and validate suite
     try:
@@ -360,10 +373,10 @@ def evaluate(
     if rubric_path is None:
         suite_rubric_hint = run_result.run.suite.rubric
         if suite_rubric_hint:
-            rubric_path = Path(f"rubrics/{suite_rubric_hint}.yaml")
+            rubric_path = find_rubric(suite_rubric_hint)
             console.print(f"Rubric (from suite): [bold]{rubric_path}[/bold]")
         else:
-            rubric_path = Path("rubrics/default.yaml")
+            rubric_path = find_rubric("default")
 
     try:
         rubric = load_rubric(rubric_path)
@@ -479,7 +492,7 @@ def compare(
 def discover_routes(
     suite_path: Annotated[
         Optional[Path],
-        typer.Option("--suite", "-s", help="Path to a routing discovery suite YAML. Interactive picker if omitted."),
+        typer.Option("--suite", "-s", help="Suite name (e.g. 'routing-discovery') or path to a YAML file. Interactive picker if omitted."),
     ] = None,
     models: Annotated[
         Optional[list[str]],
@@ -516,6 +529,12 @@ def discover_routes(
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
         models = select_models(backend)
+
+    try:
+        suite_path = find_suite(suite_path)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
 
     try:
         suite = load_suite(suite_path)
@@ -826,7 +845,7 @@ def overnight(
     ] = None,
     suite_paths: Annotated[
         Optional[list[Path]],
-        typer.Option("--suite", "-s", help="Specific suite YAML files. Omit to auto-discover."),
+        typer.Option("--suite", "-s", help="Suite names or YAML paths. Repeat for multiple. Omit to auto-discover."),
     ] = None,
     repeats: Annotated[
         int,
@@ -853,9 +872,12 @@ def overnight(
         typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
     ] = Path("results"),
     suite_dir: Annotated[
-        Path,
-        typer.Option("--suite-dir", help="Directory to auto-discover suites from."),
-    ] = Path("suites"),
+        Path | None,
+        typer.Option(
+            "--suite-dir",
+            help="Directory to auto-discover suites from. Defaults to ./suites if present, else the packaged suites bundled with feral.",
+        ),
+    ] = None,
     do_profile: Annotated[
         bool,
         typer.Option("--profile", help="Run system profiling before benchmarks."),
@@ -923,10 +945,10 @@ def overnight(
 
     # 1. Discover or use provided suites
     if suite_paths:
-        paths = list(suite_paths)
+        paths = [find_suite(p) for p in suite_paths]
     else:
         from feral.interactive import select_suites
-        paths = select_suites(suite_dir)
+        paths = select_suites(resolve_suite_dir(suite_dir))
 
     # Interactive options screen
     if interactive:
@@ -1021,11 +1043,8 @@ def overnight(
 
         eval_backend_label = f"{eval_backend}/{resolved_eval_model}"
 
-        # Pre-load rubrics and calibration
-        eval_rubrics_by_cat = None
-        if rubric_dir:
-            eval_rubrics_by_cat = load_rubric_dir(rubric_dir)
-        cal_data = load_calibration_examples(Path("rubrics/calibration-examples.yaml"))
+        # Pre-load category rubrics (falls through to packaged defaults if no override)
+        eval_rubrics_by_cat = load_rubric_dir(resolve_rubric_dir(rubric_dir))
 
         console.print(f"[bold]Post-run evaluation:[/bold] {eval_backend_label}")
         console.print()
@@ -1037,11 +1056,14 @@ def overnight(
             if rubric_path:
                 r_path = rubric_path
             elif suite_hint:
-                r_path = Path(f"rubrics/{suite_hint}.yaml")
+                r_path = find_rubric(suite_hint)
             else:
-                r_path = Path("rubrics/default.yaml")
+                r_path = find_rubric("default")
 
             r = load_rubric(r_path)
+            # Calibration examples live alongside the resolved rubric —
+            # packaged when rubric is packaged, project-local when overridden.
+            cal_data = load_calibration_examples(r_path.parent / "calibration-examples.yaml")
             scorecard = await evaluate_run(
                 run_result, r, eval_be,
                 evaluator_label=eval_backend_label,

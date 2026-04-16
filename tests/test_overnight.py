@@ -97,7 +97,7 @@ class TestBuildPlan:
         mock_load.return_value = suite
         mock_ref.return_value = MagicMock()
 
-        plan = build_plan([Path("suites/coding.yaml")], ["model-a", "model-b"], repeats=3)
+        plan = build_plan([Path("suites/coding-basics.yaml")], ["model-a", "model-b"], repeats=3)
 
         assert len(plan) == 1
         task = plan[0]
@@ -116,7 +116,7 @@ class TestBuildPlan:
         mock_load.return_value = suite
         mock_ref.return_value = MagicMock()
 
-        plan = build_plan([Path("suites/routing.yaml")], ["model-a"], repeats=3)
+        plan = build_plan([Path("suites/routing-discovery.yaml")], ["model-a"], repeats=3)
 
         assert len(plan) == 1
         task = plan[0]
@@ -135,7 +135,7 @@ class TestBuildPlan:
         mock_ref.return_value = MagicMock()
 
         plan = build_plan(
-            [Path("suites/coding.yaml"), Path("suites/routing.yaml")],
+            [Path("suites/coding-basics.yaml"), Path("suites/routing-discovery.yaml")],
             ["m1", "m2"],
             repeats=2,
         )

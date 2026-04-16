@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from feral.assets import find_suite
 from feral.schemas import Message, ModelOptions, Prompt, Strategy
 from feral.suite import (
     compute_suite_hash,
@@ -111,13 +112,13 @@ class TestResolveMessages:
 
 class TestLoadSuite:
     def test_load_coding_basics(self):
-        suite = load_suite("suites/coding-basics.yaml")
+        suite = load_suite(find_suite("coding-basics"))
         assert suite.suite.name == "Coding Basics"
         assert suite.suite.version == "2.0"
         assert len(suite.prompts) > 0
 
     def test_load_routing_discovery(self):
-        suite = load_suite("suites/routing-discovery.yaml")
+        suite = load_suite(find_suite("routing-discovery"))
         assert suite.suite.name == "Routing Discovery"
         assert len(suite.strategies) == 5
         assert len(suite.prompts) >= 90
@@ -134,14 +135,16 @@ class TestLoadSuite:
                 load_suite(f.name)
 
     def test_suite_hash_deterministic(self):
-        h1 = compute_suite_hash("suites/coding-basics.yaml")
-        h2 = compute_suite_hash("suites/coding-basics.yaml")
+        path = find_suite("coding-basics")
+        h1 = compute_suite_hash(path)
+        h2 = compute_suite_hash(path)
         assert h1 == h2
         assert len(h1) == 64  # SHA256 hex
 
     def test_suite_reference(self):
-        suite = load_suite("suites/coding-basics.yaml")
-        ref = make_suite_reference("suites/coding-basics.yaml", suite)
+        path = find_suite("coding-basics")
+        suite = load_suite(path)
+        ref = make_suite_reference(path, suite)
         assert ref.name == "Coding Basics"
         assert ref.version == "2.0"
         assert len(ref.sha256) == 64

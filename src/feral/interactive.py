@@ -63,8 +63,11 @@ def select_models(backend: InferenceBackend) -> list[str]:
     return selected
 
 
-def select_suite(suite_dir: Path = Path("suites")) -> Path:
+def select_suite(suite_dir: Path | None = None) -> Path:
     """Prompt user to pick a suite YAML file from the suite directory."""
+    from feral.assets import resolve_suite_dir
+
+    suite_dir = resolve_suite_dir(suite_dir)
     try:
         paths = discover_suites(suite_dir)
     except FileNotFoundError as exc:
@@ -86,8 +89,11 @@ def select_suite(suite_dir: Path = Path("suites")) -> Path:
     return suite_dir / chosen
 
 
-def select_suites(suite_dir: Path = Path("suites")) -> list[Path]:
+def select_suites(suite_dir: Path | None = None) -> list[Path]:
     """Prompt user to pick one or more suite YAML files from the suite directory."""
+    from feral.assets import resolve_suite_dir
+
+    suite_dir = resolve_suite_dir(suite_dir)
     try:
         paths = discover_suites(suite_dir)
     except FileNotFoundError as exc:

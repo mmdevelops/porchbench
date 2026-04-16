@@ -23,8 +23,8 @@ pip install -e .
 # Pull a model if you haven't already
 ollama pull qwen2.5:3b
 
-# Run the coding benchmark
-feral run --suite suites/coding-basics.yaml --model qwen2.5:3b
+# Run the coding benchmark — suites ship with the package, reference by name
+feral run --suite coding-basics --model qwen2.5:3b
 ```
 
 That's it. A summary table prints to your terminal, and a structured JSON is written to `results/` with a predictable name:
@@ -49,7 +49,7 @@ Scorecards are written to `scorecards/` and follow the same naming pattern as re
 
 ```bash
 # Run the same suite on multiple models
-feral run --suite suites/coding-basics.yaml --model qwen2.5:3b --model qwen2.5:7b
+feral run --suite coding-basics --model qwen2.5:3b --model qwen2.5:7b
 
 # Compare results side-by-side
 feral compare \
@@ -78,7 +78,7 @@ Does adapting your prompt strategy to model size actually help?
 ```bash
 # Run every prompt x strategy x model combination
 feral routes discover \
-  --suite suites/routing-discovery.yaml \
+  --suite routing-discovery \
   --model qwen2.5:3b --model qwen2.5:7b
 
 # Analyze the results
@@ -107,12 +107,16 @@ Add `--profile` to measure model load times and VRAM first, or `--yes` to skip t
 
 ## Benchmark suites
 
+Suites ship bundled with the package and are referenced by name:
+
 | Suite | Prompts | What it tests |
 |-------|---------|---------------|
-| `coding-basics.yaml` | 28 | Implementation quality across 3 difficulty tiers — not just "does it compile" but design, idiom, edge-case handling |
-| `cross-domain.yaml` | 22 | Science problems requiring both Python implementation and domain reasoning (security, biology, physics, math) |
-| `routing-discovery.yaml` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
-| `tool-use.yaml` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state |
+| `coding-basics` | 28 | Implementation quality across 3 difficulty tiers — not just "does it compile" but design, idiom, edge-case handling |
+| `cross-domain` | 22 | Science problems requiring both Python implementation and domain reasoning (security, biology, physics, math) |
+| `routing-discovery` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
+| `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state |
+
+**Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `feral` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
 
 ## What makes this different
 
@@ -127,28 +131,30 @@ See [METHODOLOGY.md](docs/reference/METHODOLOGY.md) for the full statistical fra
 ## Project structure
 
 ```
-suites/          Benchmark prompt suites (YAML)
-rubrics/         Evaluation rubrics for LLM-as-judge scoring
-examples/        Sample results you can feed into feral compare/evaluate
-results/         Run outputs (JSON, gitignored)
-scorecards/      Evaluation scorecards (JSON, gitignored)
-src/feral/       Python package
-  cli.py         CLI entry point (typer + rich + beaupy pickers)
-  interactive.py Interactive model/suite/result pickers
-  backend.py     Inference backend abstraction (Ollama, OpenAI-compat)
-  runner.py      Async benchmark execution
-  suite.py       Suite + prompt loading and validation
-  evaluator.py   LLM-as-judge scoring with debiasing
-  routing.py     Routing discovery and analysis
-  profiler.py    Hardware and model profiling
-  compare.py     Side-by-side comparison rendering
-  leaderboard.py Cross-scorecard ranking
-  overnight.py   Unattended multi-suite orchestration
-  metrics.py     Throughput and latency metrics
-  statistics.py  Bootstrap CIs, paired comparisons, effect sizes
-  schemas.py     Pydantic models for all I/O
-  sandbox/       Sandboxed code execution for tool-use suites
-  harness/       Prompt rendering and response parsing
+examples/           Sample results you can feed into feral compare/evaluate
+results/            Run outputs (JSON, gitignored)
+scorecards/         Evaluation scorecards (JSON, gitignored)
+src/feral/          Python package
+  cli.py            CLI entry point (typer + rich + beaupy pickers)
+  interactive.py    Interactive model/suite/result pickers
+  assets.py         Asset resolver: cwd overrides → packaged defaults
+  backend.py        Inference backend abstraction (Ollama, OpenAI-compat)
+  runner.py         Async benchmark execution
+  suite.py          Suite + prompt loading and validation
+  evaluator.py      LLM-as-judge scoring with debiasing
+  routing.py        Routing discovery and analysis
+  profiler.py       Hardware and model profiling
+  compare.py        Side-by-side comparison rendering
+  leaderboard.py    Cross-scorecard ranking
+  overnight.py      Unattended multi-suite orchestration
+  metrics.py        Throughput and latency metrics
+  statistics.py     Bootstrap CIs, paired comparisons, effect sizes
+  schemas.py        Pydantic models for all I/O
+  sandbox/          Sandboxed code execution for tool-use suites
+  harness/          Prompt rendering and response parsing
+  data/             Bundled assets (shipped inside the wheel)
+    suites/         Benchmark prompt suites (YAML)
+    rubrics/        LLM-as-judge scoring rubrics
 ```
 
 ## Documentation

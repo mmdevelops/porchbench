@@ -110,13 +110,15 @@ To compare cache types, set `OLLAMA_KV_CACHE_TYPE` and restart the Ollama server
 between runs:
 
 ```bash
-# Baseline run (f16 cache)
+# Baseline run (f16 cache). Use a long-context-heavy suite; the example
+# below uses the shipped coding-basics suite, but for KV-cache sensitivity
+# you'll want prompts that exercise the context window.
 OLLAMA_KV_CACHE_TYPE=f16 ollama serve &
-feral run --suite suites/long-context.yaml --model qwen2.5:7b
+feral run --suite coding-basics --model qwen2.5:7b
 
 # Compressed cache run
 OLLAMA_KV_CACHE_TYPE=q4_0 ollama serve &
-feral run --suite suites/long-context.yaml --model qwen2.5:7b
+feral run --suite coding-basics --model qwen2.5:7b
 ```
 
 The framework records the cache type in `system.kv_cache_type` for each run result,

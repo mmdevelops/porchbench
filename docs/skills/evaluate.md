@@ -40,19 +40,25 @@ need to read the original result file again during scoring.
 
 ### Step 2: Load rubrics
 
-Load rubrics from `rubrics/` directory:
+Rubrics live under `src/feral/data/rubrics/` in the repo (and ship bundled
+with the installed wheel). A project-local `./rubrics/` directory, if present,
+overrides the packaged copies.
+
 - First read the suite YAML (at `header.suite_file`) and check for a `rubric`
-  field in the `suite` header. If present, use `rubrics/{rubric}.yaml` for
-  ALL prompts in the run — this overrides per-category matching.
+  field in the `suite` header. If present, use that rubric name (e.g.
+  `coding`, `cross-domain-science`) for ALL prompts in the run — this
+  overrides per-category matching.
 - Otherwise, match by category:
-  - `rubrics/coding.yaml` → category "coding"
-  - `rubrics/reasoning.yaml` → category "reasoning"
-  - `rubrics/cross-domain.yaml` → category "cross-domain"
-  - `rubrics/default.yaml` → fallback for unmatched categories
+  - `coding.yaml` → category "coding"
+  - `reasoning.yaml` → category "reasoning"
+  - `cross-domain.yaml` → category "cross-domain"
+  - `default.yaml` → fallback for unmatched categories
 
 ### Step 3: Load calibration examples
 
-Load calibration examples from `rubrics/calibration-examples.yaml` (if it
+Load calibration examples from `calibration-examples.yaml` alongside the
+resolved rubric (i.e. `src/feral/data/rubrics/calibration-examples.yaml` for
+packaged runs, or `./rubrics/calibration-examples.yaml` for project-local) if it
 exists). Select the calibration set matching the rubric being used:
 - `coding` set → for coding-basics or coding-heavy suites
 - `reasoning` set → for reasoning-focused prompts

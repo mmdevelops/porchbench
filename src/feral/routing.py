@@ -1,9 +1,9 @@
 """Routing discovery: strategy expansion, correctness checking, and analysis.
 
 Implements the routing discovery pipeline from DESIGN-ROUTING.md:
-1. Expand prompts across strategies (discover-routes)
+1. Expand prompts across strategies (routes discover)
 2. Check correctness against expected answers
-3. Analyze the result matrix to find routing patterns (analyze-routes)
+3. Analyze the result matrix to find routing patterns (routes analyze)
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 
 from rich.console import Console
 
+from feral.assets import feral_version
 from feral.backend import InferenceBackend
 from feral.schemas import (
     BestRoute,
@@ -147,6 +148,7 @@ async def run_discovery(
                 ollama_version=health_label,
                 os=f"{platform.system()} {platform.release()}",
             ),
+            feral_version=feral_version(),
         )
 
         prompt_results: list[PromptResult] = []

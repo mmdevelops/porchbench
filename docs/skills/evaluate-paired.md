@@ -48,12 +48,14 @@ user how to proceed (evaluate only the intersection, or abort).
 
 - Read the suite YAML (at `header.suite_file` from any extracted file) for
   a `rubric` field
-- If present, use `rubrics/{rubric}.yaml` for all prompts
+- If present, use that rubric name (resolved from `src/feral/data/rubrics/`
+  or `./rubrics/` if a project-local override exists) for all prompts
 - Otherwise fall back to per-category matching (see `/evaluate` skill)
 
 ### Step 4: Load calibration examples
 
-Load from `rubrics/calibration-examples.yaml`.
+Load `calibration-examples.yaml` from the same rubric directory that the
+resolved rubric came from (packaged or project-local).
 
 ### Step 5: Initialize scores files
 
@@ -76,7 +78,7 @@ rm -f .claude/eval-scores-*.jsonl
 
 Before scoring any benchmark responses, review the calibration examples:
 
-1. Read `rubrics/calibration-examples.yaml`
+1. Read `calibration-examples.yaml` (from the same rubric directory used in Step 4)
 2. Select the calibration set matching the rubric being used (e.g., `coding` for
    coding-basics, `cross-domain-science` for the cross-domain science suite,
    `reasoning` for reasoning-focused prompts). If the suite mixes categories,
@@ -311,7 +313,7 @@ by > 1.5 points (flag for investigation).
   reasoning chain — finish scoring one, write the result, then start the next.
 
 - **Calibration source disclosure**: The calibration examples in
-  `rubrics/calibration-examples.yaml` were scored by Claude Opus 4.6 (chatbot),
+  `src/feral/data/rubrics/calibration-examples.yaml` were scored by Claude Opus 4.6 (chatbot),
   the same model family as the evaluator. This provides intra-rater scale
   consistency but is not an independent validity check. Note this limitation
   when reporting results.
