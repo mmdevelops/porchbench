@@ -62,7 +62,7 @@ dev = [
 ]
 
 [project.scripts]
-feral = "feral.cli:app"
+feral = "feral.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/feral"]

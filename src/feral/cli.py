@@ -7,6 +7,7 @@ Loads .env from the working directory for persistent configuration.
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -33,9 +34,10 @@ from feral.assets import (
     resolve_suite_dir,
 )
 from feral.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
+from feral.errors import UserError, load_json_model
 from feral.runner import run_suite
 from feral.suite import load_suite, make_suite_reference
-from feral.schemas import RunResult
+from feral.schemas import RunResult, Scorecard
 
 app = typer.Typer(
     name="feral",
@@ -363,10 +365,9 @@ def evaluate(
 
     # Load inputs
     try:
-        run_data = result_path.read_text(encoding="utf-8")
-        run_result = RunResult.model_validate_json(run_data)
-    except Exception as exc:
-        console.print(f"[red]Failed to load run result: {exc}[/red]")
+        run_result = load_json_model(result_path, RunResult, "run result")
+    except UserError as exc:
+        console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
     # Resolve rubric: explicit --rubric > suite hint > default
@@ -460,7 +461,7 @@ def compare(
     ] = None,
 ) -> None:
     """Compare metrics and scores across models side-by-side."""
-    from feral.compare import load_run_result, load_scorecard, print_comparison_table
+    from feral.compare import print_comparison_table
 
     # Interactive selection when args omitted
     if result_paths is None:
@@ -470,9 +471,9 @@ def compare(
     runs = []
     for p in result_paths:
         try:
-            runs.append(load_run_result(p))
-        except Exception as exc:
-            console.print(f"[red]Failed to load {p}: {exc}[/red]")
+            runs.append(load_json_model(p, RunResult, "run result"))
+        except UserError as exc:
+            console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
 
     scorecards = None
@@ -480,9 +481,9 @@ def compare(
         scorecards = []
         for p in scorecard_paths:
             try:
-                scorecards.append(load_scorecard(p))
-            except Exception as exc:
-                console.print(f"[yellow]Warning: could not load scorecard {p}: {exc}[/yellow]")
+                scorecards.append(load_json_model(p, Scorecard, "scorecard"))
+            except UserError as exc:
+                console.print(f"[yellow]Warning: {exc}[/yellow]")
                 scorecards.append(None)
 
     print_comparison_table(runs, scorecards)
@@ -600,10 +601,9 @@ def analyze_routes_cmd(
     runs = []
     for p in result_paths:
         try:
-            data = p.read_text(encoding="utf-8")
-            runs.append(RunResult.model_validate_json(data))
-        except Exception as exc:
-            console.print(f"[red]Failed to load {p}: {exc}[/red]")
+            runs.append(load_json_model(p, RunResult, "run result"))
+        except UserError as exc:
+            console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
 
     analysis = analyze_routes(runs)
@@ -728,7 +728,6 @@ def leaderboard(
         discover_scorecards,
         filter_comparable,
         group_scorecards,
-        load_scorecard,
         print_leaderboard,
     )
 
@@ -736,18 +735,20 @@ def leaderboard(
     if scorecard_paths:
         for p in scorecard_paths:
             try:
-                scorecards.append(load_scorecard(p))
-            except Exception as exc:
-                console.print(f"[red]Failed to load {p}: {exc}[/red]")
+                scorecards.append(load_json_model(p, Scorecard, "scorecard"))
+            except UserError as exc:
+                console.print(f"[red]{exc}[/red]")
                 raise typer.Exit(code=1)
     else:
         if not scorecard_dir.is_dir():
             console.print(f"[red]Scorecard directory not found: {scorecard_dir}[/red]")
+            console.print("  Run [bold]feral evaluate[/bold] on a run result first to produce a scorecard.")
             raise typer.Exit(code=1)
         scorecards = discover_scorecards(scorecard_dir, verbose=verbose)
 
     if not scorecards:
         console.print("[yellow]No scorecards found.[/yellow]")
+        console.print("  Run [bold]feral evaluate[/bold] on a run result first to produce a scorecard.")
         raise typer.Exit(code=1)
 
     # Interactive rubric group selection when multiple groups exist
@@ -1121,5 +1122,19 @@ def overnight(
     print_summary(results, elapsed)
 
 
+def main() -> None:
+    """Entry point wrapper that turns Ctrl+C into a clean exit.
+
+    Without this, aborting a beaupy picker raises KeyboardInterrupt and
+    users see a Python traceback. Exit 130 is the shell convention for
+    SIGINT-style termination.
+    """
+    try:
+        app()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled.[/yellow]")
+        sys.exit(130)
+
+
 if __name__ == "__main__":
-    app()
+    main()
