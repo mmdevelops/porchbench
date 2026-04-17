@@ -1,7 +1,10 @@
 # Platform folders (personal config — skills are templated in docs/skills/)
 .claude/
-.github/
 .codex/
+
+# GitHub config: track workflows (CI), ignore other personal bits by default
+.github/*
+!.github/workflows/
 
 # Project internal
 docs/design/
