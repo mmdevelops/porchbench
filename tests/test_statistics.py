@@ -111,20 +111,36 @@ class TestAutoCI:
 
 class TestPairedTTest:
     def test_identical_values(self):
+        # Degenerate case (SD=0) yields p=1.0 by definition — not an
+        # approximation, so it's reported regardless of sample size.
         a = [1.0, 2.0, 3.0, 4.0, 5.0]
         result = paired_t_test(a, a)
         assert result is not None
         assert result.mean_difference == pytest.approx(0.0)
+        assert result.p_value == pytest.approx(1.0)
         assert not result.significant
 
-    def test_clearly_different(self):
+    def test_clearly_different_large_effect(self):
+        # n=5 (df=4) is below the p-value gate; we still get the statistic,
+        # CI, and effect-size — the effect size should clearly be large.
         a = [10.0, 20.0, 30.0, 40.0, 50.0]
         b = [1.0, 2.0, 3.0, 4.0, 5.0]
         result = paired_t_test(a, b)
         assert result is not None
         assert result.mean_difference > 0
-        assert result.significant
+        assert result.p_value is None
+        assert result.significant is None
         assert result.effect_magnitude == "large"
+
+    def test_pvalue_available_for_large_df(self):
+        # n=40 (df=39) clears the gate — p-value should be a real float.
+        a = [float(i) for i in range(40)]
+        b = [float(i) + 2.0 for i in range(40)]
+        result = paired_t_test(a, b)
+        assert result is not None
+        assert result.p_value is not None
+        assert 0.0 <= result.p_value <= 1.0
+        assert result.significant is not None
 
     def test_returns_none_for_single_pair(self):
         assert paired_t_test([1.0], [2.0]) is None
@@ -140,6 +156,8 @@ class TestPairedTTest:
         assert "test_name" in d
         assert "p_value" in d
         assert "effect_size" in d
+        # Small n → p_value is None, serialized as JSON null
+        assert d["p_value"] is None
 
 
 class TestWilcoxon:

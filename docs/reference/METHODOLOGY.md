@@ -35,7 +35,27 @@ OpenLLM Leaderboard v2), and Anthropic's agent evaluation guide.
 - CLT-based confidence intervals are unreliable when n < 100. Use bootstrap
   confidence intervals for smaller samples.
 
-*Reference: Wolfe (2025); Artificial Analysis Intelligence Index v4.0 methodology*
+**How feral implements this**
+
+- `feral compare` runs a paired test on per-prompt quality score differences
+  between two runs — Wilcoxon signed-rank for n >= 6, paired t for 2 <= n <= 5 —
+  and reports a bootstrap CI on the mean difference and a Cohen's dz effect size.
+- `feral leaderboard` is a **descriptive ranking of weighted means**; it does not
+  run a significance test or attach CIs to the ranking itself. To judge whether a
+  leaderboard gap reflects a real quality difference, run `feral compare` on the
+  two underlying runs.
+
+**p-value caveat.** Without a scipy dependency, feral approximates the t-tail
+with a standard-normal tail. The normal has lighter tails than the t-distribution,
+so this approximation *understates* p (anti-conservative) when applied at small df.
+feral therefore gates paired-t p-values to df >= 30 (n >= 31); below that threshold
+`p_value` and `significant` are reported as `null` and the bootstrap CI on the mean
+difference plus the Cohen's dz effect size carry the inference. The Wilcoxon
+signed-rank path uses its own asymptotic normal approximation of the W statistic,
+which is textbook-standard for n >= 10 and reasonable for n >= 6.
+
+*References: Wolfe (2025), "Applying Statistics to LLM Evaluations"; Artificial
+Analysis Intelligence Index v4.0 methodology*
 
 ### Repeated runs
 
@@ -178,23 +198,53 @@ Necessary for:
 
 ### LLM-as-judge debiasing
 
-Three documented biases must be mitigated:
+LLM judges exhibit several well-documented biases. This section describes which
+ones feral currently mitigates, how, and which remain as known limitations that
+users should be aware of when interpreting scorecards.
 
-**Position bias** — judges favor responses in specific positions (~40% inconsistency
-when positions are swapped).
-- *Mitigation:* Evaluate both orderings (A,B) and (B,A); only count consistent wins.
+**What ships today**
 
-**Verbosity bias** — judges favor longer responses regardless of quality (~15% inflation).
-- *Mitigation:* Use rubric scales with explicit conciseness criteria. Penalize unnecessary
-  verbosity in the scoring prompt.
+- **Rubric-anchored absolute scoring.** Every judge prompt includes a calibration
+  preamble with worked examples at multiple quality tiers (strong / adequate /
+  weak) drawn from `src/feral/data/rubrics/calibration-examples.yaml`. The judge
+  is instructed to use these as fixed anchors for the 1-5 scale rather than
+  calibrating internally from the single response under review. Implemented in
+  `evaluator.format_calibration_preamble`; applied in `evaluator.build_scoring_prompt`.
+- **Contamination-aware aggregation.** Prompts carry a `contamination_risk` tag
+  (`high` / `medium` / `low`); scorecards produce both raw aggregates and `*_clean`
+  variants that exclude high-contamination prompts. This surfaces whether a model's
+  edge comes from genuinely novel problems or from public benchmark items likely
+  present in training data. See `AggregateScores` in `src/feral/schemas.py`.
+- **Single-response absolute scoring.** feral does not score pairwise; the judge
+  rates each response against the rubric in isolation. Position bias (which applies
+  to pairwise judging) therefore does not arise in the current pipeline.
 
-**Self-preference bias** — LLMs rate outputs resembling their own training distribution
-higher (GPT-4 bias score: 0.520). Root cause is perplexity preference, not self-recognition.
-- *Mitigation:* Use a different model family as the judge than the models being evaluated.
-  Ensemble across multiple judge models from different families.
+**Operator guidance (not automated)**
 
-*References: Panickssery et al. (2024), "Self-Preference Bias in LLM-as-a-Judge" (arXiv 2410.21819);
-Kim et al. (2025), "A Systematic Study of Position Bias in LLM-as-a-Judge" (IJCNLP 2025)*
+- **Judge-family separation.** To reduce self-preference bias, use a different
+  model family for the judge than the models under test (e.g., a Gemma judge
+  scoring Qwen responses, or vice versa). The default Ollama judge is
+  `gemma4:e4b`; the default API / Claude-Code judge is Claude Sonnet. feral does
+  **not** warn when the judge family overlaps with a model under test — that
+  check is the user's responsibility.
+
+**Known gaps — not implemented in v0.1**
+
+- **Multi-judge ensemble.** All v0.1 evaluations use a single judge model.
+  Averaging across multiple judge families would reduce both self-preference
+  bias and idiosyncratic bias from any individual judge.
+- **Verbosity-penalizing rubric criteria.** Shipped rubrics evaluate content
+  quality, completeness, and reasoning, but do not include an explicit
+  conciseness / brevity criterion. Judges may still favor longer responses on
+  open-ended tasks at roughly the rates reported in the literature.
+- **Pairwise ordering controls.** If pairwise judging is added in a future
+  release, it will need position-swap evaluation (compare both A,B and B,A
+  orderings; count only consistent wins). Not needed today because scoring is
+  absolute.
+
+*References: Panickssery et al. (2024), "Self-Preference Bias in LLM-as-a-Judge"
+(arXiv 2410.21819); Kim et al. (2025), "A Systematic Study of Position Bias in
+LLM-as-a-Judge" (IJCNLP 2025)*
 
 ---
 
@@ -269,8 +319,8 @@ Every run result should capture sufficient metadata for exact reproduction:
 | Ollama server version | `GET /api/version` | Runtime behavior may vary |
 | Suite file SHA256 | Computed at load time | Detects prompt changes |
 | Suite semver | `suite.version` | Human-readable version |
-| GPU model | System detection | Affects inference speed |
-| VRAM total | System detection | Affects model loading strategy |
+| GPU model | `feral profile` (schema field exists in every run but is populated only when profiling) | Affects inference speed |
+| VRAM total | `feral profile` (schema field exists in every run but is populated only when profiling) | Affects model loading strategy |
 | OS | System detection | Runtime environment |
 | Temperature, seed, top_p | From options | Determinism parameters |
 | `num_ctx` | From options | Context window affects quality and VRAM |

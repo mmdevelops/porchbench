@@ -227,11 +227,14 @@ def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> 
 
     direction = name_a if result.mean_difference > 0 else name_b
     table.add_row("Mean difference", f"{result.mean_difference:+.4f} (favors {direction})")
-    table.add_row("p-value", f"{result.p_value:.4f}")
-
-    sig_str = "[green]Yes[/green]" if result.significant else "[yellow]No[/yellow]"
-    table.add_row("Significant (p<0.05)", sig_str)
-    table.add_row("Effect size (Cohen's d)", f"{result.effect_size:.3f} ({result.effect_magnitude})")
+    if result.p_value is None:
+        table.add_row("p-value", "[dim]n too small (rely on CI / effect size)[/dim]")
+        table.add_row("Significant (p<0.05)", "[dim]n/a[/dim]")
+    else:
+        table.add_row("p-value", f"{result.p_value:.4f}")
+        sig_str = "[green]Yes[/green]" if result.significant else "[yellow]No[/yellow]"
+        table.add_row("Significant (p<0.05)", sig_str)
+    table.add_row("Effect size (Cohen's dz)", f"{result.effect_size:.3f} ({result.effect_magnitude})")
 
     if result.ci:
         table.add_row("95% CI on difference", f"[{result.ci.ci_lower:.4f}, {result.ci.ci_upper:.4f}]")

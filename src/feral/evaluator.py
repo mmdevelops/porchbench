@@ -59,7 +59,7 @@ DEFAULT_OLLAMA_EVALUATOR = "gemma4:e4b"
 # Per-backend default models — used when --evaluator is not explicitly set
 EVAL_BACKEND_DEFAULTS: dict[str, str] = {
     "ollama": "gemma4:e4b",
-    "api": "claude-sonnet-4-6-20250514",
+    "api": "claude-sonnet-4-6",
     "claude-code": "sonnet",
 }
 
@@ -96,7 +96,7 @@ class OllamaEvalBackend:
 class AnthropicEvalBackend:
     """Evaluator backend using Claude via Anthropic API."""
 
-    def __init__(self, model: str = "claude-sonnet-4-6-20250514", api_key: str | None = None):
+    def __init__(self, model: str = "claude-sonnet-4-6", api_key: str | None = None):
         try:
             import anthropic
         except ImportError:

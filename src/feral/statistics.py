@@ -155,15 +155,22 @@ def auto_ci(
 
 @dataclass(frozen=True)
 class PairedTestResult:
-    """Result of a paired statistical test comparing two models."""
+    """Result of a paired statistical test comparing two models.
+
+    p_value and significant are None when the sample is too small for a
+    reliable p-value (paired-t requires df >= 30 because we approximate
+    the t-tail with a z-tail; see _normal_tail_p). The CI on the mean
+    difference and the effect size remain valid and are the recommended
+    primary evidence for small n.
+    """
 
     test_name: str  # "paired_t" or "wilcoxon"
     n_pairs: int
     mean_difference: float  # model_a - model_b (positive = A better)
     statistic: float
-    p_value: float
-    significant: bool  # at alpha=0.05
-    effect_size: float  # Cohen's d
+    p_value: float | None
+    significant: bool | None  # at alpha=0.05; None when p_value is None
+    effect_size: float  # Cohen's dz for paired data
     effect_magnitude: str  # negligible, small, medium, large
     ci: ConfidenceInterval | None  # CI on the mean difference
 
@@ -173,7 +180,7 @@ class PairedTestResult:
             "n_pairs": self.n_pairs,
             "mean_difference": round(self.mean_difference, 4),
             "statistic": round(self.statistic, 4),
-            "p_value": round(self.p_value, 6),
+            "p_value": round(self.p_value, 6) if self.p_value is not None else None,
             "significant": self.significant,
             "effect_size": round(self.effect_size, 4),
             "effect_magnitude": self.effect_magnitude,
@@ -203,6 +210,17 @@ def _cohens_d(differences: list[float]) -> tuple[float, str]:
     return d, magnitude
 
 
+MIN_DF_FOR_T_PVALUE = 30
+"""Minimum degrees of freedom before we report a paired-t p-value.
+
+We approximate the t-tail with the standard normal, which is accurate to
+within a few percent at df >= 30 and diverges below that (giving smaller
+p-values than the true t-distribution). Rather than report a number that
+understates p for small n, we return None and let callers surface the CI
+and effect size instead.
+"""
+
+
 def paired_t_test(
     values_a: list[float],
     values_b: list[float],
@@ -210,7 +228,8 @@ def paired_t_test(
 ) -> PairedTestResult | None:
     """Paired t-test for the difference between two matched samples.
 
-    Requires n >= 2 paired observations. Returns None if insufficient data.
+    Requires n >= 2 paired observations; returns None if insufficient data.
+    p_value and significant are None when df < 30 (see MIN_DF_FOR_T_PVALUE).
     """
     if len(values_a) != len(values_b) or len(values_a) < 2:
         return None
@@ -220,18 +239,20 @@ def paired_t_test(
     mean_d = statistics.mean(differences)
     sd_d = statistics.stdev(differences)
     se_d = sd_d / math.sqrt(n)
+    df = n - 1
 
+    p_value: float | None
     if se_d == 0:
         t_stat = float("inf") if mean_d != 0 else 0.0
         p_value = 0.0 if mean_d != 0 else 1.0
+    elif df < MIN_DF_FOR_T_PVALUE:
+        t_stat = mean_d / se_d
+        p_value = None
     else:
         t_stat = mean_d / se_d
-        # Two-tailed p-value approximation using t-distribution
-        # For a proper implementation we'd need scipy, but we can approximate
-        # using the relationship: for large df, t ≈ z
-        df = n - 1
-        p_value = _approximate_two_tailed_p(abs(t_stat), df)
+        p_value = _normal_tail_p(abs(t_stat))
 
+    significant = (p_value < alpha) if p_value is not None else None
     effect_size, magnitude = _cohens_d(differences)
     ci = auto_ci(differences)
 
@@ -241,26 +262,26 @@ def paired_t_test(
         mean_difference=mean_d,
         statistic=t_stat,
         p_value=p_value,
-        significant=p_value < alpha,
+        significant=significant,
         effect_size=effect_size,
         effect_magnitude=magnitude,
         ci=ci,
     )
 
 
-def _approximate_two_tailed_p(t_abs: float, df: int) -> float:
-    """Approximate two-tailed p-value for a t-statistic.
+def _normal_tail_p(abs_stat: float) -> float:
+    """Two-tailed p-value under the standard normal: 2 * (1 - Phi(|x|)).
 
-    Uses a conservative normal approximation. Exact computation requires scipy.
-    For benchmarking purposes this is sufficient — users needing exact values
-    should use the raw data with scipy.
+    Uses the logistic approximation Phi(x) ~ 1/(1+exp(-1.7x)), which is
+    accurate to ~1% across the relevant range. Exact values require scipy.
+
+    Correct for genuinely z-distributed statistics (e.g., the asymptotic
+    normal approximation of the Wilcoxon signed-rank W). For t-statistics,
+    gate on degrees of freedom before calling (see MIN_DF_FOR_T_PVALUE):
+    the normal has lighter tails than the t, so applying this directly to
+    a t-stat at small df understates p (anti-conservative).
     """
-    # For df >= 30, t ≈ z (normal distribution)
-    # For smaller df, this underestimates p (conservative)
-    # Approximation: p ≈ 2 * Φ(-|t|) using the logistic approximation to Φ
-    z = t_abs
-    # Logistic approximation to normal CDF: Φ(x) ≈ 1/(1 + exp(-1.7*x))
-    p = 2.0 / (1.0 + math.exp(1.7 * z))
+    p = 2.0 / (1.0 + math.exp(1.7 * abs_stat))
     return min(1.0, max(0.0, p))
 
 
@@ -319,7 +340,7 @@ def wilcoxon_signed_rank(
     var_w = nr * (nr + 1) * (2 * nr + 1) / 24
     if var_w > 0:
         z = (w - mean_w) / math.sqrt(var_w)
-        p_value = _approximate_two_tailed_p(abs(z), n)
+        p_value = _normal_tail_p(abs(z))
     else:
         p_value = 1.0
 

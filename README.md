@@ -11,7 +11,7 @@ Most local LLM benchmarks measure tokens/sec. Model cards report scores on stand
 ## What it does
 
 - **Benchmark** — run curated prompt suites against any Ollama model and capture structured results (quality + throughput + full metadata)
-- **Evaluate** — score responses with an LLM judge using rubric-based criteria and debiasing controls
+- **Evaluate** — score responses with an LLM judge using rubric-based criteria anchored by worked calibration examples
 - **Compare** — side-by-side model comparison with paired statistics
 - **Route** — discover whether adapting prompt strategies to model size beats always using the biggest model
 - **Profile** — measure model load times, VRAM usage, swap costs, and co-residency on your hardware
@@ -76,6 +76,8 @@ feral leaderboard --scorecard scorecards/<a>.json --scorecard scorecards/<b>.jso
 
 Pass `--strict` to require the same evaluator model, not just the same rubric.
 
+> The leaderboard ranks by weighted mean only — it does not run a significance test or attach CIs to the ranking. To judge whether a gap between two models is real, run `feral compare` on their underlying result files; that path produces a paired test with a bootstrap CI and a Cohen's dz effect size.
+
 ### Discover routing opportunities
 
 Does adapting your prompt strategy to model size actually help?
@@ -127,7 +129,7 @@ Suites ship bundled with the package and are referenced by name:
 
 **It's not another MMLU wrapper.** Standard benchmarks tell you "model X scores 85% on MMLU." That doesn't help you decide between two quantization levels on your 24GB GPU. feral treats the deployment context — quantization, VRAM budget, model swap time, prompt strategy — as first-class experimental variables.
 
-**Statistical rigor for local eval.** Paired comparisons (question-level deltas, not independent point estimates), bootstrap confidence intervals, Cohen's d effect sizes, and contamination tagging. Repeat runs at temperature=0 to detect floating-point non-determinism across quantization levels.
+**Statistical rigor for local eval.** Paired comparisons (question-level deltas, not independent point estimates), bootstrap confidence intervals, Cohen's dz effect sizes, calibration-anchored judge prompts, and contamination tagging. Repeat runs at temperature=0 to detect floating-point non-determinism across quantization levels.
 
 **Reproducibility built in.** Every result captures model SHA, suite SHA, Ollama version, quantization level, KV cache type, and full generation parameters. Same inputs, same outputs, verifiable later.
 
