@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/feral.svg)](https://pypi.org/project/feral/)
 [![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/feral/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/mmdevelops/feral/blob/main/LICENSE)
 
 Rigorous quality benchmarking for local LLMs. Measures what actually matters when choosing between models, quantization levels, and prompt strategies on your own hardware — with real statistics, not vibes.
 
@@ -133,7 +133,7 @@ Suites ship bundled with the package and are referenced by name:
 
 **Reproducibility built in.** Every result captures model SHA, suite SHA, Ollama version, quantization level, KV cache type, and full generation parameters. Same inputs, same outputs, verifiable later.
 
-See [METHODOLOGY.md](docs/reference/METHODOLOGY.md) for the full statistical framework and academic references.
+See [METHODOLOGY.md](https://github.com/mmdevelops/feral/blob/main/docs/reference/METHODOLOGY.md) for the full statistical framework and academic references.
 
 ## Project structure
 
@@ -166,9 +166,9 @@ src/feral/          Python package
 
 ## Documentation
 
-- [METHODOLOGY.md](docs/reference/METHODOLOGY.md) — statistical framework, evaluation methods, debiasing, reproducibility standards
-- [CHANGELOG.md](CHANGELOG.md) — release notes and known limitations
-- [docs/skills/](docs/skills/) — Claude Code skill templates for using your subscription as an evaluation backend
+- [METHODOLOGY.md](https://github.com/mmdevelops/feral/blob/main/docs/reference/METHODOLOGY.md) — statistical framework, evaluation methods, debiasing, reproducibility standards
+- [CHANGELOG.md](https://github.com/mmdevelops/feral/blob/main/CHANGELOG.md) — release notes and known limitations
+- [docs/skills/](https://github.com/mmdevelops/feral/tree/main/docs/skills) — Claude Code skill templates for using your subscription as an evaluation backend
 
 ## Configuration
 
@@ -178,6 +178,9 @@ Defaults work out of the box. To override them persistently, copy `.env.example`
 |----------|---------|
 | `OLLAMA_HOST` | Ollama server URL (default `http://localhost:11434`) |
 | `OLLAMA_KV_CACHE_TYPE` | KV cache quantization passed through to Ollama (e.g. `q8_0`) |
+| `FERAL_BACKEND` | Inference backend for `feral run`: `ollama` (default) or `openai-compat` |
+| `FERAL_BASE_URL` | OpenAI-compatible server URL (when `FERAL_BACKEND=openai-compat`) |
+| `FERAL_API_KEY` | API key for the OpenAI-compatible server |
 | `FERAL_EVAL_BACKEND` | Judge backend: `ollama` (default), `api`, or `claude-code` |
 | `FERAL_EVAL_MODEL` | Judge model override (defaults differ per backend) |
 | `ANTHROPIC_API_KEY` | Required only when `FERAL_EVAL_BACKEND=api` |
@@ -206,4 +209,4 @@ CLI flags always take precedence over env vars. See `feral <command> --help` for
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) for details.
+Apache 2.0 — see [LICENSE](https://github.com/mmdevelops/feral/blob/main/LICENSE) for details.

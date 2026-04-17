@@ -606,6 +606,16 @@ def analyze_routes_cmd(
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
 
+    non_routing = [r for r in runs if not any(pr.strategy for pr in r.prompt_results)]
+    if non_routing:
+        names = ", ".join(r.metadata.run_id for r in non_routing)
+        console.print(
+            f"[red]routes analyze requires results produced by `feral routes discover` "
+            f"(prompts must carry a strategy tag). The following result files have no "
+            f"routing strategies and cannot be analyzed: {names}[/red]"
+        )
+        raise typer.Exit(code=1)
+
     analysis = analyze_routes(runs)
 
     # Print headline
@@ -683,9 +693,9 @@ def profile(
         raise typer.Exit(code=1)
 
     backend = OllamaBackend(host=host)
+    check_server_or_exit(backend, "ollama")
 
     if models is None:
-        check_server_or_exit(backend, "ollama")
         models = select_models(backend)
 
     sys_profile = asyncio.run(profile_system(models, backend=backend))
