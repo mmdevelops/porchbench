@@ -16,8 +16,6 @@ class SandboxConfig:
     """Configuration for a sandbox session."""
 
     timeout_s: int = 30
-    memory_limit_mb: int = 256
-    network_enabled: bool = False
     env: dict[str, str] = field(default_factory=dict)
 
 

@@ -41,8 +41,6 @@ async def run_tool_use_prompt(
     sandbox_config_raw = prompt.sandbox or {}
     config = SandboxConfig(
         timeout_s=sandbox_config_raw.get("timeout_s", 30),
-        memory_limit_mb=sandbox_config_raw.get("memory_limit_mb", 256),
-        network_enabled=sandbox_config_raw.get("network_enabled", False),
     )
 
     sandbox = SubprocessSandbox()
