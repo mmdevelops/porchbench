@@ -310,7 +310,7 @@ def evaluate(
     ] = None,
     rubric_path: Annotated[
         Optional[Path],
-        typer.Option("--rubric", "-R", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
+        typer.Option("--rubric", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
     ] = None,
     evaluator_model: Annotated[
         Optional[str],
@@ -457,7 +457,7 @@ def compare(
     ] = None,
     scorecard_paths: Annotated[
         Optional[list[Path]],
-        typer.Option("--scorecard", "-S", help="Scorecard JSON files (same order as results)."),
+        typer.Option("--scorecard", help="Scorecard JSON files (same order as results)."),
     ] = None,
 ) -> None:
     """Compare metrics and scores across models side-by-side."""
@@ -700,7 +700,7 @@ def profile(
 def leaderboard(
     scorecard_paths: Annotated[
         Optional[list[Path]],
-        typer.Option("--scorecard", "-S", help="Scorecard JSON files. Repeat for each."),
+        typer.Option("--scorecard", help="Scorecard JSON files. Repeat for each."),
     ] = None,
     scorecard_dir: Annotated[
         Path,
@@ -815,7 +815,7 @@ def eval_finalize(
     ] = "claude-code/claude-opus-4-6",
     rubric_label: Annotated[
         str,
-        typer.Option("--rubric", "-R", help="Rubric description for the scorecard."),
+        typer.Option("--rubric", help="Rubric description for the scorecard."),
     ] = "",
     output_dir: Annotated[
         Path,
@@ -912,7 +912,7 @@ def overnight(
     ] = None,
     rubric_path: Annotated[
         Optional[Path],
-        typer.Option("--rubric", "-R", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
+        typer.Option("--rubric", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
     ] = None,
     rubric_dir: Annotated[
         Optional[Path],

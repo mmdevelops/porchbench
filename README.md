@@ -71,7 +71,7 @@ Once you have multiple scorecards in `scorecards/`, rank them on a single rubric
 feral leaderboard
 
 # Or point at specific scorecards
-feral leaderboard -S scorecards/<a>.json -S scorecards/<b>.json
+feral leaderboard --scorecard scorecards/<a>.json --scorecard scorecards/<b>.json
 ```
 
 Pass `--strict` to require the same evaluator model, not just the same rubric.

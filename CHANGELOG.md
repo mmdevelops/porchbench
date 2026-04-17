@@ -24,7 +24,7 @@ Initial public release.
 - Statistical tooling: bootstrap confidence intervals, paired per-question deltas, Cohen's d, contamination tagging.
 - `.env` + `FERAL_*` environment variable configuration; CLI flags always win.
 - 236-test suite across backend, runner, evaluator, routing, sandbox, validators, schemas, and asset resolution.
-- Benchmark suites and rubrics ship bundled with the package under `src/feral/data/`. Reference them by name (`-s coding-basics`, `-R default`) from any directory — no repo checkout required. Drop a YAML in `./suites/` or `./rubrics/` to override with a project-local copy.
+- Benchmark suites and rubrics ship bundled with the package under `src/feral/data/`. Reference them by name (`-s coding-basics`, `--rubric default`) from any directory — no repo checkout required. Drop a YAML in `./suites/` or `./rubrics/` to override with a project-local copy.
 - `RunMetadata.feral_version` records the installed package version on every new run for reproducibility.
 
 ### Known limitations
