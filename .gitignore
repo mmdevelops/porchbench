@@ -37,6 +37,6 @@ Thumbs.db
 # User config
 .env
 
-# feral outputs (regenerable)
+# porchbench outputs (regenerable)
 results/
 scorecards/

@@ -29,7 +29,7 @@ The arguments are: `$ARGUMENTS`
 
 For each result file in `$ARGUMENTS` (split on spaces), run:
 ```bash
-python -m feral eval-extract "<result_file>" --output ".claude/eval-data-<N>.json"
+python -m porchbench eval-extract "<result_file>" --output ".claude/eval-data-<N>.json"
 ```
 
 Name the output files sequentially (e.g., `.claude/eval-data-1.json`,
@@ -48,7 +48,7 @@ user how to proceed (evaluate only the intersection, or abort).
 
 - Read the suite YAML (at `header.suite_file` from any extracted file) for
   a `rubric` field
-- If present, use that rubric name (resolved from `src/feral/data/rubrics/`
+- If present, use that rubric name (resolved from `src/porchbench/data/rubrics/`
   or `./rubrics/` if a project-local override exists) for all prompts
 - Otherwise fall back to per-category matching (see `/evaluate` skill)
 
@@ -154,8 +154,8 @@ model's JSONL file:
 
 ```python
 python -c "
-from feral.evaluator import append_score
-from feral.schemas import PromptScore, CriterionScore
+from porchbench.evaluator import append_score
+from porchbench.schemas import PromptScore, CriterionScore
 append_score(PromptScore(
     prompt_id='<id>',
     criteria={
@@ -200,7 +200,7 @@ After all prompts are scored, finalize one scorecard per model using the
 and scores JSONL):
 
 ```bash
-python -m feral eval-finalize "<result_file_N>" \
+python -m porchbench eval-finalize "<result_file_N>" \
     --scores .claude/eval-scores-<N>.jsonl \
     --evaluator "claude-code/claude-opus-4-6/paired" \
     --rubric "<rubric description>"
@@ -313,7 +313,7 @@ by > 1.5 points (flag for investigation).
   reasoning chain — finish scoring one, write the result, then start the next.
 
 - **Calibration source disclosure**: The calibration examples in
-  `src/feral/data/rubrics/calibration-examples.yaml` were scored by Claude Opus 4.6 (chatbot),
+  `src/porchbench/data/rubrics/calibration-examples.yaml` were scored by Claude Opus 4.6 (chatbot),
   the same model family as the evaluator. This provides intra-rater scale
   consistency but is not an independent validity check. Note this limitation
   when reporting results.

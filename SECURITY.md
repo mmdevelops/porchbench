@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you believe you've found a security issue in feral, please report it
+If you believe you've found a security issue in porchbench, please report it
 privately to **mmdevelops@gmail.com** rather than opening a public issue.
 
 Include:
@@ -16,7 +16,7 @@ on a fix and coordinate a disclosure timeline with you.
 
 ## Threat Model
 
-feral is a benchmarking tool you run on your own machine, against models
+porchbench is a benchmarking tool you run on your own machine, against models
 you've chosen to install and run locally (or against API endpoints you've
 authenticated to). The threat model assumes you trust the inputs you give
 it: the suite YAML, the rubric YAML, the models being benchmarked, and the
@@ -31,23 +31,23 @@ a security boundary.** The subprocess inherits your full environment
 write any file your user account can. The only enforced limit is the
 per-execution wall-clock timeout.
 
-If you point feral at a model that emits hostile code, that code runs with
-your privileges. That's the documented behavior, not a bug. Run feral in a
+If you point porchbench at a model that emits hostile code, that code runs with
+your privileges. That's the documented behavior, not a bug. Run porchbench in a
 VM or container if you want hard isolation.
 
 ## In Scope
 
-Bugs in feral itself that compromise a user running feral on inputs they
+Bugs in porchbench itself that compromise a user running porchbench on inputs they
 authored or trust:
 
 - Remote code execution or file disclosure via crafted result/scorecard/
   rubric/suite files (parsing must remain safe — currently `yaml.safe_load`
   and Pydantic JSON validation, no `pickle`, no `eval`)
-- feral writing or transmitting credentials, API keys, or other secrets
+- porchbench writing or transmitting credentials, API keys, or other secrets
   to places the user didn't ask for (logs, result JSON, network calls)
-- feral making network connections to hosts other than the configured
+- porchbench making network connections to hosts other than the configured
   inference endpoint
-- Path traversal in feral's own output writers (results, scorecards,
+- Path traversal in porchbench's own output writers (results, scorecards,
   profiles) when the user passes trusted CLI flags
 
 ## Out of Scope

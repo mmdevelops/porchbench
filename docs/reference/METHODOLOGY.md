@@ -1,6 +1,6 @@
 # Benchmarking Methodology
 
-Standards and practices for rigorous LLM evaluation in feral. Informed by
+Standards and practices for rigorous LLM evaluation in porchbench. Informed by
 academic literature, established benchmark frameworks (HELM, lm-evaluation-harness,
 OpenLLM Leaderboard v2), and Anthropic's agent evaluation guide.
 
@@ -35,20 +35,20 @@ OpenLLM Leaderboard v2), and Anthropic's agent evaluation guide.
 - CLT-based confidence intervals are unreliable when n < 100. Use bootstrap
   confidence intervals for smaller samples.
 
-**How feral implements this**
+**How porchbench implements this**
 
-- `feral compare` runs a paired test on per-prompt quality score differences
+- `porchbench compare` runs a paired test on per-prompt quality score differences
   between two runs — Wilcoxon signed-rank for n >= 6, paired t for 2 <= n <= 5 —
   and reports a bootstrap CI on the mean difference and a Cohen's dz effect size.
-- `feral leaderboard` is a **descriptive ranking of weighted means**; it does not
+- `porchbench leaderboard` is a **descriptive ranking of weighted means**; it does not
   run a significance test or attach CIs to the ranking itself. To judge whether a
-  leaderboard gap reflects a real quality difference, run `feral compare` on the
+  leaderboard gap reflects a real quality difference, run `porchbench compare` on the
   two underlying runs.
 
-**p-value caveat.** Without a scipy dependency, feral approximates the t-tail
+**p-value caveat.** Without a scipy dependency, porchbench approximates the t-tail
 with a standard-normal tail. The normal has lighter tails than the t-distribution,
 so this approximation *understates* p (anti-conservative) when applied at small df.
-feral therefore gates paired-t p-values to df >= 30 (n >= 31); below that threshold
+porchbench therefore gates paired-t p-values to df >= 30 (n >= 31); below that threshold
 `p_value` and `significant` are reported as `null` and the bootstrap CI on the mean
 difference plus the Cohen's dz effect size carry the inference. The Wilcoxon
 signed-rank path uses its own asymptotic normal approximation of the W statistic,
@@ -134,11 +134,11 @@ between runs:
 # below uses the shipped coding-basics suite, but for KV-cache sensitivity
 # you'll want prompts that exercise the context window.
 OLLAMA_KV_CACHE_TYPE=f16 ollama serve &
-feral run --suite coding-basics --model qwen2.5:7b
+porchbench run --suite coding-basics --model qwen2.5:7b
 
 # Compressed cache run
 OLLAMA_KV_CACHE_TYPE=q4_0 ollama serve &
-feral run --suite coding-basics --model qwen2.5:7b
+porchbench run --suite coding-basics --model qwen2.5:7b
 ```
 
 The framework records the cache type in `system.kv_cache_type` for each run result,
@@ -199,14 +199,14 @@ Necessary for:
 ### LLM-as-judge debiasing
 
 LLM judges exhibit several well-documented biases. This section describes which
-ones feral currently mitigates, how, and which remain as known limitations that
+ones porchbench currently mitigates, how, and which remain as known limitations that
 users should be aware of when interpreting scorecards.
 
 **What ships today**
 
 - **Rubric-anchored absolute scoring.** Every judge prompt includes a calibration
   preamble with worked examples at multiple quality tiers (strong / adequate /
-  weak) drawn from `src/feral/data/rubrics/calibration-examples.yaml`. The judge
+  weak) drawn from `src/porchbench/data/rubrics/calibration-examples.yaml`. The judge
   is instructed to use these as fixed anchors for the 1-5 scale rather than
   calibrating internally from the single response under review. Implemented in
   `evaluator.format_calibration_preamble`; applied in `evaluator.build_scoring_prompt`.
@@ -214,8 +214,8 @@ users should be aware of when interpreting scorecards.
   (`high` / `medium` / `low`); scorecards produce both raw aggregates and `*_clean`
   variants that exclude high-contamination prompts. This surfaces whether a model's
   edge comes from genuinely novel problems or from public benchmark items likely
-  present in training data. See `AggregateScores` in `src/feral/schemas.py`.
-- **Single-response absolute scoring.** feral does not score pairwise; the judge
+  present in training data. See `AggregateScores` in `src/porchbench/schemas.py`.
+- **Single-response absolute scoring.** porchbench does not score pairwise; the judge
   rates each response against the rubric in isolation. Position bias (which applies
   to pairwise judging) therefore does not arise in the current pipeline.
 
@@ -224,7 +224,7 @@ users should be aware of when interpreting scorecards.
 - **Judge-family separation.** To reduce self-preference bias, use a different
   model family for the judge than the models under test (e.g., a Gemma judge
   scoring Qwen responses, or vice versa). The default Ollama judge is
-  `gemma4:e4b`; the default API / Claude-Code judge is Claude Sonnet. feral does
+  `gemma4:e4b`; the default API / Claude-Code judge is Claude Sonnet. porchbench does
   **not** warn when the judge family overlaps with a model under test — that
   check is the user's responsibility.
 
@@ -319,8 +319,8 @@ Every run result should capture sufficient metadata for exact reproduction:
 | Ollama server version | `GET /api/version` | Runtime behavior may vary |
 | Suite file SHA256 | Computed at load time | Detects prompt changes |
 | Suite semver | `suite.version` | Human-readable version |
-| GPU model | `feral profile` (schema field exists in every run but is populated only when profiling) | Affects inference speed |
-| VRAM total | `feral profile` (schema field exists in every run but is populated only when profiling) | Affects model loading strategy |
+| GPU model | `porchbench profile` (schema field exists in every run but is populated only when profiling) | Affects inference speed |
+| VRAM total | `porchbench profile` (schema field exists in every run but is populated only when profiling) | Affects model loading strategy |
 | OS | System detection | Runtime environment |
 | Temperature, seed, top_p | From options | Determinism parameters |
 | `num_ctx` | From options | Context window affects quality and VRAM |

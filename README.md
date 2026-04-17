@@ -1,12 +1,12 @@
-# feral
+# porchbench
 
-[![PyPI version](https://img.shields.io/pypi/v/feral.svg)](https://pypi.org/project/feral/)
-[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/feral/)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/mmdevelops/feral/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/porchbench.svg)](https://pypi.org/project/porchbench/)
+[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/porchbench/)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/mmdevelops/porchbench/blob/main/LICENSE)
 
 Rigorous quality benchmarking for local LLMs. Measures what actually matters when choosing between models, quantization levels, and prompt strategies on your own hardware — with real statistics, not vibes.
 
-Most local LLM benchmarks measure tokens/sec. Model cards report scores on standard academic benchmarks under ideal conditions. Neither tells you whether Qwen 14B Q4 or Qwen 8B Q8 is the better choice for *your* GPU and *your* workload. feral does.
+Most local LLM benchmarks measure tokens/sec. Model cards report scores on standard academic benchmarks under ideal conditions. Neither tells you whether Qwen 14B Q4 or Qwen 8B Q8 is the better choice for *your* GPU and *your* workload. porchbench does.
 
 ## What it does
 
@@ -28,7 +28,7 @@ pip install -e .
 ollama pull qwen2.5:3b
 
 # Run the coding benchmark — suites ship with the package, reference by name
-feral run --suite coding-basics --model qwen2.5:3b
+porchbench run --suite coding-basics --model qwen2.5:3b
 ```
 
 That's it. A summary table prints to your terminal, and a structured JSON is written to `results/`:
@@ -45,7 +45,7 @@ Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If yo
 ```bash
 # Score results using a local Ollama model as judge (default: gemma4:e4b).
 # --rubric is auto-resolved from the result file if omitted.
-feral evaluate --result results/<your-result-file>.json
+porchbench evaluate --result results/<your-result-file>.json
 ```
 
 Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
@@ -54,10 +54,10 @@ Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
 ```bash
 # Run the same suite on multiple models
-feral run --suite coding-basics --model qwen2.5:3b --model qwen2.5:7b
+porchbench run --suite coding-basics --model qwen2.5:3b --model qwen2.5:7b
 
 # Compare results side-by-side
-feral compare \
+porchbench compare \
   --result results/<model-a-result>.json \
   --result results/<model-b-result>.json
 ```
@@ -68,15 +68,15 @@ Once you have multiple scorecards in `scorecards/`, rank them on a single rubric
 
 ```bash
 # Auto-scans scorecards/ for comparable entries (same rubric)
-feral leaderboard
+porchbench leaderboard
 
 # Or point at specific scorecards
-feral leaderboard --scorecard scorecards/<a>.json --scorecard scorecards/<b>.json
+porchbench leaderboard --scorecard scorecards/<a>.json --scorecard scorecards/<b>.json
 ```
 
 Pass `--strict` to require the same evaluator model, not just the same rubric.
 
-> The leaderboard ranks by weighted mean only — it does not run a significance test or attach CIs to the ranking. To judge whether a gap between two models is real, run `feral compare` on their underlying result files; that path produces a paired test with a bootstrap CI and a Cohen's dz effect size.
+> The leaderboard ranks by weighted mean only — it does not run a significance test or attach CIs to the ranking. To judge whether a gap between two models is real, run `porchbench compare` on their underlying result files; that path produces a paired test with a bootstrap CI and a Cohen's dz effect size.
 
 ### Discover routing opportunities
 
@@ -84,12 +84,12 @@ Does adapting your prompt strategy to model size actually help?
 
 ```bash
 # Run every prompt x strategy x model combination
-feral routes discover \
+porchbench routes discover \
   --suite routing-discovery \
   --model qwen2.5:3b --model qwen2.5:7b
 
 # Analyze the results
-feral routes analyze \
+porchbench routes analyze \
   --result results/<discovery-result-1>.json \
   --result results/<discovery-result-2>.json
 ```
@@ -97,17 +97,17 @@ feral routes analyze \
 ### Profile your hardware
 
 ```bash
-feral profile --model qwen2.5:3b --model qwen2.5:7b
+porchbench profile --model qwen2.5:3b --model qwen2.5:7b
 ```
 
 Measures model load/unload times, VRAM footprint, and co-residency capacity — the data you need to decide whether model routing is worth the swap overhead on your system.
 
 ### Run everything overnight
 
-Queue up a full benchmark run before bed or work. Feral auto-discovers suites, detects which ones need routing discovery vs standard runs, checks your GPU is working, and handles errors without stopping.
+Queue up a full benchmark run before bed or work. porchbench auto-discovers suites, detects which ones need routing discovery vs standard runs, checks your GPU is working, and handles errors without stopping.
 
 ```bash
-feral overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
+porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
 ```
 
 Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs.
@@ -123,25 +123,25 @@ Suites ship bundled with the package and are referenced by name:
 | `routing-discovery` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
 | `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state |
 
-**Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `feral` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
+**Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `porchbench` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
 
 ## What makes this different
 
-**It's not another MMLU wrapper.** Standard benchmarks tell you "model X scores 85% on MMLU." That doesn't help you decide between two quantization levels on your 24GB GPU. feral treats the deployment context — quantization, VRAM budget, model swap time, prompt strategy — as first-class experimental variables.
+**It's not another MMLU wrapper.** Standard benchmarks tell you "model X scores 85% on MMLU." That doesn't help you decide between two quantization levels on your 24GB GPU. porchbench treats the deployment context — quantization, VRAM budget, model swap time, prompt strategy — as first-class experimental variables.
 
 **Statistical rigor for local eval.** Paired comparisons (question-level deltas, not independent point estimates), bootstrap confidence intervals, Cohen's dz effect sizes, calibration-anchored judge prompts, and contamination tagging. Repeat runs at temperature=0 to detect floating-point non-determinism across quantization levels.
 
 **Reproducibility built in.** Every result captures model SHA, suite SHA, Ollama version, quantization level, KV cache type, and full generation parameters. Same inputs, same outputs, verifiable later.
 
-See [METHODOLOGY.md](https://github.com/mmdevelops/feral/blob/main/docs/reference/METHODOLOGY.md) for the full statistical framework and academic references.
+See [METHODOLOGY.md](https://github.com/mmdevelops/porchbench/blob/main/docs/reference/METHODOLOGY.md) for the full statistical framework and academic references.
 
 ## Project structure
 
 ```
-examples/           Sample results you can feed into feral compare/evaluate
+examples/           Sample results you can feed into porchbench compare/evaluate
 results/            Run outputs (JSON, gitignored)
 scorecards/         Evaluation scorecards (JSON, gitignored)
-src/feral/          Python package
+src/porchbench/          Python package
   cli.py            CLI entry point (typer + rich + beaupy pickers)
   interactive.py    Interactive model/suite/result pickers
   assets.py         Asset resolver: cwd overrides → packaged defaults
@@ -166,9 +166,9 @@ src/feral/          Python package
 
 ## Documentation
 
-- [METHODOLOGY.md](https://github.com/mmdevelops/feral/blob/main/docs/reference/METHODOLOGY.md) — statistical framework, evaluation methods, debiasing, reproducibility standards
-- [CHANGELOG.md](https://github.com/mmdevelops/feral/blob/main/CHANGELOG.md) — release notes and known limitations
-- [docs/skills/](https://github.com/mmdevelops/feral/tree/main/docs/skills) — Claude Code skill templates for using your subscription as an evaluation backend
+- [METHODOLOGY.md](https://github.com/mmdevelops/porchbench/blob/main/docs/reference/METHODOLOGY.md) — statistical framework, evaluation methods, debiasing, reproducibility standards
+- [CHANGELOG.md](https://github.com/mmdevelops/porchbench/blob/main/CHANGELOG.md) — release notes and known limitations
+- [docs/skills/](https://github.com/mmdevelops/porchbench/tree/main/docs/skills) — Claude Code skill templates for using your subscription as an evaluation backend
 
 ## Configuration
 
@@ -185,15 +185,15 @@ Defaults work out of the box. To override them persistently, copy `.env.example`
 | `PORCHBENCH_EVAL_MODEL` | Judge model override (defaults differ per backend) |
 | `ANTHROPIC_API_KEY` | Required only when `PORCHBENCH_EVAL_BACKEND=api` |
 
-CLI flags always take precedence over env vars. See `feral <command> --help` for per-command overrides.
+CLI flags always take precedence over env vars. See `porchbench <command> --help` for per-command overrides.
 
 ## Troubleshooting
 
 **`Connection refused` or `cannot connect to Ollama`** — Ollama isn't running. Start it with `ollama serve` (or the Ollama desktop app) and retry. For a remote instance, set `OLLAMA_HOST=http://host:11434` or pass `--host`.
 
-**`model 'X' not found`** — pull it first: `ollama pull X`. `feral` does not auto-pull; this keeps runs reproducible.
+**`model 'X' not found`** — pull it first: `ollama pull X`. `porchbench` does not auto-pull; this keeps runs reproducible.
 
-**`feral: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install -e .` inside the project's venv, or invoke via `python -m feral.cli`.
+**`porchbench: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install -e .` inside the project's venv, or invoke via `python -m porchbench.cli`.
 
 **Interactive picker shows no options** — either Ollama has no pulled models (`ollama list` to check) or your `suites/` / `results/` directory is empty. You can always pass `--model` / `--suite` / `--result` explicitly.
 
@@ -209,4 +209,4 @@ CLI flags always take precedence over env vars. See `feral <command> --help` for
 
 ## License
 
-Apache 2.0 — see [LICENSE](https://github.com/mmdevelops/feral/blob/main/LICENSE) for details.
+Apache 2.0 — see [LICENSE](https://github.com/mmdevelops/porchbench/blob/main/LICENSE) for details.

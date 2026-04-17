@@ -1,6 +1,6 @@
 ---
 name: evaluate
-description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with feral compare and analysis tools. Use when the user wants to evaluate benchmark run results.
+description: Frontier-model evaluation of benchmark results. Scores each prompt response against category-specific rubrics with chain-of-thought reasoning. Outputs a scorecard JSON compatible with porchbench compare and analysis tools. Use when the user wants to evaluate benchmark run results.
 disable-model-invocation: true
 ---
 
@@ -26,7 +26,7 @@ Run the extraction command to produce a lightweight file with only the fields
 needed for scoring. This avoids repeated partial reads of a large result file.
 
 ```bash
-python -m feral eval-extract "$ARGUMENTS" --output .claude/eval-data.json
+python -m porchbench eval-extract "$ARGUMENTS" --output .claude/eval-data.json
 ```
 
 Then **read `.claude/eval-data.json`** to get:
@@ -40,7 +40,7 @@ need to read the original result file again during scoring.
 
 ### Step 2: Load rubrics
 
-Rubrics live under `src/feral/data/rubrics/` in the repo (and ship bundled
+Rubrics live under `src/porchbench/data/rubrics/` in the repo (and ship bundled
 with the installed wheel). A project-local `./rubrics/` directory, if present,
 overrides the packaged copies.
 
@@ -57,7 +57,7 @@ overrides the packaged copies.
 ### Step 3: Load calibration examples
 
 Load calibration examples from `calibration-examples.yaml` alongside the
-resolved rubric (i.e. `src/feral/data/rubrics/calibration-examples.yaml` for
+resolved rubric (i.e. `src/porchbench/data/rubrics/calibration-examples.yaml` for
 packaged runs, or `./rubrics/calibration-examples.yaml` for project-local) if it
 exists). Select the calibration set matching the rubric being used:
 - `coding` set → for coding-basics or coding-heavy suites
@@ -204,8 +204,8 @@ Run a short Python snippet:
 
 ```python
 python -c "
-from feral.evaluator import append_score
-from feral.schemas import PromptScore, CriterionScore
+from porchbench.evaluator import append_score
+from porchbench.schemas import PromptScore, CriterionScore
 append_score(PromptScore(
     prompt_id='<id>',
     criteria={
@@ -233,7 +233,7 @@ scores, loads the original result file for category/difficulty metadata,
 computes all aggregates, and writes the scorecard JSON:
 
 ```bash
-python -m feral eval-finalize "$ARGUMENTS" \
+python -m porchbench eval-finalize "$ARGUMENTS" \
     --scores .claude/eval-scores.jsonl \
     --evaluator "claude-code/claude-opus-4-6" \
     --rubric "<rubric description>"
