@@ -128,7 +128,7 @@ def run(
     ] = None,
     backend_name: Annotated[
         str,
-        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' (default) or 'openai-compat'."),
+        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' (default) or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -136,11 +136,11 @@ def run(
     ] = None,
     base_url: Annotated[
         Optional[str],
-        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+        typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
         Optional[str],
-        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
+        typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -314,11 +314,11 @@ def evaluate(
     ] = None,
     evaluator_model: Annotated[
         Optional[str],
-        typer.Option("--evaluator", "-e", envvar="FERAL_EVAL_MODEL", help="Model to use as judge. Defaults per backend: ollama=gemma4:e4b, api=claude-sonnet-4-6, claude-code=sonnet."),
+        typer.Option("--evaluator", "-e", envvar="PORCHBENCH_EVAL_MODEL", help="Model to use as judge. Defaults per backend: ollama=gemma4:e4b, api=claude-sonnet-4-6, claude-code=sonnet."),
     ] = None,
     backend: Annotated[
         str,
-        typer.Option("--backend", "-b", envvar="FERAL_EVAL_BACKEND", help="Evaluation backend: 'ollama' (default), 'api', or 'claude-code'."),
+        typer.Option("--backend", "-b", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: 'ollama' (default), 'api', or 'claude-code'."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -501,7 +501,7 @@ def discover_routes(
     ] = None,
     backend_name: Annotated[
         str,
-        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
+        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -509,11 +509,11 @@ def discover_routes(
     ] = None,
     base_url: Annotated[
         Optional[str],
-        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+        typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
         Optional[str],
-        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
+        typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -670,7 +670,7 @@ def profile(
     ] = None,
     backend_name: Annotated[
         str,
-        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
+        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -867,7 +867,7 @@ def overnight(
     ] = 3,
     backend_name: Annotated[
         str,
-        typer.Option("--backend", envvar="FERAL_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
+        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
         Optional[str],
@@ -875,11 +875,11 @@ def overnight(
     ] = None,
     base_url: Annotated[
         Optional[str],
-        typer.Option("--base-url", envvar="FERAL_BASE_URL", help="OpenAI-compat server URL."),
+        typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
         Optional[str],
-        typer.Option("--api-key", envvar="FERAL_API_KEY", help="API key for OpenAI-compat servers."),
+        typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -914,11 +914,11 @@ def overnight(
     ] = False,
     eval_backend: Annotated[
         str,
-        typer.Option("--eval-backend", envvar="FERAL_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
+        typer.Option("--eval-backend", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
     ] = "ollama",
     eval_model: Annotated[
         Optional[str],
-        typer.Option("--eval-model", envvar="FERAL_EVAL_MODEL", help="Judge model. Defaults per backend."),
+        typer.Option("--eval-model", envvar="PORCHBENCH_EVAL_MODEL", help="Judge model. Defaults per backend."),
     ] = None,
     rubric_path: Annotated[
         Optional[Path],

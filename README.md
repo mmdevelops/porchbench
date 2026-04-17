@@ -178,12 +178,12 @@ Defaults work out of the box. To override them persistently, copy `.env.example`
 |----------|---------|
 | `OLLAMA_HOST` | Ollama server URL (default `http://localhost:11434`) |
 | `OLLAMA_KV_CACHE_TYPE` | KV cache quantization passed through to Ollama (e.g. `q8_0`) |
-| `FERAL_BACKEND` | Inference backend for `feral run`: `ollama` (default) or `openai-compat` |
-| `FERAL_BASE_URL` | OpenAI-compatible server URL (when `FERAL_BACKEND=openai-compat`) |
-| `FERAL_API_KEY` | API key for the OpenAI-compatible server |
-| `FERAL_EVAL_BACKEND` | Judge backend: `ollama` (default), `api`, or `claude-code` |
-| `FERAL_EVAL_MODEL` | Judge model override (defaults differ per backend) |
-| `ANTHROPIC_API_KEY` | Required only when `FERAL_EVAL_BACKEND=api` |
+| `PORCHBENCH_BACKEND` | Inference backend for `porchbench run`: `ollama` (default) or `openai-compat` |
+| `PORCHBENCH_BASE_URL` | OpenAI-compatible server URL (when `PORCHBENCH_BACKEND=openai-compat`) |
+| `PORCHBENCH_API_KEY` | API key for the OpenAI-compatible server |
+| `PORCHBENCH_EVAL_BACKEND` | Judge backend: `ollama` (default), `api`, or `claude-code` |
+| `PORCHBENCH_EVAL_MODEL` | Judge model override (defaults differ per backend) |
+| `ANTHROPIC_API_KEY` | Required only when `PORCHBENCH_EVAL_BACKEND=api` |
 
 CLI flags always take precedence over env vars. See `feral <command> --help` for per-command overrides.
 
