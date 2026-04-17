@@ -15,9 +15,9 @@ from pathlib import Path
 
 from rich.console import Console
 
-from feral.assets import feral_version
-from feral.backend import InferenceBackend
-from feral.schemas import (
+from porchbench.assets import porchbench_version
+from porchbench.backend import InferenceBackend
+from porchbench.schemas import (
     BestRoute,
     DefaultComparison,
     Message,
@@ -40,7 +40,7 @@ from feral.schemas import (
     ToolUseMetricsData,
     compute_derived_metrics,
 )
-from feral.suite import resolve_messages, resolve_options
+from porchbench.suite import resolve_messages, resolve_options
 
 console = Console()
 
@@ -66,7 +66,7 @@ async def _run_tool_use_discovery_cell(
     backend: InferenceBackend,
 ) -> PromptResult:
     """Run a single tool-use prompt for routing discovery and package as PromptResult."""
-    from feral.tool_runner import run_tool_use_prompt
+    from porchbench.tool_runner import run_tool_use_prompt
 
     result = await run_tool_use_prompt(
         prompt=prompt,
@@ -138,7 +138,7 @@ async def run_discovery(
         model_info = await backend.get_model_info(model_name)
         _healthy, health_label = await backend.get_server_health()
 
-        from feral.schemas import SystemInfo
+        from porchbench.schemas import SystemInfo
         import platform
 
         run_meta = RunMetadata(
@@ -148,7 +148,7 @@ async def run_discovery(
                 ollama_version=health_label,
                 os=f"{platform.system()} {platform.release()}",
             ),
-            feral_version=feral_version(),
+            porchbench_version=porchbench_version(),
         )
 
         prompt_results: list[PromptResult] = []

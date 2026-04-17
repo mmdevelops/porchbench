@@ -2,14 +2,14 @@
 
 import pytest
 
-from feral.routing import (
+from porchbench.routing import (
     analyze_routes,
     build_routing_matrix,
     check_correctness,
     _find_best_cell,
     _parse_param_size,
 )
-from feral.schemas import (
+from porchbench.schemas import (
     Message,
     ModelDetails,
     ModelInfo,

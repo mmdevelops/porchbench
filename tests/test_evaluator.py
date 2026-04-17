@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from feral.evaluator import (
+from porchbench.evaluator import (
     ClaudeCodeEvalBackend,
     _extract_json,
     _extract_summary,
@@ -18,7 +18,7 @@ from feral.evaluator import (
     normalize_score,
     score_prompt,
 )
-from feral.schemas import (
+from porchbench.schemas import (
     Criterion,
     CriterionScore,
     Message,
@@ -89,7 +89,7 @@ class TestClaudeCodeEvalBackend:
         mock_proc.communicate.return_value = (b'{"criteria": {}}', b"")
         mock_proc.returncode = 0
 
-        with patch("feral.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+        with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             result = await backend.generate("Score this response")
 
         # Verify the command
@@ -116,7 +116,7 @@ class TestClaudeCodeEvalBackend:
         mock_proc.communicate.return_value = (b"", b"Error: rate limited")
         mock_proc.returncode = 1
 
-        with patch("feral.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
             with pytest.raises(RuntimeError, match="claude -p failed"):
                 await backend.generate("prompt")
 
@@ -129,7 +129,7 @@ class TestClaudeCodeEvalBackend:
         mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
-        with patch("feral.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
             with pytest.raises(RuntimeError, match="timed out"):
                 await backend.generate("prompt")
 
@@ -143,7 +143,7 @@ class TestClaudeCodeEvalBackend:
         mock_proc.communicate.return_value = (b"response", b"")
         mock_proc.returncode = 0
 
-        with patch("feral.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+        with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
             await backend.generate("prompt")
 
         args = mock_exec.call_args[0]
@@ -158,7 +158,7 @@ class TestClaudeCodeEvalBackend:
         mock_proc.communicate.return_value = ("résultat".encode("utf-8"), b"")
         mock_proc.returncode = 0
 
-        with patch("feral.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
+        with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await backend.generate("évaluer cette réponse")
 
         stdin_data = mock_proc.communicate.call_args[1]["input"]
@@ -359,8 +359,8 @@ class TestComputeAggregates:
 
 class TestExtractEvalData:
     def test_extracts_prompts_from_run_result(self, tmp_path):
-        from feral.evaluator import extract_eval_data
-        from feral.schemas import (
+        from porchbench.evaluator import extract_eval_data
+        from porchbench.schemas import (
             RunMetadata,
             RunResult,
             RunSummary,
@@ -396,8 +396,8 @@ class TestExtractEvalData:
         assert data.prompts[0].response_text == "print('hello world')"
 
     def test_counts_truncated(self, tmp_path):
-        from feral.evaluator import extract_eval_data
-        from feral.schemas import (
+        from porchbench.evaluator import extract_eval_data
+        from porchbench.schemas import (
             RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo,
             ResponseData, ResponseMessage,
         )
@@ -430,7 +430,7 @@ class TestExtractEvalData:
 
 class TestAppendAndLoadScores:
     def test_round_trip(self, tmp_path):
-        from feral.evaluator import append_score, load_scores
+        from porchbench.evaluator import append_score, load_scores
 
         scores_path = tmp_path / "scores.jsonl"
         s1 = PromptScore(
@@ -457,7 +457,7 @@ class TestAppendAndLoadScores:
         assert loaded[1].prompt_id == "p2"
 
     def test_creates_parent_dirs(self, tmp_path):
-        from feral.evaluator import append_score
+        from porchbench.evaluator import append_score
 
         scores_path = tmp_path / "deep" / "nested" / "scores.jsonl"
         s = PromptScore(prompt_id="p1", criteria={}, weighted_score=3.0, summary="ok")
@@ -467,8 +467,8 @@ class TestAppendAndLoadScores:
 
 class TestBuildScorecardFromScores:
     def test_produces_valid_scorecard(self, tmp_path):
-        from feral.evaluator import append_score, build_scorecard_from_scores
-        from feral.schemas import (
+        from porchbench.evaluator import append_score, build_scorecard_from_scores
+        from porchbench.schemas import (
             RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo,
         )
 

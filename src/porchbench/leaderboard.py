@@ -16,7 +16,7 @@ import pydantic
 from rich.console import Console
 from rich.table import Table
 
-from feral.schemas import Scorecard
+from porchbench.schemas import Scorecard
 
 console = Console()
 

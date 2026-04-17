@@ -13,9 +13,9 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from feral.metrics import describe, extract_tokens_per_second, summarize_run
-from feral.schemas import PromptResult, RunResult, Scorecard
-from feral.statistics import PairedTestResult, paired_comparison
+from porchbench.metrics import describe, extract_tokens_per_second, summarize_run
+from porchbench.schemas import PromptResult, RunResult, Scorecard
+from porchbench.statistics import PairedTestResult, paired_comparison
 
 console = Console()
 

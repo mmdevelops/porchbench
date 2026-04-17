@@ -6,7 +6,7 @@ This module builds the appropriate Validator instance from that spec.
 
 from __future__ import annotations
 
-from feral.sandbox.validators import (
+from porchbench.sandbox.validators import (
     CodeOutputValidator,
     CompositeValidator,
     ContentContainsValidator,

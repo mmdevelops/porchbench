@@ -1,4 +1,4 @@
-"""CLI entry point for feral.
+"""CLI entry point for porchbench.
 
 Uses typer for argument parsing and rich for terminal output.
 Loads .env from the working directory for persistent configuration.
@@ -27,20 +27,20 @@ from rich.progress import (
 )
 from rich.table import Table
 
-from feral.assets import (
+from porchbench.assets import (
     find_rubric,
     find_suite,
     resolve_rubric_dir,
     resolve_suite_dir,
 )
-from feral.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
-from feral.errors import UserError, load_json_model
-from feral.runner import run_suite
-from feral.suite import load_suite, make_suite_reference
-from feral.schemas import RunResult, Scorecard
+from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
+from porchbench.errors import UserError, load_json_model
+from porchbench.runner import run_suite
+from porchbench.suite import load_suite, make_suite_reference
+from porchbench.schemas import RunResult, Scorecard
 
 app = typer.Typer(
-    name="feral",
+    name="porchbench",
     help="Deterministic benchmarking of local LLMs.",
     no_args_is_help=True,
 )
@@ -168,15 +168,15 @@ def run(
 
     # Interactive selection when args omitted (model first, then suite)
     if models is None:
-        from feral.interactive import select_models
+        from porchbench.interactive import select_models
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
         models = select_models(backend)
     if suite_path is None:
-        from feral.interactive import select_suite
+        from porchbench.interactive import select_suite
         suite_path = select_suite()
     if interactive:
-        from feral.interactive import select_run_options
+        from porchbench.interactive import select_run_options
         opts = select_run_options(default_repeats=repeats)
         repeats = opts["repeats"]
         verbose = opts["verbose"]
@@ -342,7 +342,7 @@ def evaluate(
     ] = 120,
 ) -> None:
     """Score model responses for quality using an LLM-as-judge evaluator."""
-    from feral.evaluator import (
+    from porchbench.evaluator import (
         EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
         ClaudeCodeEvalBackend,
@@ -356,7 +356,7 @@ def evaluate(
 
     # Interactive selection when args omitted
     if result_path is None:
-        from feral.interactive import select_result
+        from porchbench.interactive import select_result
         result_path = select_result()
 
     # Resolve evaluator model: explicit --evaluator > env var > per-backend default
@@ -461,11 +461,11 @@ def compare(
     ] = None,
 ) -> None:
     """Compare metrics and scores across models side-by-side."""
-    from feral.compare import print_comparison_table
+    from porchbench.compare import print_comparison_table
 
     # Interactive selection when args omitted
     if result_paths is None:
-        from feral.interactive import select_results
+        from porchbench.interactive import select_results
         result_paths = select_results()
 
     runs = []
@@ -521,8 +521,8 @@ def discover_routes(
     ] = Path("results"),
 ) -> None:
     """Run all prompt x strategy x model combinations to map capabilities."""
-    from feral.interactive import select_models, select_suite
-    from feral.routing import count_discovery_runs, run_discovery
+    from porchbench.interactive import select_models, select_suite
+    from porchbench.routing import count_discovery_runs, run_discovery
 
     if suite_path is None:
         suite_path = select_suite()
@@ -591,11 +591,11 @@ def analyze_routes_cmd(
     ] = False,
 ) -> None:
     """Analyze discovery results to find optimal routing strategies."""
-    from feral.routing import analyze_routes
+    from porchbench.routing import analyze_routes
 
     # Interactive selection when args omitted
     if result_paths is None:
-        from feral.interactive import select_results
+        from porchbench.interactive import select_results
         result_paths = select_results()
 
     runs = []
@@ -610,7 +610,7 @@ def analyze_routes_cmd(
     if non_routing:
         names = ", ".join(r.metadata.run_id for r in non_routing)
         console.print(
-            f"[red]routes analyze requires results produced by `feral routes discover` "
+            f"[red]routes analyze requires results produced by `porchbench routes discover` "
             f"(prompts must carry a strategy tag). The following result files have no "
             f"routing strategies and cannot be analyzed: {names}[/red]"
         )
@@ -682,8 +682,8 @@ def profile(
     ] = Path("results"),
 ) -> None:
     """Measure GPU memory, model load times, and swap costs (Ollama only)."""
-    from feral.interactive import select_models
-    from feral.profiler import profile_system, write_profile, print_profile_summary
+    from porchbench.interactive import select_models
+    from porchbench.profiler import profile_system, write_profile, print_profile_summary
 
     if backend_name != "ollama":
         console.print(
@@ -734,7 +734,7 @@ def leaderboard(
     ] = False,
 ) -> None:
     """Rank scored models in a leaderboard table."""
-    from feral.leaderboard import (
+    from porchbench.leaderboard import (
         discover_scorecards,
         filter_comparable,
         group_scorecards,
@@ -752,19 +752,19 @@ def leaderboard(
     else:
         if not scorecard_dir.is_dir():
             console.print(f"[red]Scorecard directory not found: {scorecard_dir}[/red]")
-            console.print("  Run [bold]feral evaluate[/bold] on a run result first to produce a scorecard.")
+            console.print("  Run [bold]porchbench evaluate[/bold] on a run result first to produce a scorecard.")
             raise typer.Exit(code=1)
         scorecards = discover_scorecards(scorecard_dir, verbose=verbose)
 
     if not scorecards:
         console.print("[yellow]No scorecards found.[/yellow]")
-        console.print("  Run [bold]feral evaluate[/bold] on a run result first to produce a scorecard.")
+        console.print("  Run [bold]porchbench evaluate[/bold] on a run result first to produce a scorecard.")
         raise typer.Exit(code=1)
 
     # Interactive rubric group selection when multiple groups exist
     groups = group_scorecards(scorecards)
     if len(groups) > 1 and scorecard_paths is None:
-        from feral.interactive import select_rubric_group
+        from porchbench.interactive import select_rubric_group
         selected = select_rubric_group(groups)
     else:
         selected = scorecards
@@ -792,7 +792,7 @@ def eval_extract(
     only prompt text, response text, expected answers, and metadata. Used by
     the /evaluate skill to avoid repeated partial reads of large result files.
     """
-    from feral.evaluator import extract_eval_data
+    from porchbench.evaluator import extract_eval_data
 
     eval_data = extract_eval_data(result_path)
 
@@ -839,7 +839,7 @@ def eval_finalize(
     all aggregates (by-category, by-difficulty, normalized, contamination-
     filtered), and writes the final scorecard JSON.
     """
-    from feral.evaluator import build_scorecard_from_scores
+    from porchbench.evaluator import build_scorecard_from_scores
 
     path = build_scorecard_from_scores(
         scores_path=scores_path,
@@ -889,7 +889,7 @@ def overnight(
         Path | None,
         typer.Option(
             "--suite-dir",
-            help="Directory to auto-discover suites from. Defaults to ./suites if present, else the packaged suites bundled with feral.",
+            help="Directory to auto-discover suites from. Defaults to ./suites if present, else the packaged suites bundled with porchbench.",
         ),
     ] = None,
     do_profile: Annotated[
@@ -940,19 +940,19 @@ def overnight(
     """Queue multiple suites and models for unattended batch benchmarking."""
     import time as _time
 
-    from feral.overnight import (
+    from porchbench.overnight import (
         build_plan,
         execute_plan,
         print_plan,
         print_summary,
     )
-    from feral.suite import discover_suites
+    from porchbench.suite import discover_suites
 
     interactive = models is None or suite_paths is None
 
     # Interactive selection when args omitted
     if models is None:
-        from feral.interactive import select_models
+        from porchbench.interactive import select_models
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
         models = select_models(backend)
@@ -961,12 +961,12 @@ def overnight(
     if suite_paths:
         paths = [find_suite(p) for p in suite_paths]
     else:
-        from feral.interactive import select_suites
+        from porchbench.interactive import select_suites
         paths = select_suites(resolve_suite_dir(suite_dir))
 
     # Interactive options screen
     if interactive:
-        from feral.interactive import select_overnight_options
+        from porchbench.interactive import select_overnight_options
         opts = select_overnight_options(default_repeats=repeats)
         repeats = opts["repeats"]
         do_evaluate = opts["evaluate"]
@@ -1000,7 +1000,7 @@ def overnight(
         console.print("\n[red]Inference server not reachable. Aborting.[/red]")
         raise typer.Exit(code=1)
 
-    from feral.overnight import check_gpu_status
+    from porchbench.overnight import check_gpu_status
 
     with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
         gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
@@ -1020,7 +1020,7 @@ def overnight(
             console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
         else:
             console.rule("[bold]System Profile[/bold]")
-            from feral.profiler import profile_system, write_profile, print_profile_summary
+            from porchbench.profiler import profile_system, write_profile, print_profile_summary
 
             sys_profile = asyncio.run(profile_system(models, backend=backend))
             path = write_profile(sys_profile, output_dir)
@@ -1031,7 +1031,7 @@ def overnight(
     # 7. Build eval callback if --evaluate is set
     on_run_eval = None
     if do_evaluate:
-        from feral.evaluator import (
+        from porchbench.evaluator import (
             EVAL_BACKEND_DEFAULTS,
             AnthropicEvalBackend,
             ClaudeCodeEvalBackend,

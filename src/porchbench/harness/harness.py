@@ -15,13 +15,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from feral.backend import InferenceBackend
-from feral.sandbox.base import (
+from porchbench.backend import InferenceBackend
+from porchbench.sandbox.base import (
     ExecutionRequest,
     ExecutionResult,
     Sandbox,
 )
-from feral.schemas import ModelOptions
+from porchbench.schemas import ModelOptions
 
 
 @dataclass
@@ -75,7 +75,7 @@ def build_default_dispatch(sandbox: Sandbox) -> dict[str, Callable]:
             return f"Error: file not found: {path}"
 
     async def write_file(path: str = "", content: str = "") -> str:
-        from feral.sandbox.base import FileContent
+        from porchbench.sandbox.base import FileContent
         await sandbox.write_files([FileContent(path=path, content=content)])
         return f"File written: {path}"
 

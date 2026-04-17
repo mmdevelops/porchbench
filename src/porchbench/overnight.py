@@ -16,12 +16,12 @@ from typing import Callable
 from rich.console import Console
 from rich.table import Table
 
-from feral.backend import InferenceBackend, OllamaBackend
-from feral.profiler import detect_gpu
-from feral.runner import run_suite
-from feral.routing import count_discovery_runs, run_discovery
-from feral.schemas import RunResult, Suite, SuiteReference
-from feral.suite import discover_suites, load_suite, make_suite_reference
+from porchbench.backend import InferenceBackend, OllamaBackend
+from porchbench.profiler import detect_gpu
+from porchbench.runner import run_suite
+from porchbench.routing import count_discovery_runs, run_discovery
+from porchbench.schemas import RunResult, Suite, SuiteReference
+from porchbench.suite import discover_suites, load_suite, make_suite_reference
 
 console = Console()
 
@@ -156,7 +156,7 @@ async def check_gpu_status(backend: InferenceBackend, model: str) -> tuple[bool,
 
     # Warmup: 1-token inference to force model load (timeout prevents hanging)
     try:
-        from feral.schemas import ModelOptions
+        from porchbench.schemas import ModelOptions
 
         await asyncio.wait_for(
             backend.chat(

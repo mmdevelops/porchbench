@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from feral.overnight import (
+from porchbench.overnight import (
     classify_suite,
     build_plan,
     discover_suites,
@@ -16,7 +16,7 @@ from feral.overnight import (
     OvernightTask,
     OvernightResult,
 )
-from feral.schemas import (
+from porchbench.schemas import (
     Message,
     ModelOptions,
     Prompt,
@@ -90,8 +90,8 @@ class TestDiscoverSuites:
 
 
 class TestBuildPlan:
-    @patch("feral.overnight.load_suite")
-    @patch("feral.overnight.make_suite_reference")
+    @patch("porchbench.overnight.load_suite")
+    @patch("porchbench.overnight.make_suite_reference")
     def test_standard_suite_plan(self, mock_ref, mock_load):
         suite = _make_suite("coding", 10)
         mock_load.return_value = suite
@@ -105,8 +105,8 @@ class TestBuildPlan:
         assert task.repeats == 3
         assert task.run_count == 10 * 2 * 3  # prompts * models * repeats
 
-    @patch("feral.overnight.load_suite")
-    @patch("feral.overnight.make_suite_reference")
+    @patch("porchbench.overnight.load_suite")
+    @patch("porchbench.overnight.make_suite_reference")
     def test_discovery_suite_plan(self, mock_ref, mock_load):
         suite = _make_suite("routing", 20, strategies={
             "universal": Strategy(),
@@ -125,8 +125,8 @@ class TestBuildPlan:
         assert task.strategy_count == 3
         assert task.run_count == 20 * 3 * 1  # prompts * strategies * models
 
-    @patch("feral.overnight.load_suite")
-    @patch("feral.overnight.make_suite_reference")
+    @patch("porchbench.overnight.load_suite")
+    @patch("porchbench.overnight.make_suite_reference")
     def test_mixed_plan(self, mock_ref, mock_load):
         standard = _make_suite("coding", 10)
         discovery = _make_suite("routing", 5, strategies={"a": Strategy(), "b": Strategy()})

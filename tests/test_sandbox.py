@@ -2,8 +2,8 @@
 
 import pytest
 
-from feral.sandbox import SubprocessSandbox, SandboxConfig
-from feral.sandbox.base import ExecutionRequest, FileContent
+from porchbench.sandbox import SubprocessSandbox, SandboxConfig
+from porchbench.sandbox.base import ExecutionRequest, FileContent
 
 
 @pytest.fixture

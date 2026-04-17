@@ -12,8 +12,8 @@ import statistics
 from collections import defaultdict
 from dataclasses import dataclass
 
-from feral.schemas import PromptResult, RunResult
-from feral.statistics import ConfidenceInterval, auto_ci
+from porchbench.schemas import PromptResult, RunResult
+from porchbench.statistics import ConfidenceInterval, auto_ci
 
 
 @dataclass(frozen=True)

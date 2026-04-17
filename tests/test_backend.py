@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from feral.backend import ChatResult, InferenceBackend, OllamaBackend, OpenAICompatBackend, ToolCall
-from feral.schemas import ModelOptions, PromptMetrics
+from porchbench.backend import ChatResult, InferenceBackend, OllamaBackend, OpenAICompatBackend, ToolCall
+from porchbench.schemas import ModelOptions, PromptMetrics
 
 
 # ---------------------------------------------------------------------------

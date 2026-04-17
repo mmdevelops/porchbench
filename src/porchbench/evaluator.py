@@ -38,7 +38,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from feral.schemas import (
+from porchbench.schemas import (
     AggregateScores,
     CriterionScore,
     EvaluationMetadata,
@@ -81,7 +81,7 @@ class OllamaEvalBackend:
         self.host = host
 
     async def generate(self, prompt: str) -> str:
-        from feral.backend import OllamaBackend
+        from porchbench.backend import OllamaBackend
 
         backend = OllamaBackend(host=self.host)
         options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=8192)

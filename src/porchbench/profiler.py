@@ -19,8 +19,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from feral.backend import OllamaBackend
-from feral.schemas import (
+from porchbench.backend import OllamaBackend
+from porchbench.schemas import (
     CoexistenceTest,
     ModelProfile,
     SwapMeasurement,
@@ -110,7 +110,7 @@ def _detect_gpu_dxdiag() -> tuple[str, float | None]:
     import tempfile
     import time
 
-    tmp_path = os.path.join(tempfile.gettempdir(), "feral_dxdiag.txt")
+    tmp_path = os.path.join(tempfile.gettempdir(), "porchbench_dxdiag.txt")
 
     # Clean up stale file
     if os.path.exists(tmp_path):
@@ -327,7 +327,7 @@ async def profile_system(
 
 async def _profile_single_model(model_name: str, backend: OllamaBackend) -> ModelProfile:
     """Profile a single model: load time, inference throughput, VRAM usage."""
-    from feral.schemas import ModelOptions
+    from porchbench.schemas import ModelOptions
 
     messages = [{"role": "user", "content": BASELINE_PROMPT}]
     options = ModelOptions(temperature=0, seed=42, num_predict=256, num_ctx=4096)
@@ -366,7 +366,7 @@ async def _measure_swap_time(from_model: str, to_model: str, backend: OllamaBack
     Ensures from_model is loaded, then times a request to to_model
     (which forces the swap).
     """
-    from feral.schemas import ModelOptions
+    from porchbench.schemas import ModelOptions
 
     messages = [{"role": "user", "content": "Hi"}]
     options = ModelOptions(temperature=0, seed=42, num_predict=1, num_ctx=2048)

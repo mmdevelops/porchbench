@@ -14,8 +14,8 @@ import typer
 from beaupy import prompt, select, select_multiple
 from rich.console import Console
 
-from feral.backend import InferenceBackend
-from feral.suite import discover_suites
+from porchbench.backend import InferenceBackend
+from porchbench.suite import discover_suites
 
 console = Console()
 
@@ -65,7 +65,7 @@ def select_models(backend: InferenceBackend) -> list[str]:
 
 def select_suite(suite_dir: Path | None = None) -> Path:
     """Prompt user to pick a suite YAML file from the suite directory."""
-    from feral.assets import resolve_suite_dir
+    from porchbench.assets import resolve_suite_dir
 
     suite_dir = resolve_suite_dir(suite_dir)
     try:
@@ -91,7 +91,7 @@ def select_suite(suite_dir: Path | None = None) -> Path:
 
 def select_suites(suite_dir: Path | None = None) -> list[Path]:
     """Prompt user to pick one or more suite YAML files from the suite directory."""
-    from feral.assets import resolve_suite_dir
+    from porchbench.assets import resolve_suite_dir
 
     suite_dir = resolve_suite_dir(suite_dir)
     try:

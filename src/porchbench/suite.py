@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from feral.schemas import (
+from porchbench.schemas import (
     Message,
     ModelOptions,
     Prompt,
@@ -62,7 +62,7 @@ def _portable_suite_id(path: Path) -> str:
     Anything else → basename only. The sha256 in SuiteReference is the
     reproducibility anchor; this string is informational.
     """
-    from feral.assets import PACKAGED_SUITES_DIR
+    from porchbench.assets import PACKAGED_SUITES_DIR
 
     try:
         rel = path.resolve().relative_to(PACKAGED_SUITES_DIR.resolve())

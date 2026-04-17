@@ -9,11 +9,11 @@ Resolution order:
 2. Otherwise, look in `<cwd>/suites/<name>.yaml` (or `rubrics/`). This is the
    project-local override slot.
 3. Otherwise, fall back to the packaged default shipped inside
-   `feral.data.suites` / `feral.data.rubrics`.
+   `porchbench.data.suites` / `porchbench.data.rubrics`.
 
-This lets `pip install feral && feral run -s coding-basics` work from any
+This lets `pip install porchbench && porchbench run -s coding-basics` work from any
 directory, while developers editing YAML in the repo see their changes
-immediately (editable install exposes the live `src/feral/data/` tree).
+immediately (editable install exposes the live `src/porchbench/data/` tree).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ def _packaged_dir(subpkg: str) -> Path:
     Uses `as_file()` so zipimport installs also work; for normal on-disk
     wheels this is a zero-copy passthrough.
     """
-    traversable = importlib.resources.files(f"feral.data.{subpkg}")
+    traversable = importlib.resources.files(f"porchbench.data.{subpkg}")
     return Path(_resource_stack.enter_context(importlib.resources.as_file(traversable)))
 
 
@@ -97,7 +97,7 @@ def find_suite(name_or_path: str | Path) -> Path:
     """Resolve a suite reference to an existing YAML file.
 
     Accepts either a bare name (`coding-basics`) or an explicit path
-    (`./my-suite.yaml`, `src/feral/data/suites/coding-basics.yaml`).
+    (`./my-suite.yaml`, `src/porchbench/data/suites/coding-basics.yaml`).
     """
     return _find_asset(name_or_path, "suites", PACKAGED_SUITES_DIR)
 
@@ -136,14 +136,14 @@ def resolve_rubric_dir(override: Path | None = None) -> Path:
     return PACKAGED_RUBRICS_DIR
 
 
-def feral_version() -> str:
+def porchbench_version() -> str:
     """Return the installed package version for reproducibility metadata."""
     try:
-        return importlib.metadata.version("feral")
+        return importlib.metadata.version("porchbench")
     except importlib.metadata.PackageNotFoundError:
         try:
-            import feral
+            import porchbench
 
-            return getattr(feral, "__version__", "unknown")
+            return getattr(porchbench, "__version__", "unknown")
         except Exception:
             return "unknown"

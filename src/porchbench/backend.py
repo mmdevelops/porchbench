@@ -17,7 +17,7 @@ from typing import Any, Protocol, runtime_checkable
 import httpx
 from ollama import AsyncClient, ChatResponse
 
-from feral.schemas import (
+from porchbench.schemas import (
     ModelDetails,
     ModelInfo,
     ModelOptions,

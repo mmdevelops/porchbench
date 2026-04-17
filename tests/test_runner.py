@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from feral.harness.harness import HarnessResult, Outcome, ToolUseMetrics
-from feral.runner import _run_tool_use_prompt, find_completed_prompt_ids
-from feral.schemas import (
+from porchbench.harness.harness import HarnessResult, Outcome, ToolUseMetrics
+from porchbench.runner import _run_tool_use_prompt, find_completed_prompt_ids
+from porchbench.schemas import (
     Message,
     ModelInfo,
     ModelOptions,
@@ -74,7 +74,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "feral.tool_runner.run_tool_use_prompt",
+            "porchbench.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -105,7 +105,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "feral.tool_runner.run_tool_use_prompt",
+            "porchbench.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -128,7 +128,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "feral.tool_runner.run_tool_use_prompt",
+            "porchbench.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):
@@ -156,7 +156,7 @@ class TestToolUseDispatch:
         }
 
         with patch(
-            "feral.tool_runner.run_tool_use_prompt",
+            "porchbench.tool_runner.run_tool_use_prompt",
             new_callable=AsyncMock,
             return_value=mock_return,
         ):

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from feral.assets import (
+from porchbench.assets import (
     PACKAGED_RUBRICS_DIR,
     PACKAGED_SUITES_DIR,
-    feral_version,
+    porchbench_version,
     find_rubric,
     find_suite,
     is_pathlike,
@@ -180,11 +180,11 @@ class TestResolveRubricDir:
 
 
 # ---------------------------------------------------------------------------
-# feral_version
+# porchbench_version
 # ---------------------------------------------------------------------------
 
 
-def test_feral_version_returns_nonempty_string():
-    version = feral_version()
+def test_porchbench_version_returns_nonempty_string():
+    version = porchbench_version()
     assert isinstance(version, str)
     assert len(version) > 0

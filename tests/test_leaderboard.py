@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from feral.leaderboard import (
+from porchbench.leaderboard import (
     MISSING_CRITERION_RATIONALE,
     PARSE_FAIL_RATIONALE,
     _clean_overall,
@@ -17,7 +17,7 @@ from feral.leaderboard import (
     group_scorecards,
     load_scorecard,
 )
-from feral.schemas import (
+from porchbench.schemas import (
     AggregateScores,
     CriterionScore,
     EvaluationMetadata,

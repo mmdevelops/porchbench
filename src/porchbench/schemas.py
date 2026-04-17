@@ -153,7 +153,7 @@ class RunMetadata(BaseModel):
     system: SystemInfo = Field(default_factory=SystemInfo)
     repeat_index: int | None = None  # 1-based repeat number when using --repeats
     total_repeats: int | None = None
-    feral_version: str | None = None  # set at run time; None on pre-0.1 result files
+    porchbench_version: str | None = None  # set at run time; None on pre-0.1 result files
 
 
 class RequestData(BaseModel):

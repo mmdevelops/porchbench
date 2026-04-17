@@ -13,7 +13,7 @@ import json
 from io import StringIO
 from typing import Protocol
 
-from feral.sandbox.base import Sandbox
+from porchbench.sandbox.base import Sandbox
 
 
 class Validator(Protocol):
@@ -188,7 +188,7 @@ class CodeOutputValidator:
         self.test_code = test_code
 
     async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
-        from feral.sandbox.base import ExecutionRequest
+        from porchbench.sandbox.base import ExecutionRequest
 
         result = await sandbox.execute(
             ExecutionRequest(code=self.test_code, filename="_validate.py")

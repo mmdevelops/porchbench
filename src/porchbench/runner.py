@@ -25,9 +25,9 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from feral.assets import feral_version
-from feral.backend import InferenceBackend, OllamaBackend
-from feral.schemas import (
+from porchbench.assets import porchbench_version
+from porchbench.backend import InferenceBackend, OllamaBackend
+from porchbench.schemas import (
     Message,
     ModelInfo,
     ModelOptions,
@@ -45,7 +45,7 @@ from feral.schemas import (
     ToolUseMetricsData,
     compute_derived_metrics,
 )
-from feral.suite import resolve_messages, resolve_options
+from porchbench.suite import resolve_messages, resolve_options
 
 
 def find_completed_prompt_ids(
@@ -86,7 +86,7 @@ async def run_prompt(
     peak_vram: int | None = None
 
     if profile_vram and isinstance(backend, OllamaBackend):
-        from feral.profiler import measure_peak_vram
+        from porchbench.profiler import measure_peak_vram
 
         async with measure_peak_vram(backend, model) as sample:
             result = await backend.chat(
@@ -127,7 +127,7 @@ async def _run_tool_use_prompt(
     backend: InferenceBackend,
 ) -> PromptResult:
     """Dispatch a tool-use prompt through the sandbox harness and package the result."""
-    from feral.tool_runner import run_tool_use_prompt
+    from porchbench.tool_runner import run_tool_use_prompt
 
     result = await run_tool_use_prompt(
         prompt=prompt,
@@ -215,7 +215,7 @@ async def run_suite(
         system=system_info,
         repeat_index=repeat_index,
         total_repeats=total_repeats,
-        feral_version=feral_version(),
+        porchbench_version=porchbench_version(),
     )
 
     # Filter prompts if specific IDs requested

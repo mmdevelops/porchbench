@@ -2,7 +2,7 @@
 
 import pytest
 
-from feral.metrics import (
+from porchbench.metrics import (
     describe,
     extract_tokens_per_second,
     extract_time_to_first_token,
@@ -12,8 +12,8 @@ from feral.metrics import (
     group_by_difficulty,
     summarize_run,
 )
-from feral.evaluator import compute_aggregates, normalize_score
-from feral.schemas import (
+from porchbench.evaluator import compute_aggregates, normalize_score
+from porchbench.schemas import (
     CriterionScore,
     Message,
     ModelDetails,

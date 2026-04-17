@@ -2,7 +2,7 @@
 
 import pytest
 
-from feral.statistics import (
+from porchbench.statistics import (
     ConfidenceInterval,
     PairedTestResult,
     auto_ci,

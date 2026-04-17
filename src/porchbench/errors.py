@@ -49,10 +49,10 @@ def load_json_model(path: str | Path, model_cls: type[T], label: str) -> T:
         fields = _summarize_missing_fields(exc)
         if fields:
             raise UserError(
-                f"{path} doesn't look like a feral {label} file "
+                f"{path} doesn't look like a porchbench {label} file "
                 f"(missing or invalid: {fields})"
             )
-        raise UserError(f"{path} doesn't look like a feral {label} file")
+        raise UserError(f"{path} doesn't look like a porchbench {label} file")
 
 
 def _summarize_missing_fields(exc: pydantic.ValidationError) -> str:

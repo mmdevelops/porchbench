@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from feral.assets import find_suite
-from feral.schemas import Message, ModelOptions, Prompt, Strategy
-from feral.suite import (
+from porchbench.assets import find_suite
+from porchbench.schemas import Message, ModelOptions, Prompt, Strategy
+from porchbench.suite import (
     compute_suite_hash,
     load_suite,
     make_suite_reference,

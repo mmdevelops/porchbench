@@ -19,7 +19,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from feral.sandbox.base import (
+from porchbench.sandbox.base import (
     ExecutionRequest,
     ExecutionResult,
     FileContent,
@@ -54,7 +54,7 @@ class SubprocessSandbox(Sandbox):
 
     async def create(self, config: SandboxConfig) -> None:
         self._config = config
-        self._workdir = Path(tempfile.mkdtemp(prefix="feral_sandbox_"))
+        self._workdir = Path(tempfile.mkdtemp(prefix="porchbench_sandbox_"))
 
     async def execute(self, request: ExecutionRequest) -> ExecutionResult:
         config = self._config or SandboxConfig()
