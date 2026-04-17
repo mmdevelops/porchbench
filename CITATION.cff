@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use feral in academic work or published benchmarks, please cite it."
+title: "feral: Rigorous quality benchmarking for local LLMs"
+abstract: >-
+  feral is a Python framework for deterministic, reproducible benchmarking of
+  locally hosted large language models. It captures full run provenance (model
+  SHA, suite SHA, quantization, KV cache type, generation parameters), supports
+  LLM-as-judge scoring with debiasing and calibration, and produces paired
+  statistical comparisons (bootstrap confidence intervals, Cohen's d effect
+  sizes) across models and quantization levels.
+type: software
+authors:
+  - given-names: Michael
+    family-names: Miller
+    email: mmdevelops@gmail.com
+repository-code: "https://github.com/mmdevelops/feral"
+url: "https://github.com/mmdevelops/feral"
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-04-16
+keywords:
+  - large-language-models
+  - benchmarking
+  - llm-evaluation
+  - reproducibility
+  - ollama
+  - local-inference
