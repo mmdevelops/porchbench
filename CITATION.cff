@@ -6,7 +6,7 @@ abstract: >-
   locally hosted large language models. It captures full run provenance (model
   SHA, suite SHA, quantization, KV cache type, generation parameters), supports
   LLM-as-judge scoring with debiasing and calibration, and produces paired
-  statistical comparisons (bootstrap confidence intervals, Cohen's d effect
+  statistical comparisons (bootstrap confidence intervals, Cohen's dz effect
   sizes) across models and quantization levels.
 type: software
 authors:

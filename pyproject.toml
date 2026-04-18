@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "porchbench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Rigorous quality benchmarking for local LLMs with paired statistics, LLM-as-judge scoring, and reproducible runs."
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,6 +33,8 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: System :: Benchmark",
+    "Environment :: Console",
+    "Typing :: Typed",
 ]
 dependencies = [
     "ollama>=0.4",
@@ -63,6 +65,9 @@ dev = [
 
 [project.scripts]
 porchbench = "porchbench.cli:main"
+
+[tool.hatch.version]
+path = "src/porchbench/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/porchbench"]

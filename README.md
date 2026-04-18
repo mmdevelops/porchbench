@@ -22,7 +22,7 @@ Most local LLM benchmarks measure tokens/sec. Model cards report scores on stand
 
 ```bash
 # Install
-pip install -e .
+pip install porchbench
 
 # Pull a model if you haven't already
 ollama pull qwen2.5:3b
@@ -138,30 +138,33 @@ See [METHODOLOGY.md](https://github.com/mmdevelops/porchbench/blob/main/docs/ref
 ## Project structure
 
 ```
-examples/           Sample results you can feed into porchbench compare/evaluate
-results/            Run outputs (JSON, gitignored)
-scorecards/         Evaluation scorecards (JSON, gitignored)
-src/porchbench/          Python package
-  cli.py            CLI entry point (typer + rich + beaupy pickers)
-  interactive.py    Interactive model/suite/result pickers
-  assets.py         Asset resolver: cwd overrides → packaged defaults
-  backend.py        Inference backend abstraction (Ollama, OpenAI-compat)
-  runner.py         Async benchmark execution
-  suite.py          Suite + prompt loading and validation
-  evaluator.py      LLM-as-judge scoring with debiasing
-  routing.py        Routing discovery and analysis
-  profiler.py       Hardware and model profiling
-  compare.py        Side-by-side comparison rendering
-  leaderboard.py    Cross-scorecard ranking
-  overnight.py      Unattended multi-suite orchestration
-  metrics.py        Throughput and latency metrics
-  statistics.py     Bootstrap CIs, paired comparisons, effect sizes
-  schemas.py        Pydantic models for all I/O
-  sandbox/          Sandboxed code execution for tool-use suites
-  harness/          Prompt rendering and response parsing
-  data/             Bundled assets (shipped inside the wheel)
-    suites/         Benchmark prompt suites (YAML)
-    rubrics/        LLM-as-judge scoring rubrics
+examples/              Sample results you can feed into porchbench compare/evaluate
+results/               Run outputs (JSON, gitignored)
+scorecards/            Evaluation scorecards (JSON, gitignored)
+src/porchbench/        Python package
+  __main__.py          Entry point for `python -m porchbench`
+  cli.py               CLI entry point (typer + rich + beaupy pickers)
+  interactive.py       Interactive model/suite/result pickers
+  assets.py            Asset resolver: cwd overrides → packaged defaults
+  backend.py           Inference backend abstraction (Ollama, OpenAI-compat)
+  runner.py            Async benchmark execution
+  suite.py             Suite + prompt loading and validation
+  evaluator.py         LLM-as-judge scoring with debiasing
+  routing.py           Routing discovery and analysis
+  profiler.py          Hardware and model profiling
+  compare.py           Side-by-side comparison rendering
+  leaderboard.py       Cross-scorecard ranking
+  overnight.py         Unattended multi-suite orchestration
+  metrics.py           Throughput and latency metrics
+  statistics.py        Bootstrap CIs, paired comparisons, effect sizes
+  schemas.py           Pydantic models for all I/O
+  errors.py            Typed exception hierarchy
+  tool_runner.py       Tool-use prompt execution driver
+  sandbox/             Sandboxed code execution for tool-use suites
+  harness/             Prompt rendering and response parsing
+  data/                Bundled assets (shipped inside the wheel)
+    suites/            Benchmark prompt suites (YAML)
+    rubrics/           LLM-as-judge scoring rubrics
 ```
 
 ## Documentation
@@ -194,7 +197,7 @@ CLI flags always take precedence over env vars. See `porchbench <command> --help
 
 **`model 'X' not found`** — pull it first: `ollama pull X`. `porchbench` does not auto-pull; this keeps runs reproducible.
 
-**`porchbench: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install -e .` inside the project's venv, or invoke via `python -m porchbench.cli`.
+**`porchbench: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install porchbench` inside the active venv (or `pip install -e .` from a checkout), or invoke via `python -m porchbench`.
 
 **Interactive picker shows no options** — either Ollama has no pulled models (`ollama list` to check) or your `suites/` / `results/` directory is empty. You can always pass `--model` / `--suite` / `--result` explicitly.
 
@@ -206,7 +209,7 @@ CLI flags always take precedence over env vars. See `porchbench <command> --help
 
 - Python 3.11+
 - Ollama running locally (or specify `--host` for a remote instance)
-- For API-based evaluation: `pip install -e ".[api]"` (adds Anthropic SDK)
+- For API-based evaluation: `pip install "porchbench[api]"` (adds Anthropic SDK)
 
 ## License
 
