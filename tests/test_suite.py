@@ -1,12 +1,11 @@
 """Tests for suite loading, validation, and option merging."""
 
 import tempfile
-from pathlib import Path
 
 import pytest
 
 from porchbench.assets import find_suite
-from porchbench.schemas import Message, ModelOptions, Prompt, Strategy
+from porchbench.schemas import Message, ModelOptions, Prompt
 from porchbench.suite import (
     compute_suite_hash,
     load_suite,
@@ -14,7 +13,6 @@ from porchbench.suite import (
     resolve_messages,
     resolve_options,
 )
-
 
 # ---------------------------------------------------------------------------
 # Option merging

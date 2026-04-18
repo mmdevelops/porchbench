@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from rich.console import Console
 from rich.table import Table
 
 from porchbench.backend import InferenceBackend, OllamaBackend
 from porchbench.profiler import detect_gpu
+from porchbench.routing import run_discovery
 from porchbench.runner import run_suite
-from porchbench.routing import count_discovery_runs, run_discovery
-from porchbench.schemas import RunResult, Suite, SuiteReference
-from porchbench.suite import discover_suites, load_suite, make_suite_reference
+from porchbench.schemas import Suite, SuiteReference
+from porchbench.suite import load_suite, make_suite_reference
 
 console = Console()
 
@@ -166,8 +166,8 @@ async def check_gpu_status(backend: InferenceBackend, model: str) -> tuple[bool,
             ),
             timeout=120,
         )
-    except asyncio.TimeoutError:
-        return False, f"GPU check failed — warmup timed out after 120s"
+    except TimeoutError:
+        return False, "GPU check failed — warmup timed out after 120s"
     except Exception as exc:
         return False, f"GPU check failed — warmup error: {exc}"
 

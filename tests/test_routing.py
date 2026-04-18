@@ -3,11 +3,11 @@
 import pytest
 
 from porchbench.routing import (
+    _find_best_cell,
+    _parse_param_size,
     analyze_routes,
     build_routing_matrix,
     check_correctness,
-    _find_best_cell,
-    _parse_param_size,
 )
 from porchbench.schemas import (
     Message,
@@ -26,7 +26,6 @@ from porchbench.schemas import (
     SuiteReference,
     SystemInfo,
 )
-
 
 # ---------------------------------------------------------------------------
 # Correctness checking

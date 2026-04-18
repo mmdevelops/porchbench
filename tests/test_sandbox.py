@@ -2,7 +2,7 @@
 
 import pytest
 
-from porchbench.sandbox import SubprocessSandbox, SandboxConfig
+from porchbench.sandbox import SandboxConfig, SubprocessSandbox
 from porchbench.sandbox.base import ExecutionRequest, FileContent
 
 

@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from porchbench.schemas import (
     AggregateScores,
     Criterion,
+    CriterionScore,
     EvaluationMetadata,
     Message,
     ModelDetails,
@@ -15,7 +16,6 @@ from porchbench.schemas import (
     PromptMetrics,
     PromptResult,
     PromptScore,
-    CriterionScore,
     RequestData,
     ResponseData,
     ResponseMessage,
@@ -25,16 +25,15 @@ from porchbench.schemas import (
     RunResult,
     RunSummary,
     Scorecard,
+    Strategy,
     Suite,
     SuiteDefaults,
     SuiteMetadata,
     SuiteReference,
-    Strategy,
     SystemInfo,
     ToolUseMetricsData,
     compute_derived_metrics,
 )
-
 
 # ---------------------------------------------------------------------------
 # Suite schemas

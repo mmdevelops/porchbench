@@ -233,7 +233,7 @@ async def measure_peak_vram(
                 pass
             try:
                 await asyncio.wait_for(stop.wait(), timeout=poll_interval_s)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     task = asyncio.create_task(_poll())

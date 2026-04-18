@@ -7,23 +7,13 @@ Errors on individual prompts are captured without aborting the run.
 
 from __future__ import annotations
 
-import json
 import os
 import platform
 import time
-from datetime import datetime, timezone
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
 
 from porchbench.assets import porchbench_version
 from porchbench.backend import InferenceBackend, OllamaBackend
@@ -39,9 +29,9 @@ from porchbench.schemas import (
     RunMetadata,
     RunResult,
     RunSummary,
-    SystemInfo,
     Suite,
     SuiteReference,
+    SystemInfo,
     ToolUseMetricsData,
     compute_derived_metrics,
 )

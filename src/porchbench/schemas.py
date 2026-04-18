@@ -8,11 +8,10 @@ as optional fields so the validation layer accepts all suite types.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 # ---------------------------------------------------------------------------
 # Shared primitives
@@ -147,7 +146,7 @@ class SystemInfo(BaseModel):
 
 class RunMetadata(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     suite: SuiteReference
     model: ModelInfo
     system: SystemInfo = Field(default_factory=SystemInfo)
@@ -326,7 +325,7 @@ class EvaluationMetadata(BaseModel):
     run_id: str
     evaluator: str
     rubric: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     model_name: str | None = None
     suite_name: str | None = None
 
@@ -410,7 +409,7 @@ class RoutingVerdict(BaseModel):
 class RoutingAnalysis(BaseModel):
     """Complete routing analysis output. Serialized to results/ as JSON."""
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     models_tested: list[str]
     strategies_tested: list[str]
     headline: RoutingHeadline
@@ -450,7 +449,7 @@ class CoexistenceTest(BaseModel):
 class SystemProfile(BaseModel):
     """Complete system profile for routing cost estimation."""
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     gpu: str = ""
     vram_total_gb: float | None = None
     ollama_version: str = ""

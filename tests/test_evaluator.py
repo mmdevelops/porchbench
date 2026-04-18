@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +10,6 @@ import pytest
 from porchbench.evaluator import (
     ClaudeCodeEvalBackend,
     _extract_json,
-    _extract_summary,
     _parse_scoring_response,
     build_scoring_prompt,
     compute_aggregates,
@@ -32,7 +30,6 @@ from porchbench.schemas import (
     Rubric,
     RubricMetadata,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -125,7 +122,7 @@ class TestClaudeCodeEvalBackend:
         backend = ClaudeCodeEvalBackend(timeout_s=1)
 
         mock_proc = AsyncMock()
-        mock_proc.communicate.side_effect = asyncio.TimeoutError()
+        mock_proc.communicate.side_effect = TimeoutError()
         mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
@@ -155,14 +152,14 @@ class TestClaudeCodeEvalBackend:
         backend = ClaudeCodeEvalBackend()
 
         mock_proc = AsyncMock()
-        mock_proc.communicate.return_value = ("résultat".encode("utf-8"), b"")
+        mock_proc.communicate.return_value = ("résultat".encode(), b"")
         mock_proc.returncode = 0
 
         with patch("porchbench.evaluator.asyncio.create_subprocess_exec", return_value=mock_proc):
             result = await backend.generate("évaluer cette réponse")
 
         stdin_data = mock_proc.communicate.call_args[1]["input"]
-        assert stdin_data == "évaluer cette réponse".encode("utf-8")
+        assert stdin_data == "évaluer cette réponse".encode()
         assert result == "résultat"
 
 
@@ -361,11 +358,11 @@ class TestExtractEvalData:
     def test_extracts_prompts_from_run_result(self, tmp_path):
         from porchbench.evaluator import extract_eval_data
         from porchbench.schemas import (
+            ModelInfo,
             RunMetadata,
             RunResult,
             RunSummary,
             SuiteReference,
-            ModelInfo,
         )
 
         result = RunResult(
@@ -398,8 +395,13 @@ class TestExtractEvalData:
     def test_counts_truncated(self, tmp_path):
         from porchbench.evaluator import extract_eval_data
         from porchbench.schemas import (
-            RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo,
-            ResponseData, ResponseMessage,
+            ModelInfo,
+            ResponseData,
+            ResponseMessage,
+            RunMetadata,
+            RunResult,
+            RunSummary,
+            SuiteReference,
         )
 
         result = RunResult(
@@ -469,7 +471,11 @@ class TestBuildScorecardFromScores:
     def test_produces_valid_scorecard(self, tmp_path):
         from porchbench.evaluator import append_score, build_scorecard_from_scores
         from porchbench.schemas import (
-            RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo,
+            ModelInfo,
+            RunMetadata,
+            RunResult,
+            RunSummary,
+            SuiteReference,
         )
 
         # Write a result file

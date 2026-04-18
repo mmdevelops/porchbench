@@ -69,10 +69,17 @@ packages = ["src/porchbench"]
 
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# cli.py calls load_dotenv() before `import typer` so Typer sees .env-provided
+# envvar defaults (E402 waiver). Typer option definitions with help= strings
+# also blow past the line limit intentionally — keeping each option on one line
+# is easier to read than mechanical wraps (E501 waiver).
+"src/porchbench/cli.py" = ["E402", "E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

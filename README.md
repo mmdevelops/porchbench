@@ -184,6 +184,7 @@ Defaults work out of the box. To override them persistently, copy `.env.example`
 | `PORCHBENCH_EVAL_BACKEND` | Judge backend: `ollama` (default), `api`, or `claude-code` |
 | `PORCHBENCH_EVAL_MODEL` | Judge model override (defaults differ per backend) |
 | `ANTHROPIC_API_KEY` | Required only when `PORCHBENCH_EVAL_BACKEND=api` |
+| `PORCHBENCH_SEED` | RNG seed for bootstrap CIs in `porchbench compare` (default `42`). Override to probe sensitivity. |
 
 CLI flags always take precedence over env vars. See `porchbench <command> --help` for per-command overrides.
 

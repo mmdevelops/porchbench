@@ -12,9 +12,9 @@ from typing import Any
 
 from porchbench.backend import InferenceBackend
 from porchbench.harness import Harness, HarnessResult
-from porchbench.sandbox import SubprocessSandbox, SandboxConfig
+from porchbench.sandbox import SandboxConfig, SubprocessSandbox
 from porchbench.sandbox.base import FileContent
-from porchbench.sandbox.validator_dispatch import build_validator, _ResponseContainsValidator
+from porchbench.sandbox.validator_dispatch import _ResponseContainsValidator, build_validator
 from porchbench.schemas import (
     Message,
     ModelOptions,

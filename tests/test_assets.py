@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -10,14 +9,13 @@ import pytest
 from porchbench.assets import (
     PACKAGED_RUBRICS_DIR,
     PACKAGED_SUITES_DIR,
-    porchbench_version,
     find_rubric,
     find_suite,
     is_pathlike,
+    porchbench_version,
     resolve_rubric_dir,
     resolve_suite_dir,
 )
-
 
 # ---------------------------------------------------------------------------
 # Packaged defaults are reachable

@@ -2,17 +2,17 @@
 
 import pytest
 
+from porchbench.evaluator import compute_aggregates, normalize_score
 from porchbench.metrics import (
     describe,
-    extract_tokens_per_second,
     extract_time_to_first_token,
+    extract_tokens_per_second,
     extract_total_tokens,
     filter_contamination,
     group_by_category,
     group_by_difficulty,
     summarize_run,
 )
-from porchbench.evaluator import compute_aggregates, normalize_score
 from porchbench.schemas import (
     CriterionScore,
     Message,
@@ -31,7 +31,6 @@ from porchbench.schemas import (
     SuiteReference,
     SystemInfo,
 )
-
 
 # ---------------------------------------------------------------------------
 # Descriptive stats

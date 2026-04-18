@@ -136,16 +136,19 @@ def auto_ci(
     values: list[float],
     confidence: float = 0.95,
     bootstrap_threshold: int = 30,
+    seed: int | None = 42,
 ) -> ConfidenceInterval | None:
     """Choose the appropriate CI method based on sample size.
 
     Uses parametric t-CI for n >= bootstrap_threshold, bootstrap for smaller samples.
+    The seed is forwarded to the bootstrap path so the entire statistical output
+    remains reproducible under a caller-supplied RNG seed.
     """
     if len(values) < 2:
-        return bootstrap_ci(values, confidence) if values else None
+        return bootstrap_ci(values, confidence, seed=seed) if values else None
     if len(values) >= bootstrap_threshold:
         return parametric_ci(values, confidence)
-    return bootstrap_ci(values, confidence)
+    return bootstrap_ci(values, confidence, seed=seed)
 
 
 # ---------------------------------------------------------------------------
@@ -225,11 +228,13 @@ def paired_t_test(
     values_a: list[float],
     values_b: list[float],
     alpha: float = 0.05,
+    seed: int | None = 42,
 ) -> PairedTestResult | None:
     """Paired t-test for the difference between two matched samples.
 
     Requires n >= 2 paired observations; returns None if insufficient data.
     p_value and significant are None when df < 30 (see MIN_DF_FOR_T_PVALUE).
+    The seed is forwarded to the CI's bootstrap path for reproducibility.
     """
     if len(values_a) != len(values_b) or len(values_a) < 2:
         return None
@@ -254,7 +259,7 @@ def paired_t_test(
 
     significant = (p_value < alpha) if p_value is not None else None
     effect_size, magnitude = _cohens_d(differences)
-    ci = auto_ci(differences)
+    ci = auto_ci(differences, seed=seed)
 
     return PairedTestResult(
         test_name="paired_t",
@@ -289,11 +294,13 @@ def wilcoxon_signed_rank(
     values_a: list[float],
     values_b: list[float],
     alpha: float = 0.05,
+    seed: int | None = 42,
 ) -> PairedTestResult | None:
     """Wilcoxon signed-rank test for paired samples.
 
     Non-parametric alternative to paired t-test. Requires n >= 6 for
-    meaningful results. Returns None if insufficient data.
+    meaningful results. Returns None if insufficient data. The seed is
+    forwarded to the CI's bootstrap path for reproducibility.
     """
     if len(values_a) != len(values_b) or len(values_a) < 6:
         return None
@@ -313,7 +320,7 @@ def wilcoxon_signed_rank(
             significant=False,
             effect_size=0.0,
             effect_magnitude="negligible",
-            ci=auto_ci(differences),
+            ci=auto_ci(differences, seed=seed),
         )
 
     # Rank the absolute differences
@@ -355,7 +362,7 @@ def wilcoxon_signed_rank(
         significant=p_value < alpha,
         effect_size=effect_size,
         effect_magnitude=magnitude,
-        ci=auto_ci(differences),
+        ci=auto_ci(differences, seed=seed),
     )
 
 
@@ -363,15 +370,17 @@ def paired_comparison(
     values_a: list[float],
     values_b: list[float],
     alpha: float = 0.05,
+    seed: int | None = 42,
 ) -> PairedTestResult | None:
     """Run the appropriate paired test based on sample size.
 
     Uses paired t-test for n >= 2 and Wilcoxon for n >= 6 (prefers Wilcoxon
-    for small samples since it doesn't assume normality).
+    for small samples since it doesn't assume normality). The seed is
+    forwarded to the CI's bootstrap path for reproducibility.
     """
     n = len(values_a)
     if n != len(values_b) or n < 2:
         return None
     if n >= 6:
-        return wilcoxon_signed_rank(values_a, values_b, alpha)
-    return paired_t_test(values_a, values_b, alpha)
+        return wilcoxon_signed_rank(values_a, values_b, alpha, seed=seed)
+    return paired_t_test(values_a, values_b, alpha, seed=seed)

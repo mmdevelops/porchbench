@@ -12,13 +12,13 @@ into another's responsibility.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from porchbench.backend import InferenceBackend
 from porchbench.sandbox.base import (
     ExecutionRequest,
-    ExecutionResult,
     Sandbox,
 )
 from porchbench.schemas import ModelOptions
@@ -277,7 +277,6 @@ class Harness:
 
     async def _capture_outcome(self) -> Outcome:
         """Snapshot the sandbox state after the run."""
-        import os
         files: dict[str, dict] = {}
         if hasattr(self.sandbox, "workdir") and self.sandbox.workdir:
             workdir = self.sandbox.workdir

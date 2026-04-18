@@ -1,9 +1,5 @@
 """Tests for leaderboard ranking, rubric grouping, and parse failure detection."""
 
-import json
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
@@ -15,7 +11,6 @@ from porchbench.leaderboard import (
     _normalize_rubric,
     discover_scorecards,
     group_scorecards,
-    load_scorecard,
 )
 from porchbench.schemas import (
     AggregateScores,
@@ -24,7 +19,6 @@ from porchbench.schemas import (
     PromptScore,
     Scorecard,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

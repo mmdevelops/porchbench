@@ -138,8 +138,9 @@ async def run_discovery(
         model_info = await backend.get_model_info(model_name)
         _healthy, health_label = await backend.get_server_health()
 
-        from porchbench.schemas import SystemInfo
         import platform
+
+        from porchbench.schemas import SystemInfo
 
         run_meta = RunMetadata(
             suite=suite_ref,

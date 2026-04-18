@@ -7,13 +7,12 @@ are available, includes quality scores in the comparison.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
-from porchbench.metrics import describe, extract_tokens_per_second, summarize_run
+from porchbench.metrics import describe, extract_tokens_per_second
 from porchbench.schemas import PromptResult, RunResult, Scorecard
 from porchbench.statistics import PairedTestResult, paired_comparison
 
@@ -60,7 +59,11 @@ def align_results(runs: list[RunResult]) -> dict[str, list[PromptResult | None]]
     return aligned
 
 
-def print_comparison_table(runs: list[RunResult], scorecards: list[Scorecard | None] | None = None) -> None:
+def print_comparison_table(
+    runs: list[RunResult],
+    scorecards: list[Scorecard | None] | None = None,
+    seed: int | None = 42,
+) -> None:
     """Print a rich table comparing models across prompts.
 
     Shows tokens/sec and total tokens for each model on each prompt,
@@ -144,7 +147,7 @@ def print_comparison_table(runs: list[RunResult], scorecards: list[Scorecard | N
     # Tokens per second
     tps_row = ["Avg tok/s"]
     for run in runs:
-        tps = describe(extract_tokens_per_second(run.results))
+        tps = describe(extract_tokens_per_second(run.results), seed=seed)
         tps_row.append(f"{tps.mean:.1f}" if tps else "-")
     summary_table.add_row(*tps_row)
 
@@ -189,7 +192,9 @@ def print_comparison_table(runs: list[RunResult], scorecards: list[Scorecard | N
 
     # Paired statistical comparison (when exactly 2 models)
     if len(runs) == 2 and has_scores and len(score_lookups) == 2:
-        result = compare_models_paired(aligned, score_lookups[0], score_lookups[1])
+        result = compare_models_paired(
+            aligned, score_lookups[0], score_lookups[1], seed=seed
+        )
         if result:
             _print_paired_result(model_names[0], model_names[1], result)
 
@@ -198,10 +203,12 @@ def compare_models_paired(
     aligned: dict[str, list[PromptResult | None]],
     scores_a: dict[str, float],
     scores_b: dict[str, float],
+    seed: int | None = 42,
 ) -> PairedTestResult | None:
     """Run a paired statistical test on quality scores for two models.
 
-    Only includes prompts where both models have scores.
+    Only includes prompts where both models have scores. The seed is
+    forwarded to the CI's bootstrap path for reproducibility.
     """
     vals_a: list[float] = []
     vals_b: list[float] = []
@@ -212,7 +219,7 @@ def compare_models_paired(
 
     if len(vals_a) < 2:
         return None
-    return paired_comparison(vals_a, vals_b)
+    return paired_comparison(vals_a, vals_b, seed=seed)
 
 
 def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> None:

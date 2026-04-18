@@ -1,6 +1,5 @@
 """Tests for runner dispatch: tool-use prompt routing, result packaging, incremental discovery."""
 
-from dataclasses import field
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -178,7 +177,7 @@ def _write_run_result(tmp_path, suite_name, model_name, prompt_ids, error_ids=No
     results = []
     for pid in prompt_ids:
         if pid in error_ids:
-            done_reason = f"error: timeout"
+            done_reason = "error: timeout"
         else:
             done_reason = "stop"
         results.append(PromptResult(

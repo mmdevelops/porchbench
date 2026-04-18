@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from porchbench.overnight import (
-    classify_suite,
     build_plan,
-    discover_suites,
+    classify_suite,
     estimate_duration,
     format_estimate,
-    OvernightTask,
-    OvernightResult,
 )
 from porchbench.schemas import (
     Message,
@@ -25,6 +22,7 @@ from porchbench.schemas import (
     SuiteDefaults,
     SuiteMetadata,
 )
+from porchbench.suite import discover_suites
 
 
 def _make_suite(name: str, n_prompts: int, strategies: dict | None = None) -> Suite:

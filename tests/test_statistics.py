@@ -3,8 +3,6 @@
 import pytest
 
 from porchbench.statistics import (
-    ConfidenceInterval,
-    PairedTestResult,
     auto_ci,
     bootstrap_ci,
     paired_comparison,

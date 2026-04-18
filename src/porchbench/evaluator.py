@@ -42,12 +42,10 @@ from porchbench.schemas import (
     AggregateScores,
     CriterionScore,
     EvaluationMetadata,
-    Message,
     ModelOptions,
     PromptResult,
     PromptScore,
     Rubric,
-    RubricMetadata,
     RunResult,
     Scorecard,
 )
@@ -146,7 +144,7 @@ class ClaudeCodeEvalBackend:
                 proc.communicate(input=prompt.encode("utf-8")),
                 timeout=self.timeout_s,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             raise RuntimeError(
@@ -453,7 +451,7 @@ def _extract_json(text: str) -> str:
     # Strip markdown code fencing
     if cleaned.startswith("```"):
         lines = cleaned.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
+        lines = [line for line in lines if not line.strip().startswith("```")]
         cleaned = "\n".join(lines).strip()
 
     # Try to find JSON object if there's surrounding text

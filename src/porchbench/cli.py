@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 from dotenv import load_dotenv
 
@@ -36,8 +36,8 @@ from porchbench.assets import (
 from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from porchbench.errors import UserError, load_json_model
 from porchbench.runner import run_suite
-from porchbench.suite import load_suite, make_suite_reference
 from porchbench.schemas import RunResult, Scorecard
+from porchbench.suite import load_suite, make_suite_reference
 
 app = typer.Typer(
     name="porchbench",
@@ -115,15 +115,15 @@ def check_models_or_exit(
 @app.command()
 def run(
     suite_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--suite", "-s", help="Suite name (e.g. 'coding-basics') or path to a YAML file. Interactive picker if omitted."),
     ] = None,
     models: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--model", "-m", help="Model name(s). Repeat for multiple. Interactive picker if omitted."),
     ] = None,
     prompt_ids: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--prompt-id", "-p", help="Run only these prompt IDs."),
     ] = None,
     backend_name: Annotated[
@@ -131,15 +131,15 @@ def run(
         typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' (default) or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
     ] = None,
     base_url: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
@@ -305,15 +305,15 @@ def _print_summary(result) -> None:
 @app.command()
 def evaluate(
     result_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--result", "-r", help="Path to a run result JSON file. Interactive picker if omitted."),
     ] = None,
     rubric_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--rubric", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
     ] = None,
     evaluator_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--evaluator", "-e", envvar="PORCHBENCH_EVAL_MODEL", help="Model to use as judge. Defaults per backend: ollama=gemma4:e4b, api=claude-sonnet-4-6, claude-code=sonnet."),
     ] = None,
     backend: Annotated[
@@ -321,7 +321,7 @@ def evaluate(
         typer.Option("--backend", "-b", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: 'ollama' (default), 'api', or 'claude-code'."),
     ] = "ollama",
     host: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--host", "-H", help="Ollama server URL (for ollama backend)."),
     ] = None,
     output_dir: Annotated[
@@ -329,11 +329,11 @@ def evaluate(
         typer.Option("--output-dir", "-o", help="Directory for scorecard JSON files."),
     ] = Path("scorecards"),
     api_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--api-key", envvar="ANTHROPIC_API_KEY", help="Anthropic API key (for api backend)."),
     ] = None,
     rubric_dir: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--rubric-dir", help="Directory of category-specific rubrics (coding.yaml, reasoning.yaml, cross-domain.yaml)."),
     ] = None,
     eval_timeout: Annotated[
@@ -452,13 +452,21 @@ def evaluate(
 @app.command()
 def compare(
     result_paths: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Option("--result", "-r", help="Run result JSON files to compare. Interactive picker if omitted."),
     ] = None,
     scorecard_paths: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Option("--scorecard", help="Scorecard JSON files (same order as results)."),
     ] = None,
+    seed: Annotated[
+        int,
+        typer.Option(
+            "--seed",
+            envvar="PORCHBENCH_SEED",
+            help="RNG seed for bootstrap CIs. Fixed at 42 by default for reproducibility; override to probe sensitivity.",
+        ),
+    ] = 42,
 ) -> None:
     """Compare metrics and scores across models side-by-side."""
     from porchbench.compare import print_comparison_table
@@ -486,17 +494,17 @@ def compare(
                 console.print(f"[yellow]Warning: {exc}[/yellow]")
                 scorecards.append(None)
 
-    print_comparison_table(runs, scorecards)
+    print_comparison_table(runs, scorecards, seed=seed)
 
 
 @routes_app.command("discover")
 def discover_routes(
     suite_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--suite", "-s", help="Suite name (e.g. 'routing-discovery') or path to a YAML file. Interactive picker if omitted."),
     ] = None,
     models: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--model", "-m", help="Model name(s). Repeat for each. Interactive picker if omitted."),
     ] = None,
     backend_name: Annotated[
@@ -504,15 +512,15 @@ def discover_routes(
         typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
     ] = None,
     base_url: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
@@ -578,7 +586,7 @@ def discover_routes(
 @routes_app.command("analyze")
 def analyze_routes_cmd(
     result_paths: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Option("--result", "-r", help="Routing discovery result files. Interactive picker if omitted."),
     ] = None,
     output_dir: Annotated[
@@ -665,7 +673,7 @@ def analyze_routes_cmd(
 @app.command()
 def profile(
     models: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--model", "-m", help="Ollama model name(s) to profile. Interactive picker if omitted."),
     ] = None,
     backend_name: Annotated[
@@ -673,7 +681,7 @@ def profile(
         typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
     ] = "ollama",
     host: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
     ] = None,
     output_dir: Annotated[
@@ -683,7 +691,7 @@ def profile(
 ) -> None:
     """Measure GPU memory, model load times, and swap costs (Ollama only)."""
     from porchbench.interactive import select_models
-    from porchbench.profiler import profile_system, write_profile, print_profile_summary
+    from porchbench.profiler import print_profile_summary, profile_system, write_profile
 
     if backend_name != "ollama":
         console.print(
@@ -709,7 +717,7 @@ def profile(
 @app.command()
 def leaderboard(
     scorecard_paths: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Option("--scorecard", help="Scorecard JSON files. Repeat for each."),
     ] = None,
     scorecard_dir: Annotated[
@@ -782,7 +790,7 @@ def eval_extract(
         typer.Argument(help="Path to a run result JSON file."),
     ],
     output: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--output", "-o", help="Output path for extracted data JSON. Defaults to .claude/eval-data.json."),
     ] = None,
 ) -> None:
@@ -854,11 +862,11 @@ def eval_finalize(
 @app.command()
 def overnight(
     models: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option("--model", "-m", help="Model name(s). Repeat for multiple. Interactive picker if omitted."),
     ] = None,
     suite_paths: Annotated[
-        Optional[list[Path]],
+        list[Path] | None,
         typer.Option("--suite", "-s", help="Suite names or YAML paths. Repeat for multiple. Omit to auto-discover."),
     ] = None,
     repeats: Annotated[
@@ -870,15 +878,15 @@ def overnight(
         typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
     ] = "ollama",
     host: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
     ] = None,
     base_url: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
     ] = None,
     api_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
     ] = None,
     output_dir: Annotated[
@@ -917,15 +925,15 @@ def overnight(
         typer.Option("--eval-backend", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
     ] = "ollama",
     eval_model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--eval-model", envvar="PORCHBENCH_EVAL_MODEL", help="Judge model. Defaults per backend."),
     ] = None,
     rubric_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--rubric", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
     ] = None,
     rubric_dir: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--rubric-dir", help="Directory of category-specific rubrics."),
     ] = None,
     eval_timeout: Annotated[
@@ -946,7 +954,6 @@ def overnight(
         print_plan,
         print_summary,
     )
-    from porchbench.suite import discover_suites
 
     interactive = models is None or suite_paths is None
 
@@ -1020,7 +1027,7 @@ def overnight(
             console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
         else:
             console.rule("[bold]System Profile[/bold]")
-            from porchbench.profiler import profile_system, write_profile, print_profile_summary
+            from porchbench.profiler import print_profile_summary, profile_system, write_profile
 
             sys_profile = asyncio.run(profile_system(models, backend=backend))
             path = write_profile(sys_profile, output_dir)

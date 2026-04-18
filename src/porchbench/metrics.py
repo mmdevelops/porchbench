@@ -7,7 +7,6 @@ the runner. Used by compare.py and the CLI for analysis output.
 
 from __future__ import annotations
 
-import math
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass
@@ -42,11 +41,19 @@ class DescriptiveStats:
         return d
 
 
-def describe(values: list[float], compute_ci: bool = True) -> DescriptiveStats | None:
-    """Compute descriptive stats for a list of values. Returns None if empty."""
+def describe(
+    values: list[float],
+    compute_ci: bool = True,
+    seed: int | None = 42,
+) -> DescriptiveStats | None:
+    """Compute descriptive stats for a list of values. Returns None if empty.
+
+    The seed is forwarded to the bootstrap CI path (no effect on the parametric
+    path) so the full numeric output remains reproducible under a fixed seed.
+    """
     if not values:
         return None
-    ci = auto_ci(values) if compute_ci and len(values) >= 2 else None
+    ci = auto_ci(values, seed=seed) if compute_ci and len(values) >= 2 else None
     return DescriptiveStats(
         count=len(values),
         mean=statistics.mean(values),

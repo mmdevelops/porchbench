@@ -6,9 +6,14 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from porchbench.backend import ChatResult, InferenceBackend, OllamaBackend, OpenAICompatBackend, ToolCall
+from porchbench.backend import (
+    ChatResult,
+    InferenceBackend,
+    OllamaBackend,
+    OpenAICompatBackend,
+    ToolCall,
+)
 from porchbench.schemas import ModelOptions, PromptMetrics
-
 
 # ---------------------------------------------------------------------------
 # Helpers — fake Ollama response objects
