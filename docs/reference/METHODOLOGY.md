@@ -54,6 +54,17 @@ difference plus the Cohen's dz effect size carry the inference. The Wilcoxon
 signed-rank path uses its own asymptotic normal approximation of the W statistic,
 which is textbook-standard for n >= 10 and reasonable for n >= 6.
 
+**Bootstrap reproducibility.** The bootstrap resampler is seeded at `42` by default,
+so `porchbench compare` on identical inputs produces byte-identical `p_value`, CI
+bounds, and effect size across invocations. Override with `porchbench compare --seed N`
+or the `PORCHBENCH_SEED` environment variable to probe sensitivity: re-running with
+a handful of different seeds and confirming the CI bounds and Cohen's dz don't swing
+materially is a cheap check that the 10,000-resample bootstrap has converged for
+your data. At the default resample count the percentile CI is typically stable to
+four decimals across seeds; if it isn't, that's a signal the sample is too small
+or too skewed for percentile bootstrap and the effect size should carry more of
+the inference than the CI edges.
+
 *References: Wolfe (2025), "Applying Statistics to LLM Evaluations"; Artificial
 Analysis Intelligence Index v4.0 methodology*
 
