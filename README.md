@@ -195,6 +195,20 @@ Defaults work out of the box. Override any of these via shell export or a projec
 
 CLI flags always take precedence over env vars. See `porchbench <command> --help` for per-command overrides.
 
+## Platform support
+
+porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia-smi` first, then `rocm-smi`, with a graceful fallback via Ollama's `/api/ps`. No vendor-specific code path gates core functionality.
+
+**Validation status:**
+
+- **AMD ROCm (tested on RDNA 4, gfx1201):** actively developed and exercised here — see the ROCm note in Troubleshooting for a known gfx1201 workaround.
+- **NVIDIA (CUDA):** implemented and expected to work, but not validated by the author, who does not currently have an NVIDIA rig. Bug reports from NVIDIA users are especially welcome.
+- **Apple Silicon / CPU-only:** inherits Ollama's Metal/CPU backends; untested.
+
+**Verifying your setup:** run `porchbench doctor` to check Python, Ollama, GPU detection, VRAM sampler selection, and package install state. When filing a bug, attach `porchbench doctor --json` output for fast triage.
+
+**Shell completion:** run `porchbench --install-completion` to install tab completion for bash, zsh, fish, or PowerShell.
+
 ## Troubleshooting
 
 **`Connection refused` or `cannot connect to Ollama`** — Ollama isn't running. Start it with `ollama serve` (or the Ollama desktop app) and retry. For a remote instance, set `OLLAMA_HOST=http://host:11434` or pass `--host`.

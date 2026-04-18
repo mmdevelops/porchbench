@@ -2,9 +2,10 @@
 .claude/
 .codex/
 
-# GitHub config: track workflows (CI), ignore other personal bits by default
+# GitHub config: track workflows (CI) and issue templates, ignore other personal bits by default
 .github/*
 !.github/workflows/
+!.github/ISSUE_TEMPLATE/
 
 # Project internal
 docs/design/

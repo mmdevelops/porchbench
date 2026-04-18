@@ -1255,6 +1255,34 @@ def _run_post_phase_evaluation(
     console.print(f"\n[bold]{scored} scored, {failed} failed[/bold]")
 
 
+@app.command()
+def doctor(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Emit a machine-readable JSON report instead of styled text."),
+    ] = False,
+    host: Annotated[
+        str | None,
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama host to probe."),
+    ] = None,
+) -> None:
+    """Diagnose local environment: Python, Ollama, GPU, and package install state.
+
+    Exits 0 if required checks pass (warnings allowed), 1 otherwise.
+    Paste the `--json` output into bug reports for fast triage.
+    """
+    from porchbench.doctor import render_report, run_checks
+
+    report = run_checks(host=host)
+
+    if json_output:
+        typer.echo(report.to_json())
+    else:
+        render_report(report, console)
+
+    raise typer.Exit(code=0 if report.ok else 1)
+
+
 def main() -> None:
     """Entry point wrapper that turns Ctrl+C into a clean exit.
 

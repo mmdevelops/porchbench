@@ -1,0 +1,110 @@
+name: Bug report
+description: Report a defect in porchbench
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report.
+
+        **NVIDIA users especially:** porchbench's NVIDIA paths are implemented
+        but have not been validated by the author (no NVIDIA rig on hand), so
+        your report is unusually valuable. Please be thorough on the
+        environment details below.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What went wrong
+      description: A clear, concise description of the bug and what you were trying to do.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: |
+        Exact command(s) you ran, in order. Include flags, environment variables,
+        and any fixture files needed. A minimal repro helps the most.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: gpu_vendor
+    attributes:
+      label: GPU vendor
+      options:
+        - NVIDIA
+        - AMD
+        - Apple Silicon
+        - CPU-only
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: gpu_model
+    attributes:
+      label: GPU model
+      placeholder: "e.g. RTX 5090, Radeon AI Pro R9700, M3 Max"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and version
+      placeholder: "Windows 11 26100 / Ubuntu 24.04 / macOS 15.1"
+    validations:
+      required: true
+
+  - type: input
+    id: porchbench_version
+    attributes:
+      label: porchbench version
+      description: "Output of `pip show porchbench | grep Version`"
+    validations:
+      required: true
+
+  - type: input
+    id: ollama_version
+    attributes:
+      label: Ollama version
+      description: "Output of `ollama --version`"
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`porchbench doctor` output (if available)"
+      description: Paste the full output. Skip this field if the command isn't in your installed version.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Full error output or logs
+      description: Paste stderr/stdout verbatim. Long logs welcome — trim only obvious noise.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Additional context, hypotheses, workarounds you've tried.
+    validations:
+      required: false
