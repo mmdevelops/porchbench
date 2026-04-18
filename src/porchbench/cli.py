@@ -304,13 +304,13 @@ def _print_summary(result) -> None:
 
 @app.command()
 def evaluate(
-    result_path: Annotated[
-        Path | None,
-        typer.Option("--result", "-r", help="Path to a run result JSON file. Interactive picker if omitted."),
+    result_paths: Annotated[
+        list[Path] | None,
+        typer.Option("--result", "-r", help="Run result JSON file(s). Repeat for multiple. Interactive picker if omitted."),
     ] = None,
     rubric_path: Annotated[
         Path | None,
-        typer.Option("--rubric", help="Path to a rubric YAML file. Auto-resolved from run result if omitted."),
+        typer.Option("--rubric", help="Path to a rubric YAML file. Auto-resolved per-result from the suite hint if omitted."),
     ] = None,
     evaluator_model: Annotated[
         str | None,
@@ -340,8 +340,12 @@ def evaluate(
         int,
         typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
     ] = 120,
+    skip_scored: Annotated[
+        bool,
+        typer.Option("--skip-scored", help="Skip result files that already have a scorecard in output-dir (matched by run_id prefix)."),
+    ] = False,
 ) -> None:
-    """Score model responses for quality using an LLM-as-judge evaluator."""
+    """Score one or more model responses for quality using an LLM-as-judge evaluator."""
     from porchbench.evaluator import (
         EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
@@ -355,37 +359,15 @@ def evaluate(
     )
 
     # Interactive selection when args omitted
-    if result_path is None:
-        from porchbench.interactive import select_result
-        result_path = select_result()
+    if result_paths is None:
+        from porchbench.interactive import select_results
+        result_paths = select_results()
 
-    # Resolve evaluator model: explicit --evaluator > env var > per-backend default
+    # ---- one-time setup (shared across all results) ----
+
     if evaluator_model is None:
         evaluator_model = EVAL_BACKEND_DEFAULTS.get(backend, "gemma4:e4b")
 
-    # Load inputs
-    try:
-        run_result = load_json_model(result_path, RunResult, "run result")
-    except UserError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
-
-    # Resolve rubric: explicit --rubric > suite hint > default
-    if rubric_path is None:
-        suite_rubric_hint = run_result.run.suite.rubric
-        if suite_rubric_hint:
-            rubric_path = find_rubric(suite_rubric_hint)
-            console.print(f"Rubric (from suite): [bold]{rubric_path}[/bold]")
-        else:
-            rubric_path = find_rubric("default")
-
-    try:
-        rubric = load_rubric(rubric_path)
-    except Exception as exc:
-        console.print(f"[red]Failed to load rubric: {exc}[/red]")
-        raise typer.Exit(code=1)
-
-    # Load category-specific rubrics if directory provided
     rubrics_by_category = None
     if rubric_dir:
         try:
@@ -394,13 +376,6 @@ def evaluate(
         except Exception as exc:
             console.print(f"[yellow]Warning: could not load rubric dir: {exc}[/yellow]")
 
-    # Load calibration examples for few-shot priming
-    calibration_path = rubric_path.parent / "calibration-examples.yaml" if rubric_path else None
-    calibration_data = load_calibration_examples(calibration_path) if calibration_path else {}
-    if calibration_data:
-        console.print(f"Calibration: {', '.join(calibration_data.keys())}")
-
-    # Create backend
     if backend == "ollama":
         eval_backend = OllamaEvalBackend(model=evaluator_model, host=host)
         backend_label = f"ollama/{evaluator_model}"
@@ -418,35 +393,117 @@ def evaluate(
         console.print(f"[red]Unknown backend: {backend}. Use 'ollama', 'api', or 'claude-code'.[/red]")
         raise typer.Exit(code=1)
 
-    console.print(f"Run: [bold]{run_result.run.model.name}[/bold] ({run_result.run.id[:8]})")
-    console.print(f"Rubric: {rubric.rubric.name} v{rubric.rubric.version}")
+    is_batch = len(result_paths) > 1
     console.print(f"Evaluator: {backend_label}")
-    console.print(f"Prompts to score: {len(run_result.results)}")
-    console.print()
+    if is_batch:
+        console.print(f"Results to score: [bold]{len(result_paths)}[/bold]\n")
 
-    scorecard = asyncio.run(
-        evaluate_run(
-            run_result, rubric, eval_backend,
-            evaluator_label=backend_label,
-            rubrics_by_category=rubrics_by_category,
-            calibration_data=calibration_data or None,
-        )
-    )
+    # Cache rubric+calibration per resolved path so a shared rubric loads once
+    rubric_cache: dict[Path, tuple] = {}
 
-    path = write_scorecard(scorecard, output_dir)
-    console.print(f"\n[green]Scorecard written to {path}[/green]")
+    def resolve_rubric_for(run_result: RunResult) -> tuple:
+        rpath = rubric_path
+        if rpath is None:
+            hint = run_result.run.suite.rubric
+            rpath = find_rubric(hint) if hint else find_rubric("default")
+        if rpath in rubric_cache:
+            return rubric_cache[rpath]
+        loaded = load_rubric(rpath)
+        cal_file = rpath.parent / "calibration-examples.yaml"
+        cal = load_calibration_examples(cal_file) if cal_file.exists() else {}
+        rubric_cache[rpath] = (rpath, loaded, cal)
+        return rubric_cache[rpath]
 
-    # Print aggregate scores
-    agg = scorecard.aggregate
-    table = Table(title="Aggregate Scores", show_header=False, title_style="bold")
-    table.add_column("Metric", style="dim")
-    table.add_column("Value")
-    table.add_row("Overall", f"{agg.overall_weighted:.2f}")
-    for cat, score in agg.by_category.items():
-        table.add_row(f"  {cat}", f"{score:.2f}")
-    for diff, score in agg.by_difficulty.items():
-        table.add_row(f"  {diff}", f"{score:.2f}")
-    console.print(table)
+    # ---- per-result loop ----
+
+    summary: list[tuple[str, str, float | None]] = []  # (label, status, overall)
+
+    for idx, rp in enumerate(result_paths, 1):
+        prefix = f"[dim]({idx}/{len(result_paths)})[/dim] " if is_batch else ""
+        console.print(f"{prefix}[bold]{rp.name}[/bold]")
+
+        try:
+            run_result = load_json_model(rp, RunResult, "run result")
+        except UserError as exc:
+            console.print(f"  [red]load failed: {exc}[/red]")
+            summary.append((rp.name, "failed", None))
+            continue
+
+        run_label = f"{run_result.run.model.name} ({run_result.run.id[:8]})"
+
+        if skip_scored:
+            existing = list(output_dir.glob(f"*_{run_result.run.id[:8]}.json"))
+            if existing:
+                console.print(f"  [yellow]skipped (scorecard exists: {existing[0].name})[/yellow]")
+                summary.append((run_label, "skipped", None))
+                continue
+
+        try:
+            resolved_path, rubric, calibration_data = resolve_rubric_for(run_result)
+        except Exception as exc:
+            console.print(f"  [red]rubric resolution failed: {exc}[/red]")
+            summary.append((run_label, "failed", None))
+            continue
+
+        if not is_batch:
+            console.print(f"Run: [bold]{run_label}[/bold]")
+            console.print(f"Rubric: {rubric.rubric.name} v{rubric.rubric.version}")
+            console.print(f"Prompts to score: {len(run_result.results)}")
+            if calibration_data:
+                console.print(f"Calibration: {', '.join(calibration_data.keys())}")
+            console.print()
+
+        try:
+            scorecard = asyncio.run(
+                evaluate_run(
+                    run_result, rubric, eval_backend,
+                    evaluator_label=backend_label,
+                    rubrics_by_category=rubrics_by_category,
+                    calibration_data=calibration_data or None,
+                )
+            )
+            written = write_scorecard(scorecard, output_dir)
+        except Exception as exc:
+            console.print(f"  [red]evaluation failed: {exc}[/red]")
+            summary.append((run_label, "failed", None))
+            continue
+
+        overall = scorecard.aggregate.overall_weighted
+        summary.append((run_label, "scored", overall))
+
+        if is_batch:
+            console.print(f"  [green]scored — {overall:.2f} → {written.name}[/green]")
+        else:
+            console.print(f"\n[green]Scorecard written to {written}[/green]")
+            agg = scorecard.aggregate
+            table = Table(title="Aggregate Scores", show_header=False, title_style="bold")
+            table.add_column("Metric", style="dim")
+            table.add_column("Value")
+            table.add_row("Overall", f"{agg.overall_weighted:.2f}")
+            for cat, score in agg.by_category.items():
+                table.add_row(f"  {cat}", f"{score:.2f}")
+            for diff, score in agg.by_difficulty.items():
+                table.add_row(f"  {diff}", f"{score:.2f}")
+            console.print(table)
+
+    # ---- batch summary ----
+    if is_batch:
+        scored = sum(1 for _, s, _ in summary if s == "scored")
+        skipped = sum(1 for _, s, _ in summary if s == "skipped")
+        failed = sum(1 for _, s, _ in summary if s == "failed")
+
+        table = Table(title="Batch Evaluation Summary", title_style="bold")
+        table.add_column("Run")
+        table.add_column("Status")
+        table.add_column("Overall", justify="right")
+        for run_label, status, overall in summary:
+            overall_str = f"{overall:.2f}" if overall is not None else "—"
+            table.add_row(run_label, status, overall_str)
+        console.print()
+        console.print(table)
+        console.print(f"\n[bold]{scored} scored, {skipped} skipped, {failed} failed[/bold]")
+        if failed > 0:
+            raise typer.Exit(code=1)
 
 
 @app.command()

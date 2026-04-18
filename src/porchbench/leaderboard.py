@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pydantic
@@ -262,6 +263,97 @@ def _clean_overall(sc: Scorecard) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+# Model-level aggregation (collapses repeats into one row per model)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ModelRow:
+    """One model's aggregated view across any number of scorecards (repeats)."""
+
+    label: str
+    n: int
+    mean_overall: float
+    overall_range: float  # max - min; 0.0 when identical or n==1
+    mean_clean: float | None  # None when no repeat had parse failures
+    cat_means: dict[str, float] = field(default_factory=dict)
+    diff_means: dict[str, float] = field(default_factory=dict)
+    total_full_fail: int = 0
+    total_partial_fail: int = 0
+    pooled_prompt_means: dict[str, float] = field(default_factory=dict)
+
+
+def aggregate_by_model(
+    scorecards: list[Scorecard],
+    result_dir: Path | None = None,
+) -> list[ModelRow]:
+    """Group scorecards by model label and aggregate across repeats.
+
+    Multiple scorecards for the same model (e.g. from `overnight --repeats N`)
+    collapse into a single ModelRow with mean scores and a repeat count.
+    Per-prompt best/worst lookups pool scores by prompt_id across repeats and
+    average — so a prompt that was consistently easy for a model stays ranked
+    as "best" even if one judge call produced noise.
+    """
+    groups: dict[str, list[Scorecard]] = defaultdict(list)
+    for sc in scorecards:
+        groups[_model_label(sc, result_dir)].append(sc)
+
+    rows: list[ModelRow] = []
+    for label, group in groups.items():
+        overalls = [sc.aggregate.overall_weighted for sc in group]
+        mean_overall = sum(overalls) / len(overalls)
+        overall_range = max(overalls) - min(overalls) if len(overalls) > 1 else 0.0
+
+        cleans = [c for c in (_clean_overall(sc) for sc in group) if c is not None]
+        mean_clean = sum(cleans) / len(cleans) if cleans else None
+
+        cat_keys = {c for sc in group for c in sc.aggregate.by_category}
+        cat_means = {
+            cat: sum(
+                sc.aggregate.by_category[cat] for sc in group if cat in sc.aggregate.by_category
+            ) / sum(1 for sc in group if cat in sc.aggregate.by_category)
+            for cat in cat_keys
+        }
+
+        diff_keys = {d for sc in group for d in sc.aggregate.by_difficulty}
+        diff_means = {
+            diff: sum(
+                sc.aggregate.by_difficulty[diff] for sc in group if diff in sc.aggregate.by_difficulty
+            ) / sum(1 for sc in group if diff in sc.aggregate.by_difficulty)
+            for diff in diff_keys
+        }
+
+        total_full = 0
+        total_partial = 0
+        for sc in group:
+            full, partial = _count_parse_failures(sc)
+            total_full += full
+            total_partial += partial
+
+        prompt_scores: dict[str, list[float]] = defaultdict(list)
+        for sc in group:
+            for ps in sc.scores:
+                prompt_scores[ps.prompt_id].append(ps.weighted_score)
+        pooled = {pid: sum(vals) / len(vals) for pid, vals in prompt_scores.items()}
+
+        rows.append(ModelRow(
+            label=label,
+            n=len(group),
+            mean_overall=mean_overall,
+            overall_range=overall_range,
+            mean_clean=mean_clean,
+            cat_means=cat_means,
+            diff_means=diff_means,
+            total_full_fail=total_full,
+            total_partial_fail=total_partial,
+            pooled_prompt_means=pooled,
+        ))
+
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Display
 # ---------------------------------------------------------------------------
 
@@ -271,39 +363,40 @@ def print_leaderboard(
     top_n: int = 3,
     result_dir: Path | None = None,
 ) -> None:
-    """Print ranked leaderboard table and best/worst prompts per model."""
+    """Print ranked leaderboard table and best/worst prompts per model.
+
+    Multiple scorecards for the same model (e.g. from --repeats) collapse
+    into a single row with mean scores, a ±half-range spread indicator, and
+    an n=<count> badge.
+    """
     if not scorecards:
         console.print("[yellow]No comparable scorecards found.[/yellow]")
         return
 
-    # Sort by overall score descending
-    ranked = sorted(
-        scorecards, key=lambda sc: sc.aggregate.overall_weighted, reverse=True,
-    )
+    rows = aggregate_by_model(scorecards, result_dir)
+    rows.sort(key=lambda r: r.mean_overall, reverse=True)
 
-    rubric = ranked[0].evaluation.rubric
-    evaluators = sorted({sc.evaluation.evaluator for sc in ranked})
+    rubric = scorecards[0].evaluation.rubric
+    evaluators = sorted({sc.evaluation.evaluator for sc in scorecards})
     eval_label = (
         evaluators[0] if len(evaluators) == 1 else f"{len(evaluators)} evaluators"
     )
 
-    # Collect all category and difficulty keys across all scorecards
     all_categories: list[str] = []
     all_difficulties: list[str] = []
-    for sc in ranked:
-        for cat in sc.aggregate.by_category:
+    for row in rows:
+        for cat in row.cat_means:
             if cat not in all_categories:
                 all_categories.append(cat)
-        for diff in sc.aggregate.by_difficulty:
+        for diff in row.diff_means:
             if diff not in all_difficulties:
                 all_difficulties.append(diff)
 
-    # Check if any scorecard has parse failures (determines whether to show Flags column)
     has_any_failures = any(
-        _count_parse_failures(sc) != (0, 0) for sc in ranked
+        row.total_full_fail or row.total_partial_fail for row in rows
     )
+    has_any_repeats = any(row.n > 1 for row in rows)
 
-    # --- Main ranking table ---
     title = f"Leaderboard — {rubric}"
     table = Table(title=title, title_style="bold")
     table.add_column("#", style="dim", justify="right")
@@ -316,39 +409,45 @@ def print_leaderboard(
     for diff in all_difficulties:
         table.add_column(diff, justify="right")
 
-    for rank, sc in enumerate(ranked, 1):
-        agg = sc.aggregate
-        label = _model_label(sc, result_dir)
+    for rank, row in enumerate(rows, 1):
+        label = f"{row.label} (n={row.n})" if row.n > 1 else row.label
 
-        # Overall score with clean score annotation
-        clean = _clean_overall(sc)
-        if clean is not None:
-            overall_str = f"{agg.overall_weighted:.2f} ({clean:.2f} clean)"
-        else:
-            overall_str = f"{agg.overall_weighted:.2f}"
+        overall_parts = [f"{row.mean_overall:.2f}"]
+        if row.n > 1 and row.overall_range > 0:
+            overall_parts.append(f"±{row.overall_range / 2:.2f}")
+        if row.mean_clean is not None:
+            overall_parts.append(f"({row.mean_clean:.2f} clean)")
+        overall_str = " ".join(overall_parts)
 
-        row: list[str] = [str(rank), label, overall_str]
+        table_row: list[str] = [str(rank), label, overall_str]
 
         if has_any_failures:
-            full_fail, partial_fail = _count_parse_failures(sc)
             flags: list[str] = []
-            if full_fail:
-                flags.append(f"[red]{full_fail} parse fail[/red]")
-            if partial_fail:
-                flags.append(f"[yellow]{partial_fail} partial[/yellow]")
-            row.append(", ".join(flags) if flags else "[green]ok[/green]")
+            if row.total_full_fail:
+                flags.append(f"[red]{row.total_full_fail} parse fail[/red]")
+            if row.total_partial_fail:
+                flags.append(f"[yellow]{row.total_partial_fail} partial[/yellow]")
+            table_row.append(", ".join(flags) if flags else "[green]ok[/green]")
 
         for cat in all_categories:
-            val = agg.by_category.get(cat)
-            row.append(f"{val:.2f}" if val is not None else "-")
+            val = row.cat_means.get(cat)
+            table_row.append(f"{val:.2f}" if val is not None else "-")
         for diff in all_difficulties:
-            val = agg.by_difficulty.get(diff)
-            row.append(f"{val:.2f}" if val is not None else "-")
-        table.add_row(*row)
+            val = row.diff_means.get(diff)
+            table_row.append(f"{val:.2f}" if val is not None else "-")
+        table.add_row(*table_row)
 
     console.print(table)
-    console.print(f"  Evaluator: {eval_label}   Scorecards: {len(ranked)}")
+    console.print(
+        f"  Evaluator: {eval_label}   "
+        f"Models: {len(rows)}   Scorecards: {len(scorecards)}"
+    )
 
+    if has_any_repeats:
+        console.print(
+            "  [dim]n = scorecards per model; scores are means across repeats. "
+            "'±' shows half the range across repeats.[/dim]"
+        )
     if has_any_failures:
         console.print(
             "  [dim]Flags: 'parse fail' = evaluator returned invalid JSON "
@@ -358,7 +457,6 @@ def print_leaderboard(
 
     console.print()
 
-    # --- Best/worst prompts per model ---
     if top_n <= 0:
         return
 
@@ -367,22 +465,19 @@ def print_leaderboard(
     bw_table.add_column("Best", style="green")
     bw_table.add_column("Worst", style="red")
 
-    for sc in ranked:
-        if not sc.scores:
+    for row in rows:
+        if not row.pooled_prompt_means:
             continue
-        sorted_scores = sorted(
-            sc.scores, key=lambda s: s.weighted_score, reverse=True,
+        sorted_ids = sorted(
+            row.pooled_prompt_means.items(), key=lambda kv: kv[1], reverse=True,
         )
-        best = sorted_scores[:top_n]
-        worst = sorted_scores[-top_n:]
+        best = sorted_ids[:top_n]
+        worst = sorted_ids[-top_n:]
 
-        best_str = "\n".join(
-            f"{s.prompt_id} ({s.weighted_score:.2f})" for s in best
-        )
-        worst_str = "\n".join(
-            f"{s.prompt_id} ({s.weighted_score:.2f})" for s in worst
-        )
+        best_str = "\n".join(f"{pid} ({score:.2f})" for pid, score in best)
+        worst_str = "\n".join(f"{pid} ({score:.2f})" for pid, score in worst)
 
-        bw_table.add_row(_model_label(sc, result_dir), best_str, worst_str)
+        label = f"{row.label} (n={row.n})" if row.n > 1 else row.label
+        bw_table.add_row(label, best_str, worst_str)
 
     console.print(bw_table)
