@@ -177,7 +177,10 @@ def run(
         suite_path = select_suite()
     if interactive:
         from porchbench.interactive import select_run_options
-        opts = select_run_options(default_repeats=repeats)
+        opts = select_run_options(
+            default_repeats=repeats,
+            defaults={"verbose": verbose, "resume": resume, "profile_vram": profile_vram},
+        )
         repeats = opts["repeats"]
         verbose = opts["verbose"]
         resume = opts["resume"]
@@ -1031,7 +1034,16 @@ def overnight(
     # Interactive options screen
     if interactive:
         from porchbench.interactive import select_overnight_options
-        opts = select_overnight_options(default_repeats=repeats)
+        opts = select_overnight_options(
+            default_repeats=repeats,
+            defaults={
+                "evaluate": do_evaluate,
+                "profile": do_profile,
+                "profile_vram": profile_vram,
+                "resume": resume,
+                "verbose": verbose,
+            },
+        )
         repeats = opts["repeats"]
         do_evaluate = opts["evaluate"]
         do_profile = opts["profile"]

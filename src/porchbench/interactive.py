@@ -248,28 +248,41 @@ def _prompt_repeats(default: int) -> int:
     return value
 
 
-def _prompt_toggles(toggles: list[tuple[str, str]]) -> dict[str, bool]:
-    """Show a multi-select of toggle options, return map of key -> enabled."""
+def _prompt_toggles(
+    toggles: list[tuple[str, str]],
+    defaults: dict[str, bool] | None = None,
+) -> dict[str, bool]:
+    """Show a multi-select of toggle options, return map of key -> enabled.
+
+    When `defaults` maps a toggle key to True, that option is pre-ticked so CLI
+    flags the user already passed survive the interactive picker.
+    """
     labels = [label for label, _ in toggles]
+    ticked = [
+        idx for idx, (_, key) in enumerate(toggles)
+        if defaults and defaults.get(key)
+    ]
     console.print("[bold]Options[/bold] (space to toggle, enter to confirm):")
-    selected = select_multiple(options=labels)
+    selected = select_multiple(options=labels, ticked_indices=ticked)
     selected_set = set(selected)
     return {key: label in selected_set for label, key in toggles}
 
 
 def select_run_options(
     default_repeats: int = 1,
+    defaults: dict[str, bool] | None = None,
 ) -> dict:
     """Interactive options screen for the run command."""
     repeats = _prompt_repeats(default_repeats)
-    toggles = _prompt_toggles(_RUN_TOGGLES)
+    toggles = _prompt_toggles(_RUN_TOGGLES, defaults=defaults)
     return {"repeats": repeats, **toggles}
 
 
 def select_overnight_options(
     default_repeats: int = 3,
+    defaults: dict[str, bool] | None = None,
 ) -> dict:
     """Interactive options screen for the overnight command."""
     repeats = _prompt_repeats(default_repeats)
-    toggles = _prompt_toggles(_OVERNIGHT_TOGGLES)
+    toggles = _prompt_toggles(_OVERNIGHT_TOGGLES, defaults=defaults)
     return {"repeats": repeats, **toggles}
