@@ -8,6 +8,7 @@ routing analysis cost model.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import platform
 import subprocess
@@ -31,13 +32,14 @@ from porchbench.schemas import (
 console = Console()
 
 
+@functools.lru_cache(maxsize=1)
 def detect_gpu() -> tuple[str, float | None]:
     """Detect GPU name and total VRAM.
 
     Returns (gpu_name, vram_total_gb). VRAM may be None if detection fails.
     Uses platform-specific methods: nvidia-smi, WMI (Windows), lspci (Linux).
-    Note: Windows WMI caps at 4GB for AdapterRAM; VRAM is estimated from
-    Ollama model loading when WMI reports an implausible value.
+    Cached at module level — GPU doesn't change within a process, and
+    dxdiag on Windows costs ~1-2s per call.
     """
     gpu_name = ""
     vram_gb = None

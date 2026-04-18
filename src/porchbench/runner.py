@@ -197,7 +197,7 @@ async def run_suite(
     """
     # Gather model and system metadata
     model_info = await _get_model_info_safe(model, backend)
-    system_info = await _get_system_info(backend)
+    system_info = await get_system_info(backend)
 
     run_meta = RunMetadata(
         suite=suite_ref,
@@ -337,12 +337,17 @@ async def _get_model_info_safe(model: str, backend: InferenceBackend) -> ModelIn
         return ModelInfo(name=model)
 
 
-async def _get_system_info(backend: InferenceBackend) -> SystemInfo:
-    """Gather system metadata for the run result."""
+async def get_system_info(backend: InferenceBackend) -> SystemInfo:
+    """Gather system metadata (ollama version, OS, GPU, VRAM, KV cache type) for a run."""
+    from porchbench.profiler import detect_gpu
+
     healthy, label = await backend.get_server_health()
     kv_cache_type = os.environ.get("OLLAMA_KV_CACHE_TYPE")
+    gpu_name, vram_gb = detect_gpu()
     return SystemInfo(
         ollama_version=label,
         os=f"{platform.system()} {platform.release()}",
+        gpu=gpu_name,
+        vram_gb=vram_gb,
         kv_cache_type=kv_cache_type,
     )

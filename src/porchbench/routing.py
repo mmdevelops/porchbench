@@ -136,19 +136,13 @@ async def run_discovery(
         console.print(f"\n[bold]Model: {model_name}[/bold]")
 
         model_info = await backend.get_model_info(model_name)
-        _healthy, health_label = await backend.get_server_health()
 
-        import platform
-
-        from porchbench.schemas import SystemInfo
+        from porchbench.runner import get_system_info
 
         run_meta = RunMetadata(
             suite=suite_ref,
             model=model_info,
-            system=SystemInfo(
-                ollama_version=health_label,
-                os=f"{platform.system()} {platform.release()}",
-            ),
+            system=await get_system_info(backend),
             porchbench_version=porchbench_version(),
         )
 
