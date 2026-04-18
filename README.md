@@ -112,7 +112,7 @@ Queue up a full benchmark run before bed or work. porchbench auto-discovers suit
 porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
 ```
 
-Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs. Add `--evaluate` to chain LLM-as-judge scoring after each run completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). With `--evaluate` you wake up to scorecards, not just raw results.
+Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs. Add `--evaluate` to chain LLM-as-judge scoring as a single post-phase after all inference completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). Running eval as a post-phase keeps the judge model loaded once for the whole batch instead of swapping between target and judge on every run. With `--evaluate` you wake up to scorecards, not just raw results.
 
 ## Benchmark suites
 
