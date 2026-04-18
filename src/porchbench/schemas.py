@@ -278,6 +278,8 @@ class Criterion(BaseModel):
 
 
 class Rubric(BaseModel):
+    """Weighted scoring criteria for LLM-as-judge evaluation, loaded from rubrics/{name}.yaml."""
+
     rubric: RubricMetadata
     criteria: list[Criterion]
 

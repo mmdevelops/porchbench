@@ -32,6 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
     "Topic :: System :: Benchmark",
     "Environment :: Console",
     "Typing :: Typed",
@@ -71,6 +72,11 @@ path = "src/porchbench/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/porchbench"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".github/",
+]
 
 [tool.ruff]
 target-version = "py311"

@@ -82,8 +82,10 @@ Pass `--strict` to require the same evaluator model, not just the same rubric.
 
 Does adapting your prompt strategy to model size actually help?
 
+A **strategy** is a system-message wrapper defined in the suite YAML (e.g. `cot` prepends "Think step by step", `direct` prepends "Respond with only the final answer"). The `routing-discovery` suite ships with five: `universal`, `brevity`, `direct`, `cot`, `structured`. Discovery runs every prompt through every strategy so `analyze` can find cases where a smaller model paired with the right strategy beats a larger model's default.
+
 ```bash
-# Run every prompt x strategy x model combination
+# Run every prompt x strategy combination against the selected models
 porchbench routes discover \
   --suite routing-discovery \
   --model qwen2.5:3b --model qwen2.5:7b
@@ -110,7 +112,7 @@ Queue up a full benchmark run before bed or work. porchbench auto-discovers suit
 porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
 ```
 
-Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs.
+Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs. Add `--evaluate` to chain LLM-as-judge scoring after each run completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). With `--evaluate` you wake up to scorecards, not just raw results.
 
 ## Benchmark suites
 
@@ -121,7 +123,9 @@ Suites ship bundled with the package and are referenced by name:
 | `coding-basics` | 28 | Implementation quality across 3 difficulty tiers — not just "does it compile" but design, idiom, edge-case handling |
 | `cross-domain` | 22 | Science problems requiring both Python implementation and domain reasoning (security, biology, physics, math) |
 | `routing-discovery` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
-| `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state |
+| `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state. Ships 4 tool-planning strategies (universal, cot, direct, structured) |
+
+**Which suites support `routes discover`?** Only suites that define a `strategies:` block in their YAML — currently `routing-discovery` and `tool-use`. The strategy set is chosen per-suite because different domains have different strategy × scale interactions worth measuring: CoT helps reasoning, a "numbered plan" preamble helps tool-use planning, neither would meaningfully differentiate factual recall. `coding-basics` and `cross-domain` intentionally stick to a single default prompt — they answer "how good is this model at X" rather than "which prompt strategy unlocks the smaller model."
 
 **Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `porchbench` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
 
@@ -175,7 +179,7 @@ src/porchbench/        Python package
 
 ## Configuration
 
-Defaults work out of the box. To override them persistently, copy `.env.example` to `.env` and edit:
+Defaults work out of the box. Override any of these via shell export or a project-local `.env` file next to where you run `porchbench`:
 
 | Variable | Purpose |
 |----------|---------|

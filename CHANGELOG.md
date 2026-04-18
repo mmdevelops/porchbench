@@ -27,6 +27,8 @@ Initial public release.
 - 260-test suite across backend, runner, evaluator, routing, sandbox, validators, schemas, statistics, and asset resolution.
 - Benchmark suites and rubrics ship bundled with the package under `src/porchbench/data/`. Reference them by name (`-s coding-basics`, `--rubric default`) from any directory — no repo checkout required. Drop a YAML in `./suites/` or `./rubrics/` to override with a project-local copy.
 - `RunMetadata.porchbench_version` records the installed package version on every new run for reproducibility.
+- Stable top-level library API: `from porchbench import RunResult, Scorecard, Suite, Rubric, RoutingAnalysis, SystemProfile` re-exports the Pydantic schemas for every serialized artifact the CLI produces. Intended entry point for programmatic consumers of result and scorecard JSON.
+- Package is typed (`py.typed` marker, `Typing :: Typed` classifier). Downstream type-checkers (mypy, pyright) pick up the Pydantic models directly without a separate stubs package.
 
 ### Known limitations
 - `profile` is Ollama-only; OpenAI-compatible backends report stub values.

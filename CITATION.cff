@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use porchbench in academic work or published benchmarks, please cite it."
-title: "porchbench: Rigorous quality benchmarking for local LLMs"
+title: "porchbench: Rigorous quality benchmarking for local LLMs with paired statistics, LLM-as-judge scoring, and reproducible runs"
 abstract: >-
   porchbench is a Python framework for deterministic, reproducible benchmarking of
   locally hosted large language models. It captures full run provenance (model

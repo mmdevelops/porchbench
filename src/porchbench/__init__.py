@@ -1,4 +1,10 @@
-"""porchbench: deterministic benchmarking of local LLMs via Ollama."""
+"""porchbench: reproducible quality benchmarking for local LLMs.
+
+Runs prompt suites against Ollama and OpenAI-compatible backends, scores
+responses via LLM-as-judge (local Ollama, Anthropic API, or Claude Code),
+and produces paired statistical comparisons across models and quantization
+levels.
+"""
 
 from porchbench.schemas import (
     Rubric,
@@ -18,5 +24,4 @@ __all__ = [
     "Scorecard",
     "Suite",
     "SystemProfile",
-    "__version__",
 ]
