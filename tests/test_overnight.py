@@ -166,3 +166,99 @@ class TestFormatEstimate:
 
     def test_zero(self):
         assert format_estimate(0) == "~0m"
+
+
+class TestCheckVramCofit:
+    """Pre-flight cofit check warns before users discover swap-thrash mid-run."""
+
+    @pytest.mark.asyncio
+    async def test_cofit_fits_in_vram(self):
+        """qwen2.5:3b (2 GB) + gemma4:e2b (2 GB) + 1.5 GB headroom < 16 GB."""
+        import asyncio as _asyncio
+        from porchbench.backend import OllamaBackend
+        from porchbench.overnight import check_vram_cofit
+
+        backend = MagicMock(spec=OllamaBackend)
+
+        async def _fake_size(_backend, model):
+            return {"qwen2.5:3b": 2 * 1024**3, "gemma4:e2b": 2 * 1024**3}[model]
+
+        with (
+            patch("porchbench.overnight.detect_gpu", return_value=("Test GPU", 16.0)),
+            patch("porchbench.overnight._get_ollama_model_size_bytes", side_effect=_fake_size),
+        ):
+            ok, msg = await check_vram_cofit(backend, ["qwen2.5:3b"], "gemma4:e2b")
+
+        assert ok is True
+        assert "fit in VRAM" in msg
+
+    @pytest.mark.asyncio
+    async def test_cofit_fails_on_16gb_with_qwen_and_gemma(self):
+        """qwen3:8b (6 GB) + gemma4:e4b (9 GB) + 1.5 GB headroom = 16.5 GB > 15.9 GB.
+        Reproduces the exact scenario the user hit that motivated this check."""
+        from porchbench.backend import OllamaBackend
+        from porchbench.overnight import check_vram_cofit
+
+        backend = MagicMock(spec=OllamaBackend)
+
+        async def _fake_size(_backend, model):
+            return {"qwen3:8b": 6 * 1024**3, "gemma4:e4b": 9 * 1024**3}[model]
+
+        with (
+            patch("porchbench.overnight.detect_gpu", return_value=("RX 9070 XT", 15.9)),
+            patch("porchbench.overnight._get_ollama_model_size_bytes", side_effect=_fake_size),
+        ):
+            ok, msg = await check_vram_cofit(backend, ["qwen3:8b"], "gemma4:e4b")
+
+        assert ok is False
+        assert "don't cofit" in msg
+        assert "claude-code" in msg or "api" in msg  # suggests an off-GPU mitigation
+
+    @pytest.mark.asyncio
+    async def test_picks_largest_target_for_worst_case(self):
+        """With multiple target models, check uses the largest against eval."""
+        from porchbench.backend import OllamaBackend
+        from porchbench.overnight import check_vram_cofit
+
+        backend = MagicMock(spec=OllamaBackend)
+
+        async def _fake_size(_backend, model):
+            return {
+                "small:3b": 2 * 1024**3,
+                "big:14b": 9 * 1024**3,
+                "judge": 3 * 1024**3,
+            }[model]
+
+        with (
+            patch("porchbench.overnight.detect_gpu", return_value=("Test GPU", 12.0)),
+            patch("porchbench.overnight._get_ollama_model_size_bytes", side_effect=_fake_size),
+        ):
+            # big:14b (9) + judge (3) + 1.5 = 13.5 > 12.0 → fail
+            ok, msg = await check_vram_cofit(backend, ["small:3b", "big:14b"], "judge")
+
+        assert ok is False
+        assert "big:14b" in msg  # worst-case model is the one cited
+
+    @pytest.mark.asyncio
+    async def test_skips_when_vram_unknown(self):
+        from porchbench.backend import OllamaBackend
+        from porchbench.overnight import check_vram_cofit
+
+        backend = MagicMock(spec=OllamaBackend)
+
+        with patch("porchbench.overnight.detect_gpu", return_value=("Test GPU", None)):
+            ok, msg = await check_vram_cofit(backend, ["qwen2.5:3b"], "gemma4:e4b")
+
+        assert ok is True
+        assert "VRAM unknown" in msg
+
+    @pytest.mark.asyncio
+    async def test_skips_for_non_ollama_backend(self):
+        from porchbench.overnight import check_vram_cofit
+        from porchbench.backend import OpenAICompatBackend
+
+        backend = MagicMock(spec=OpenAICompatBackend)
+        ok, msg = await check_vram_cofit(backend, ["x"], "y")
+
+        assert ok is True
+        assert "not available" in msg

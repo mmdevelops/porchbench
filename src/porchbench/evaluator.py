@@ -651,6 +651,91 @@ def write_scorecard(scorecard: Scorecard, output_dir: str | Path = "scorecards")
     return path
 
 
+async def batch_evaluate_results(
+    result_paths: list[Path],
+    eval_backend: "EvalBackend",
+    backend_label: str,
+    output_dir: Path,
+    explicit_rubric_path: Path | None = None,
+    rubrics_by_category: dict[str, "Rubric"] | None = None,
+    skip_scored: bool = False,
+) -> list[tuple[str, str, float | None]]:
+    """Score N result files sequentially with one evaluator backend instance.
+
+    Shared orchestration used by the `evaluate` CLI batch mode and by
+    `overnight --evaluate`'s post-run phase. Rubric + calibration are cached
+    across results so a shared rubric only loads once.
+
+    Returns a list of (run_label, status, overall_score) tuples, one per input
+    path. Status is 'scored', 'skipped', or 'failed'. Errors on one result
+    don't abort the batch — they're reported and the next result proceeds.
+    """
+    from porchbench.assets import find_rubric
+    from porchbench.errors import UserError, load_json_model
+
+    rubric_cache: dict[Path, tuple[Path, Rubric, dict]] = {}
+
+    def resolve_for(run_result: RunResult) -> tuple[Path, Rubric, dict]:
+        rpath = explicit_rubric_path
+        if rpath is None:
+            hint = run_result.run.suite.rubric
+            rpath = find_rubric(hint) if hint else find_rubric("default")
+        if rpath not in rubric_cache:
+            loaded = load_rubric(rpath)
+            cal_file = rpath.parent / "calibration-examples.yaml"
+            cal = load_calibration_examples(cal_file) if cal_file.exists() else {}
+            rubric_cache[rpath] = (rpath, loaded, cal)
+        return rubric_cache[rpath]
+
+    summary: list[tuple[str, str, float | None]] = []
+
+    for idx, rp in enumerate(result_paths, 1):
+        prefix = f"({idx}/{len(result_paths)}) " if len(result_paths) > 1 else ""
+        console.print(f"{prefix}[bold]{rp.name}[/bold]")
+
+        try:
+            run_result = load_json_model(rp, RunResult, "run result")
+        except UserError as exc:
+            console.print(f"  [red]load failed: {exc}[/red]")
+            summary.append((rp.name, "failed", None))
+            continue
+
+        run_label = f"{run_result.run.model.name} ({run_result.run.id[:8]})"
+
+        if skip_scored:
+            existing = list(output_dir.glob(f"*_{run_result.run.id[:8]}.json"))
+            if existing:
+                console.print(f"  [yellow]skipped (scorecard exists: {existing[0].name})[/yellow]")
+                summary.append((run_label, "skipped", None))
+                continue
+
+        try:
+            _, rubric, calibration_data = resolve_for(run_result)
+        except Exception as exc:
+            console.print(f"  [red]rubric resolution failed: {exc}[/red]")
+            summary.append((run_label, "failed", None))
+            continue
+
+        try:
+            scorecard = await evaluate_run(
+                run_result, rubric, eval_backend,
+                evaluator_label=backend_label,
+                rubrics_by_category=rubrics_by_category,
+                calibration_data=calibration_data or None,
+            )
+            written = write_scorecard(scorecard, output_dir)
+        except Exception as exc:
+            console.print(f"  [red]evaluation failed: {exc}[/red]")
+            summary.append((run_label, "failed", None))
+            continue
+
+        overall = scorecard.aggregate.overall_weighted
+        console.print(f"  [green]scored — {overall:.2f} → {written.name}[/green]")
+        summary.append((run_label, "scored", overall))
+
+    return summary
+
+
 # ---------------------------------------------------------------------------
 # Claude Code /evaluate skill helpers
 #

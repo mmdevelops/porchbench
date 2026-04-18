@@ -58,7 +58,8 @@ class OvernightResult:
     success: bool
     error: str | None = None
     duration_s: float = 0.0
-    eval_score: float | None = None  # weighted aggregate from post-run evaluation
+    result_path: Path | None = None  # on-disk path to the RunResult JSON (successful standard runs only)
+    eval_score: float | None = None  # weighted aggregate from post-run evaluation (set later by post-run batch eval)
 
 
 # ---------------------------------------------------------------------------
@@ -186,6 +187,77 @@ async def check_gpu_status(backend: InferenceBackend, model: str) -> tuple[bool,
     return True, f"{gpu_label} detected (VRAM check not available for this backend)"
 
 
+async def _get_ollama_model_size_bytes(
+    backend: OllamaBackend, model: str,
+) -> int | None:
+    """Return on-disk size in bytes for an Ollama model, or None if unknown."""
+    from ollama import AsyncClient
+
+    try:
+        client = AsyncClient(host=backend.host)
+        listing = await client.list()
+        for m in listing.models:
+            m_name = getattr(m, "model", "") or ""
+            if m_name == model or m_name.startswith(f"{model}:") or model.startswith(m_name):
+                size = getattr(m, "size", None)
+                if isinstance(size, int) and size > 0:
+                    return size
+    except Exception:
+        pass
+    return None
+
+
+async def check_vram_cofit(
+    backend: InferenceBackend,
+    target_models: list[str],
+    eval_model: str,
+) -> tuple[bool, str]:
+    """Warn if target + eval model can't cofit in VRAM.
+
+    Returns (ok, message). `ok=False` is advisory only — the caller should
+    surface the warning but not block the run. Only meaningful on
+    OllamaBackend where we can look up disk sizes.
+    """
+    if not isinstance(backend, OllamaBackend):
+        return True, "cofit check not available for this backend"
+
+    _gpu_name, vram_gb = detect_gpu()
+    if not vram_gb:
+        return True, "VRAM unknown — skipping cofit check"
+
+    sizes_gb: dict[str, float] = {}
+    for m in [*target_models, eval_model]:
+        if m in sizes_gb:
+            continue
+        size_bytes = await _get_ollama_model_size_bytes(backend, m)
+        if size_bytes is None:
+            return True, f"could not determine size for {m} — skipping cofit check"
+        sizes_gb[m] = size_bytes / (1024**3)
+
+    eval_gb = sizes_gb[eval_model]
+    # Leave ~1 GB headroom for KV cache + compute graph on each side
+    HEADROOM_GB = 1.5
+
+    # Worst-case: largest target model + eval model + headroom must fit in VRAM
+    worst_target = max(target_models, key=lambda m: sizes_gb[m])
+    worst_target_gb = sizes_gb[worst_target]
+    combined = worst_target_gb + eval_gb + HEADROOM_GB
+
+    if combined <= vram_gb:
+        return True, (
+            f"target + eval fit in VRAM "
+            f"({worst_target_gb:.1f} + {eval_gb:.1f} GB + ~1.5 GB headroom ≤ {vram_gb:.1f} GB)"
+        )
+
+    return False, (
+        f"target + eval don't cofit ({worst_target}={worst_target_gb:.1f} GB + "
+        f"{eval_model}={eval_gb:.1f} GB + ~1.5 GB headroom = {combined:.1f} GB > "
+        f"{vram_gb:.1f} GB). Ollama will swap between models at eval time. "
+        f"Mitigations: --eval-backend claude-code / --eval-backend api (off-GPU judge); "
+        f"smaller --eval-model; or drop --evaluate and run `porchbench evaluate -r results/*.json` later."
+    )
+
+
 async def run_preflight(
     backend: InferenceBackend,
     models: list[str],
@@ -254,15 +326,17 @@ async def execute_plan(
     verbose: bool,
     on_task_start: Callable[[OvernightTask, str, int | None], None] | None = None,
     on_task_done: Callable[[OvernightResult], None] | None = None,
-    on_run_eval: Callable | None = None,
     profile_vram: bool = False,
 ) -> list[OvernightResult]:
     """Execute the overnight plan with error resilience.
 
-    When on_run_eval is provided, it is called after each successful standard
-    run with the RunResult. It should be an async callable returning a float
-    (the aggregate eval score) or None on failure.
+    Inference runs one model at a time to completion. Successful standard
+    runs record their on-disk `result_path` so a post-phase evaluator can
+    batch-score all results with a single judge model load, instead of
+    thrashing between target-model and judge-model on every task.
     """
+    from porchbench.runner import result_path_for
+
     results: list[OvernightResult] = []
 
     for task in plan:
@@ -323,6 +397,7 @@ async def execute_plan(
                         result = OvernightResult(
                             task=task, model=model, repeat=repeat_i,
                             success=True, duration_s=time.monotonic() - start,
+                            result_path=result_path_for(run_result, output_dir),
                         )
                     except KeyboardInterrupt:
                         raise
@@ -332,15 +407,6 @@ async def execute_plan(
                             success=False, error=str(exc),
                             duration_s=time.monotonic() - start,
                         )
-
-                    # Post-run evaluation (skip on failure or discovery)
-                    if on_run_eval and result.success and run_result is not None:
-                        try:
-                            result.eval_score = await on_run_eval(run_result)
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as exc:
-                            console.print(f"  [yellow]Eval failed: {exc}[/yellow]")
 
                     results.append(result)
                     if on_task_done:

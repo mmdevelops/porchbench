@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from porchbench.harness.harness import HarnessResult, Outcome, ToolUseMetrics
-from porchbench.runner import _run_tool_use_prompt, find_completed_prompt_ids
+from porchbench.runner import _run_tool_use_prompt, find_completed_prompt_ids, result_path_for
 from porchbench.schemas import (
     Message,
     ModelInfo,
@@ -251,3 +251,45 @@ class TestIncrementalDiscovery:
 
         completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
         assert completed == {"p1", "p2", "p3"}
+
+
+class TestResultPathFor:
+    """result_path_for must match the filename _write_result produces — overnight
+    relies on this to locate result files post-inference for batch evaluation."""
+
+    def _make_run_result(
+        self, model: str = "m", suite_name: str = "T", repeat: int | None = None,
+    ) -> RunResult:
+        from datetime import UTC, datetime
+        return RunResult(
+            run=RunMetadata(
+                timestamp=datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC),
+                suite=SuiteReference(name=suite_name, version="1.0", file="s.yaml", sha256="x"),
+                model=ModelInfo(name=model),
+                repeat_index=repeat,
+            ),
+            results=[],
+            summary=RunSummary(total_prompts=0, completed=0, failed=0, total_duration_s=0.0),
+        )
+
+    def test_deterministic_path(self, tmp_path):
+        from porchbench.runner import result_path_for
+        rr = self._make_run_result(model="qwen2.5:3b", suite_name="Coding Basics")
+        path = result_path_for(rr, tmp_path)
+        assert path == tmp_path / "2026-04-18T12-00-00_coding-basics_qwen2.5-3b.json"
+
+    def test_includes_repeat_suffix(self, tmp_path):
+        from porchbench.runner import result_path_for
+        rr = self._make_run_result(model="qwen2.5:3b", suite_name="Coding Basics", repeat=2)
+        path = result_path_for(rr, tmp_path)
+        assert path.name.endswith("_repeat-2.json")
+
+    def test_round_trips_with_writer(self, tmp_path):
+        """The path computed independently must equal the path _write_result wrote to.
+        This invariant is what lets overnight locate files without a return-value round-trip."""
+        from porchbench.runner import _write_result, result_path_for
+        rr = self._make_run_result(model="qwen2.5:3b", suite_name="Coding Basics")
+        written = _write_result(rr, tmp_path)
+        computed = result_path_for(rr, tmp_path)
+        assert written == computed
+        assert written.exists()

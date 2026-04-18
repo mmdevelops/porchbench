@@ -1076,12 +1076,22 @@ def overnight(
         console.print("\n[red]Inference server not reachable. Aborting.[/red]")
         raise typer.Exit(code=1)
 
-    from porchbench.overnight import check_gpu_status
+    from porchbench.overnight import check_gpu_status, check_vram_cofit
 
     with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
         gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
     status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
     console.print(f"  {status} GPU acceleration: {gpu_msg}")
+
+    # VRAM co-fit check — only meaningful when --evaluate will load a judge on the same GPU
+    if do_evaluate and eval_backend == "ollama":
+        from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
+        resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get("ollama", "gemma4:e4b")
+        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, resolved_eval_model))
+        if cofit_ok:
+            console.print(f"  [green]PASS[/green] VRAM cofit: {cofit_msg}")
+        else:
+            console.print(f"  [yellow]WARN[/yellow] VRAM cofit: {cofit_msg}")
 
     console.print()
 
@@ -1104,81 +1114,36 @@ def overnight(
             print_profile_summary(sys_profile)
             console.print()
 
-    # 7. Build eval callback if --evaluate is set
-    on_run_eval = None
+    # 7. Announce (but don't start) post-run evaluation
     if do_evaluate:
-        from porchbench.evaluator import (
-            EVAL_BACKEND_DEFAULTS,
-            AnthropicEvalBackend,
-            ClaudeCodeEvalBackend,
-            OllamaEvalBackend,
-            evaluate_run,
-            load_calibration_examples,
-            load_rubric,
-            load_rubric_dir,
-            write_scorecard,
+        console.print(
+            f"[bold]Post-run evaluation[/bold] will run after all inference completes "
+            f"([cyan]{eval_backend}/{eval_model or 'default'}[/cyan])."
         )
-
-        resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get(eval_backend, "gemma4:e4b")
-
-        if eval_backend == "ollama":
-            eval_be = OllamaEvalBackend(model=resolved_eval_model, host=host)
-        elif eval_backend == "api":
-            eval_be = AnthropicEvalBackend(model=resolved_eval_model)
-        elif eval_backend == "claude-code":
-            eval_be = ClaudeCodeEvalBackend(model=resolved_eval_model, timeout_s=eval_timeout)
-        else:
-            console.print(f"[red]Unknown eval backend: {eval_backend}[/red]")
-            raise typer.Exit(code=1)
-
-        eval_backend_label = f"{eval_backend}/{resolved_eval_model}"
-
-        # Pre-load category rubrics (falls through to packaged defaults if no override)
-        eval_rubrics_by_cat = load_rubric_dir(resolve_rubric_dir(rubric_dir))
-
-        console.print(f"[bold]Post-run evaluation:[/bold] {eval_backend_label}")
         console.print()
 
-        async def on_run_eval(run_result):
-            """Evaluate a completed run and write its scorecard."""
-            # Resolve rubric from suite hint or explicit flag
-            suite_hint = run_result.run.suite.rubric
-            if rubric_path:
-                r_path = rubric_path
-            elif suite_hint:
-                r_path = find_rubric(suite_hint)
-            else:
-                r_path = find_rubric("default")
-
-            r = load_rubric(r_path)
-            # Calibration examples live alongside the resolved rubric —
-            # packaged when rubric is packaged, project-local when overridden.
-            cal_data = load_calibration_examples(r_path.parent / "calibration-examples.yaml")
-            scorecard = await evaluate_run(
-                run_result, r, eval_be,
-                evaluator_label=eval_backend_label,
-                rubrics_by_category=eval_rubrics_by_cat,
-                calibration_data=cal_data or None,
-            )
-            write_scorecard(scorecard)
-            console.print(
-                f"  [green]Eval:[/green] {scorecard.aggregate.overall_weighted:.2f} "
-                f"({r.rubric.name})"
-            )
-            return scorecard.aggregate.overall_weighted
-
-    # 8. Execute
+    # 8. Execute inference
     console.rule("[bold]Running benchmarks[/bold]")
     start = _time.monotonic()
+
+    seen_models: set[str] = set()
 
     def on_start(task, model, repeat):
         repeat_str = f" repeat {repeat}/{task.repeats}" if repeat else ""
         console.rule(f"[bold]{task.suite.suite.name}[/bold] / {model}{repeat_str}")
+        # Cold-start hint the first time we touch a model — ROCm/AMD in particular
+        # spends minutes compiling compute-graph kernels on the first prompt of a
+        # freshly-loaded model, and the CLI otherwise looks hung during that window.
+        if model not in seen_models and model not in ("(all models)",):
+            seen_models.add(model)
+            console.print(
+                "  [dim]First prompt can take several minutes while the model loads "
+                "and kernels compile (common on ROCm/AMD).[/dim]"
+            )
 
     def on_done(result):
         if result.success:
-            eval_str = f"  score: {result.eval_score:.2f}" if result.eval_score is not None else ""
-            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s){eval_str}")
+            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s)")
         else:
             console.print(f"  [red]Failed: {result.error}[/red]")
 
@@ -1192,7 +1157,6 @@ def overnight(
                 verbose=verbose,
                 on_task_start=on_start,
                 on_task_done=on_done,
-                on_run_eval=on_run_eval,
                 profile_vram=profile_vram,
             )
         )
@@ -1204,8 +1168,91 @@ def overnight(
 
     elapsed = _time.monotonic() - start
 
-    # 8. Summary
+    # 9. Post-run batch evaluation — single judge-model load for all results
+    if do_evaluate:
+        eval_paths = [r.result_path for r in results if r.success and r.result_path is not None]
+        if eval_paths:
+            console.rule("[bold]Evaluation[/bold]")
+            _run_post_phase_evaluation(
+                eval_paths=eval_paths,
+                eval_backend_name=eval_backend,
+                eval_model=eval_model,
+                host=host,
+                eval_timeout=eval_timeout,
+                rubric_path=rubric_path,
+                rubric_dir=rubric_dir,
+                results=results,
+            )
+
+    # 10. Summary
     print_summary(results, elapsed)
+
+
+def _run_post_phase_evaluation(
+    eval_paths: list[Path],
+    eval_backend_name: str,
+    eval_model: str | None,
+    host: str | None,
+    eval_timeout: int,
+    rubric_path: Path | None,
+    rubric_dir: Path | None,
+    results: list,
+) -> None:
+    """Batch-score all successful run results after inference completes.
+
+    Holds the judge model resident once for the whole batch — no swap
+    thrashing between target-model inference and judge-model scoring.
+    Scores feed back into `OvernightResult.eval_score` so the final
+    summary can show them.
+    """
+    from porchbench.evaluator import (
+        EVAL_BACKEND_DEFAULTS,
+        AnthropicEvalBackend,
+        ClaudeCodeEvalBackend,
+        OllamaEvalBackend,
+        batch_evaluate_results,
+        load_rubric_dir,
+    )
+
+    resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get(eval_backend_name, "gemma4:e4b")
+
+    if eval_backend_name == "ollama":
+        eval_be = OllamaEvalBackend(model=resolved_eval_model, host=host)
+    elif eval_backend_name == "api":
+        eval_be = AnthropicEvalBackend(model=resolved_eval_model)
+    elif eval_backend_name == "claude-code":
+        eval_be = ClaudeCodeEvalBackend(model=resolved_eval_model, timeout_s=eval_timeout)
+    else:
+        console.print(f"[red]Unknown eval backend: {eval_backend_name}[/red]")
+        return
+
+    backend_label = f"{eval_backend_name}/{resolved_eval_model}"
+    eval_rubrics_by_cat = load_rubric_dir(resolve_rubric_dir(rubric_dir))
+
+    console.print(f"Evaluator: {backend_label}")
+    console.print(f"Results to score: [bold]{len(eval_paths)}[/bold]\n")
+
+    summary = asyncio.run(batch_evaluate_results(
+        result_paths=eval_paths,
+        eval_backend=eval_be,
+        backend_label=backend_label,
+        output_dir=Path("scorecards"),
+        explicit_rubric_path=rubric_path,
+        rubrics_by_category=eval_rubrics_by_cat,
+    ))
+
+    # Feed scores back into OvernightResults so print_summary can show them
+    path_to_score = {}
+    for (_, status, score), path in zip(summary, eval_paths):
+        if status == "scored" and score is not None:
+            path_to_score[path] = score
+    for r in results:
+        if r.result_path in path_to_score:
+            r.eval_score = path_to_score[r.result_path]
+
+    scored = sum(1 for _, s, _ in summary if s == "scored")
+    failed = sum(1 for _, s, _ in summary if s == "failed")
+    console.print(f"\n[bold]{scored} scored, {failed} failed[/bold]")
 
 
 def main() -> None:

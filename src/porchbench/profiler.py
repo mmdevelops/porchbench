@@ -201,13 +201,71 @@ class VramSample:
             self.peak_bytes = size_vram
 
 
+def _sample_vram_via_nvidia_smi() -> int | None:
+    """Return bytes of VRAM used on GPU 0 via nvidia-smi, or None if unavailable."""
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if r.returncode == 0:
+            # memory.used is in MiB
+            first_line = r.stdout.strip().splitlines()[0]
+            return int(first_line) * 1024 * 1024
+    except (FileNotFoundError, ValueError, IndexError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _sample_vram_via_rocm_smi() -> int | None:
+    """Return bytes of VRAM used on GPU 0 via rocm-smi, or None if unavailable.
+
+    Uses --showmeminfo vram --json. rocm-smi reports VRAM in bytes under
+    'VRAM Total Used Memory (B)'.
+    """
+    try:
+        r = subprocess.run(
+            ["rocm-smi", "--showmeminfo", "vram", "--json"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            data = json.loads(r.stdout)
+            for card_info in data.values():
+                used_str = card_info.get("VRAM Total Used Memory (B)")
+                if used_str is not None:
+                    return int(used_str)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def _pick_vram_sampler() -> Callable[[], int | None] | None:
+    """Detect which direct-GPU VRAM sampler is available on this host.
+
+    Probes once and caches — same tool will be used for the rest of the process.
+    Returns None if no direct sampler works; the caller should fall back to
+    ollama polling or disable VRAM sampling.
+    """
+    if _sample_vram_via_nvidia_smi() is not None:
+        return _sample_vram_via_nvidia_smi
+    if _sample_vram_via_rocm_smi() is not None:
+        return _sample_vram_via_rocm_smi
+    return None
+
+
 @asynccontextmanager
 async def measure_peak_vram(
     backend: OllamaBackend,
     model: str,
-    poll_interval_s: float = 0.1,
+    poll_interval_s: float = 0.5,
 ):
-    """Poll ollama.ps() in the background and track peak VRAM for a model.
+    """Track peak VRAM usage during the wrapped block.
+
+    Prefers direct GPU queries (nvidia-smi, rocm-smi) over ollama's /api/ps
+    endpoint — the ollama path adds HTTP chatter that competes with ollama's
+    own scheduler polling and degrades under load. Falls back to /api/ps only
+    if neither CLI tool is on PATH.
 
     Usage::
 
@@ -215,13 +273,28 @@ async def measure_peak_vram(
             await backend.chat(...)
         print(sample.peak_bytes)
 
-    Yields a VramSample whose peak_bytes is updated continuously.
-    Returns 0 if the model isn't found or polling fails.
+    Returns 0 peak_bytes if sampling never captured anything.
     """
     sample = VramSample()
     stop = asyncio.Event()
+    direct_sampler = _pick_vram_sampler()
 
-    async def _poll() -> None:
+    async def _poll_direct() -> None:
+        # Direct GPU query — no backend round-trip
+        while not stop.is_set():
+            try:
+                used = await asyncio.to_thread(direct_sampler)
+                if used is not None and used > 0:
+                    sample.update(used)
+            except Exception:
+                pass
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=poll_interval_s)
+            except TimeoutError:
+                pass
+
+    async def _poll_ollama() -> None:
+        # Fallback — /api/ps polling
         while not stop.is_set():
             try:
                 running = await backend.list_running_models()
@@ -238,7 +311,8 @@ async def measure_peak_vram(
             except TimeoutError:
                 pass
 
-    task = asyncio.create_task(_poll())
+    poll_coro = _poll_direct() if direct_sampler else _poll_ollama()
+    task = asyncio.create_task(poll_coro)
     try:
         yield sample
     finally:

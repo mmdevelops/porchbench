@@ -309,18 +309,24 @@ async def run_suite(
     return run_result
 
 
-def _write_result(run_result: RunResult, output_dir: str | Path) -> Path:
-    """Serialize run result to a timestamped JSON file."""
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def result_path_for(run_result: RunResult, output_dir: str | Path) -> Path:
+    """Compute the on-disk path for a run result from its metadata.
 
+    Deterministic — same metadata always maps to the same path, so callers
+    can locate a result file without needing the writer to hand them the path.
+    """
     ts = run_result.run.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
     suite_slug = run_result.run.suite.name.lower().replace(" ", "-")
     model_slug = run_result.run.model.name.replace(":", "-").replace("/", "-")
     repeat_suffix = f"_repeat-{run_result.run.repeat_index}" if run_result.run.repeat_index else ""
     filename = f"{ts}_{suite_slug}_{model_slug}{repeat_suffix}.json"
+    return Path(output_dir) / filename
 
-    path = output_dir / filename
+
+def _write_result(run_result: RunResult, output_dir: str | Path) -> Path:
+    """Serialize run result to a timestamped JSON file."""
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    path = result_path_for(run_result, output_dir)
     path.write_text(
         run_result.model_dump_json(indent=2),
         encoding="utf-8",
