@@ -38,8 +38,15 @@ from porchbench.doctor import (
 # ---------------------------------------------------------------------------
 
 
-def test_normalize_ollama_url_defaults_to_localhost(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_normalize_ollama_url_defaults_to_loopback_ipv4(monkeypatch: pytest.MonkeyPatch) -> None:
+    # IPv4 loopback avoids the ~2s IPv6-first retry on Windows `localhost` lookups.
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    assert _normalize_ollama_url(None) == "http://127.0.0.1:11434"
+
+
+def test_normalize_ollama_url_respects_user_localhost(monkeypatch: pytest.MonkeyPatch) -> None:
+    # If the user explicitly sets OLLAMA_HOST, honor it (including any slow resolution).
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
     assert _normalize_ollama_url(None) == "http://localhost:11434"
 
 

@@ -77,7 +77,9 @@ REQUIRED_CHECKS: frozenset[str] = frozenset({"python", "ollama-server", "builtin
 
 
 def _normalize_ollama_url(host: str | None) -> str:
-    url = host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    # Default to 127.0.0.1 rather than localhost: on Windows, localhost often
+    # resolves to ::1 first, adds a ~2s IPv6 retry delay per HTTP probe.
+    url = host or os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
     if not url.startswith(("http://", "https://")):
         url = f"http://{url}"
     return url.rstrip("/")
@@ -335,6 +337,11 @@ def render_report(report: DoctorReport, console: Console) -> None:
         parts.append(f"{s.skip} skip")
     totals = ", ".join(parts)
     if report.ok:
-        console.print(f"\n[green]{totals}[/green]\n")
+        console.print(f"\n[green]{totals}[/green]")
     else:
-        console.print(f"\n[red]{totals}[/red] (exit 1)\n")
+        console.print(f"\n[red]{totals}[/red] (exit 1)")
+
+    console.print(
+        "\n[dim]Tip: run [bold]porchbench --install-completion[/bold] to enable "
+        "shell tab completion.[/dim]\n"
+    )

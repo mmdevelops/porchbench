@@ -32,15 +32,72 @@ from porchbench.schemas import (
 console = Console()
 
 
+_GPU_CACHE_TTL_SECONDS = 24 * 60 * 60  # Hardware doesn't change; re-probe daily to catch driver/firmware shifts.
+
+
+def _gpu_cache_path() -> Path:
+    return Path.home() / ".porchbench" / "cache" / "gpu.json"
+
+
+def _read_gpu_cache() -> tuple[str, float | None] | None:
+    """Return a cached (name, vram_gb) pair if present and fresh, else None."""
+    path = _gpu_cache_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    try:
+        cached_at = float(data["cached_at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if time.time() - cached_at > _GPU_CACHE_TTL_SECONDS:
+        return None
+    name = data.get("gpu_name", "")
+    vram = data.get("vram_gb")
+    if vram is not None:
+        try:
+            vram = float(vram)
+        except (TypeError, ValueError):
+            vram = None
+    return name, vram
+
+
+def _write_gpu_cache(gpu_name: str, vram_gb: float | None) -> None:
+    """Persist GPU detection result for use by future process invocations."""
+    path = _gpu_cache_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {"gpu_name": gpu_name, "vram_gb": vram_gb, "cached_at": time.time()}
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # best-effort; a failed cache write must not break detection
+
+
 @functools.lru_cache(maxsize=1)
 def detect_gpu() -> tuple[str, float | None]:
     """Detect GPU name and total VRAM.
 
     Returns (gpu_name, vram_total_gb). VRAM may be None if detection fails.
-    Uses platform-specific methods: nvidia-smi, WMI (Windows), lspci (Linux).
-    Cached at module level — GPU doesn't change within a process, and
-    dxdiag on Windows costs ~1-2s per call.
+    Uses platform-specific methods: nvidia-smi, dxdiag (Windows), lspci (Linux).
+    Cached in-process via lru_cache and across processes via
+    ~/.porchbench/cache/gpu.json with a 24h TTL — dxdiag on Windows
+    costs ~9s per cold call.
     """
+    cached = _read_gpu_cache()
+    if cached is not None:
+        return cached
+
+    result = _detect_gpu_uncached()
+    _write_gpu_cache(*result)
+    return result
+
+
+def _detect_gpu_uncached() -> tuple[str, float | None]:
+    """The actual GPU probe — separated so `detect_gpu` can wrap it in disk cache."""
     gpu_name = ""
     vram_gb = None
 
