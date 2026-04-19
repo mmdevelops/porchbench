@@ -221,6 +221,18 @@ porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia
 
 **AMD / ROCm: kernel errors on gfx1201 (RDNA 4)** — a rocblas override usually fixes most models. Some quantized models (notably parts of the Qwen 3.5 family) hit a missing `SOLVE_TRI` kernel upstream; fall back to a different model family until ROCm ships the fix.
 
+**Reasoning-mode models run slow by default** — Qwen 3, DeepSeek-R1, and other models with a thinking mode emit `<think>...</think>` reasoning tokens before every answer unless explicitly disabled. Porchbench strips thinking tags before judging, but still pays the full generation cost per prompt. To disable thinking at inference time, set `think: false` in your suite's `defaults.options`:
+
+```yaml
+defaults:
+  options:
+    temperature: 0
+    num_predict: 2048
+    think: false   # disable reasoning tokens for thinking-capable models
+```
+
+Or leave it unset to benchmark with-thinking performance. Applies only to the Ollama backend; OpenAI-compatible servers ignore the field.
+
 **Results file not where you expected** — output goes to `--output-dir` (default `results/`). Check the command's `--help` for the relevant flag.
 
 ## Requirements

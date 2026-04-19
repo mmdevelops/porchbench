@@ -35,6 +35,11 @@ class ModelOptions(BaseModel):
     top_p: float = 1
     num_predict: int = 2048
     num_ctx: int = 4096
+    # Reasoning-mode toggle forwarded to Ollama as the top-level `think` field.
+    # Default None leaves it unset, letting Ollama use the model's default
+    # (qwen3, deepseek-r1, etc. default to on). Set False to disable thinking
+    # when benchmarking — avoids paying for reasoning tokens you discard.
+    think: bool | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -94,11 +94,17 @@ class OllamaBackend:
         client = AsyncClient(host=self.host)
         opts_dict = options.model_dump()
 
+        # `think` is a top-level Ollama request field, not an options sub-field.
+        # Pull it out so it isn't silently ignored inside the options bag.
+        think = opts_dict.pop("think", None)
+
         kwargs: dict[str, Any] = dict(
             model=model,
             messages=messages,
             options=opts_dict,
         )
+        if think is not None:
+            kwargs["think"] = think
         if tools is not None:
             kwargs["tools"] = tools
 

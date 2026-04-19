@@ -178,6 +178,58 @@ class TestGetServerHealth:
 
 
 # ---------------------------------------------------------------------------
+# `think` passthrough — reasoning-mode toggle for qwen3/deepseek-r1
+# ---------------------------------------------------------------------------
+
+
+class TestThinkPassthrough:
+    """`think` is a top-level Ollama request field; options.think must be lifted
+    out of the options bag, not smuggled inside it (where Ollama would ignore it)."""
+
+    @pytest.mark.asyncio
+    async def test_think_false_forwarded_as_top_level_kwarg(self):
+        backend = OllamaBackend()
+        options = ModelOptions(think=False)
+
+        with patch("porchbench.backend.AsyncClient") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
+            mock_client.chat = AsyncMock(return_value=_make_ollama_response())
+            await backend.chat(messages=[{"role": "user", "content": "hi"}], model="qwen3:8b", options=options)
+
+        call_kwargs = mock_client.chat.call_args.kwargs
+        assert call_kwargs["think"] is False
+        assert "think" not in call_kwargs["options"]
+
+    @pytest.mark.asyncio
+    async def test_think_true_forwarded(self):
+        backend = OllamaBackend()
+        options = ModelOptions(think=True)
+
+        with patch("porchbench.backend.AsyncClient") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
+            mock_client.chat = AsyncMock(return_value=_make_ollama_response())
+            await backend.chat(messages=[{"role": "user", "content": "hi"}], model="qwen3:8b", options=options)
+
+        call_kwargs = mock_client.chat.call_args.kwargs
+        assert call_kwargs["think"] is True
+
+    @pytest.mark.asyncio
+    async def test_think_unset_is_omitted(self):
+        """When think is None (default), the kwarg must be absent — let Ollama use model defaults."""
+        backend = OllamaBackend()
+        options = ModelOptions()  # think defaults to None
+
+        with patch("porchbench.backend.AsyncClient") as mock_client_cls:
+            mock_client = mock_client_cls.return_value
+            mock_client.chat = AsyncMock(return_value=_make_ollama_response())
+            await backend.chat(messages=[{"role": "user", "content": "hi"}], model="qwen2.5:7b", options=options)
+
+        call_kwargs = mock_client.chat.call_args.kwargs
+        assert "think" not in call_kwargs
+        assert "think" not in call_kwargs["options"]
+
+
+# ---------------------------------------------------------------------------
 # Protocol compliance
 # ---------------------------------------------------------------------------
 
