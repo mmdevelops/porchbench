@@ -350,6 +350,134 @@ class TestComputeAggregates:
 
 
 # ---------------------------------------------------------------------------
+# evaluate_run — empty/truncated content is scored 0, not silently dropped
+# ---------------------------------------------------------------------------
+
+
+class TestEmptyContentHandling:
+    """Reasoning-mode models can exhaust num_predict inside <think> and emit
+    zero user-facing content. Pre-fix these prompts were filtered from the
+    scorecard entirely, inflating aggregate scores. Post-fix they score 0
+    with a specific rationale, keeping cross-model aggregates honest."""
+
+    @pytest.mark.asyncio
+    async def test_length_truncated_empty_content_scores_zero(self):
+        from porchbench.evaluator import evaluate_run
+        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+
+        # Two prompts: one with real content, one truncated with empty content
+        good = _make_prompt_result(
+            prompt_id="p-good",
+            response=ResponseData(
+                message=ResponseMessage(content="real answer"),
+                done_reason="stop",
+            ),
+        )
+        empty = _make_prompt_result(
+            prompt_id="p-empty",
+            response=ResponseData(
+                message=ResponseMessage(content=""),
+                done_reason="length",  # exhausted num_predict
+            ),
+        )
+
+        rr = RunResult(
+            run=RunMetadata(
+                suite=SuiteReference(name="test", version="1", file="test.yaml", sha256="x" * 64),
+                model=ModelInfo(name="m", size=1, quantization="Q4", family="test", parameter_size="1B", digest="d"),
+            ),
+            results=[good, empty],
+            summary=RunSummary(total_prompts=2, completed=2, failed=0, total_duration_s=1.0),
+        )
+
+        # Backend should only be called for the good prompt — empty is shortcut
+        mock_backend = AsyncMock()
+        mock_backend.generate.return_value = json.dumps({
+            "criteria": {
+                "correctness": {"score": 5, "rationale": "fine"},
+                "clarity": {"score": 5, "rationale": "fine"},
+            },
+            "summary": "good",
+        })
+
+        scorecard = await evaluate_run(rr, _make_rubric(), mock_backend, evaluator_label="ollama/test")
+
+        assert len(scorecard.scores) == 2
+        good_score = next(s for s in scorecard.scores if s.prompt_id == "p-good")
+        empty_score = next(s for s in scorecard.scores if s.prompt_id == "p-empty")
+
+        assert good_score.weighted_score == pytest.approx(5.0)
+        assert empty_score.weighted_score == 0.0
+        assert "truncated" in empty_score.summary
+        assert all(c.score == 0 for c in empty_score.criteria.values())
+        # Backend called once for the good prompt; empty prompt shortcut to zero.
+        assert mock_backend.generate.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_with_empty_content_also_scores_zero(self):
+        """done_reason=stop + empty content = model returned nothing. Same zero
+        treatment as length-truncation, but with a different rationale tag."""
+        from porchbench.evaluator import evaluate_run
+        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+
+        empty = _make_prompt_result(
+            prompt_id="p-empty",
+            response=ResponseData(
+                message=ResponseMessage(content=""),
+                done_reason="stop",
+            ),
+        )
+
+        rr = RunResult(
+            run=RunMetadata(
+                suite=SuiteReference(name="test", version="1", file="test.yaml", sha256="x" * 64),
+                model=ModelInfo(name="m", size=1, quantization="Q4", family="test", parameter_size="1B", digest="d"),
+            ),
+            results=[empty],
+            summary=RunSummary(total_prompts=1, completed=1, failed=0, total_duration_s=1.0),
+        )
+
+        mock_backend = AsyncMock()
+        scorecard = await evaluate_run(rr, _make_rubric(), mock_backend, evaluator_label="ollama/test")
+
+        assert len(scorecard.scores) == 1
+        assert scorecard.scores[0].weighted_score == 0.0
+        assert "empty" in scorecard.scores[0].summary.lower()
+        assert mock_backend.generate.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_errored_responses_still_excluded(self):
+        """Runtime errors (done_reason starts with 'error:') are NOT scored — these
+        indicate the inference itself failed, not a model producing a bad answer.
+        Those stay filtered out."""
+        from porchbench.evaluator import evaluate_run
+        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+
+        errored = _make_prompt_result(
+            prompt_id="p-error",
+            response=ResponseData(
+                message=ResponseMessage(content=""),
+                done_reason="error: connection reset",
+            ),
+        )
+
+        rr = RunResult(
+            run=RunMetadata(
+                suite=SuiteReference(name="test", version="1", file="test.yaml", sha256="x" * 64),
+                model=ModelInfo(name="m", size=1, quantization="Q4", family="test", parameter_size="1B", digest="d"),
+            ),
+            results=[errored],
+            summary=RunSummary(total_prompts=1, completed=0, failed=1, total_duration_s=1.0),
+        )
+
+        mock_backend = AsyncMock()
+        scorecard = await evaluate_run(rr, _make_rubric(), mock_backend, evaluator_label="ollama/test")
+
+        assert len(scorecard.scores) == 0
+        assert mock_backend.generate.call_count == 0
+
+
+# ---------------------------------------------------------------------------
 # /evaluate skill helpers: extract, stream, finalize
 # ---------------------------------------------------------------------------
 

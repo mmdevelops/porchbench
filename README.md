@@ -235,6 +235,14 @@ Or leave it unset to benchmark with-thinking performance. Applies only to the Ol
 
 **Results file not where you expected** — output goes to `--output-dir` (default `results/`). Check the command's `--help` for the relevant flag.
 
+## Methodology notes
+
+**Determinism is best-effort on GPU.** porchbench sets `temperature: 0` and `seed: 42` by default, which gives bit-identical outputs across repeats *in the steady state*. However, GPU floating-point reductions do not guarantee the same order across cold- vs warm-kernel states. On ROCm (and to a lesser extent CUDA), the first inference after a model (re)load can produce subtly different logits than subsequent inferences — enough to flip greedy token selection on near-tied probabilities. In practice this manifests as "repeat 1 differs slightly from repeats 2, 3, …" on a fresh model load, with later repeats converging.
+
+This is not a porchbench bug; it's inherent to parallel GPU inference. Treat it as real measurement noise. `porchbench compare` uses paired bootstrap CIs (`seed=42` for the bootstrap RNG; override via `PORCHBENCH_SEED`), which handle cross-repeat variance honestly — wider intervals when the signal is noisier. If you need strict steady-state numbers (e.g., pure speed benchmarks), run a throwaway warmup pass before your measured repeats.
+
+**Truncated / empty responses score zero, not skipped.** When a model exhausts `num_predict` before producing any user-facing content — common with reasoning-mode models emitting long `<think>` blocks — the evaluator records a zero score with a diagnostic rationale rather than silently excluding the prompt from aggregates. This keeps cross-model comparisons honest: a model that fails to answer 8 prompts shouldn't outscore a model that answers all 28. If you see prompts scored zero for "truncated before answer emitted", bump `num_predict` or set `think: false` in your suite's `defaults.options`.
+
 ## Requirements
 
 - Python 3.11+

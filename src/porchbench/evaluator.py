@@ -565,12 +565,14 @@ async def evaluate_run(
     unmatched categories. When calibration_data is provided, few-shot
     calibration examples are prepended to each scoring prompt.
     """
-    # Include responses that completed (stop) or were truncated (length)
-    # — truncated responses still have real content worth evaluating
-    completed = [
+    # Include every non-errored response. Truncated responses still have real
+    # content worth evaluating; empty responses (e.g. reasoning-mode models
+    # that exhaust num_predict inside <think> without emitting an answer) are
+    # scored 0 below so aggregate comparisons stay consistent across models
+    # rather than silently dropping truncated prompts from the mean.
+    scorable = [
         r for r in run_result.results
         if r.response.done_reason in ("stop", "length", None)
-        and r.response.message.content
     ]
 
     # Pre-compute calibration preambles per rubric to avoid reformatting each prompt
@@ -594,17 +596,44 @@ async def evaluate_run(
         TimeElapsedColumn(),
         console=console,
     ) as progress:
-        task = progress.add_task("Evaluating", total=len(completed))
+        task = progress.add_task("Evaluating", total=len(scorable))
 
-        for prompt_result in completed:
+        for prompt_result in scorable:
+            if rubrics_by_category:
+                prompt_rubric = select_rubric(
+                    prompt_result.category, rubrics_by_category, fallback=rubric
+                )
+            else:
+                prompt_rubric = rubric
+
+            if not prompt_result.response.message.content:
+                # No answer reached the evaluator — score 0 across criteria so
+                # aggregates stay honest. Common cause on reasoning-mode
+                # models: `num_predict` exhausted inside <think> before any
+                # user-facing answer was emitted.
+                reason = (
+                    "truncated before answer emitted (try think: false or a larger num_predict)"
+                    if prompt_result.response.done_reason == "length"
+                    else "empty response from model"
+                )
+                zero_score = PromptScore(
+                    prompt_id=prompt_result.prompt_id,
+                    criteria={
+                        c.name: CriterionScore(score=0, rationale=reason)
+                        for c in prompt_rubric.criteria
+                    },
+                    weighted_score=0.0,
+                    summary=reason,
+                )
+                scores.append(zero_score)
+                progress.console.print(
+                    f"  {prompt_result.prompt_id}: "
+                    f"[red]0.00[/red] [dim]({reason})[/dim]"
+                )
+                progress.advance(task)
+                continue
+
             try:
-                if rubrics_by_category:
-                    prompt_rubric = select_rubric(
-                        prompt_result.category, rubrics_by_category, fallback=rubric
-                    )
-                else:
-                    prompt_rubric = rubric
-
                 preamble = _get_preamble(prompt_rubric)
                 score = await score_prompt(prompt_result, prompt_rubric, backend, preamble)
                 scores.append(score)
@@ -618,7 +647,7 @@ async def evaluate_run(
                 )
             progress.advance(task)
 
-    aggregates = compute_aggregates(scores, completed)
+    aggregates = compute_aggregates(scores, scorable)
 
     rubric_label = f"{rubric.rubric.name} v{rubric.rubric.version}"
     if rubrics_by_category:
