@@ -358,16 +358,146 @@ def aggregate_by_model(
 # ---------------------------------------------------------------------------
 
 
+_SPARK_CHARS = " ▁▂▃▄▅▆▇█"
+
+
+def _sparkline(counts: list[int]) -> str:
+    """Render bucket counts as a Unicode sparkline; zero-count buckets use '·'."""
+    max_c = max(counts)
+    if max_c == 0:
+        return "·" * len(counts)
+    return "".join(
+        "·" if c == 0 else _SPARK_CHARS[max(1, round(c / max_c * 8))]
+        for c in counts
+    )
+
+
+def _bucket_weighted_scores(scores: list[float]) -> list[int]:
+    """Bin 0–5 weighted scores into [0,1), [1,2), [2,3), [3,4), [4,5] counts."""
+    buckets = [0, 0, 0, 0, 0]
+    for s in scores:
+        idx = max(0, min(int(s), 4))
+        buckets[idx] += 1
+    return buckets
+
+
+def print_score_distribution(rows: list[ModelRow]) -> None:
+    """Show per-model histogram of prompt-level weighted scores.
+
+    Surfaces distribution shape — ceiling-stuck, long-tailed, or bimodal —
+    beyond what a single mean reveals.
+    """
+    table = Table(title="Score Distribution by Model", title_style="bold")
+    table.add_column("Model", style="bold")
+    for bucket_label in ("0–1", "1–2", "2–3", "3–4", "4–5"):
+        table.add_column(bucket_label, justify="right")
+    table.add_column("Shape", justify="left")
+
+    any_rendered = False
+    for row in rows:
+        scores = list(row.pooled_prompt_means.values())
+        if not scores:
+            continue
+        buckets = _bucket_weighted_scores(scores)
+        model_label = f"{row.label} (n={row.n})" if row.n > 1 else row.label
+        table.add_row(model_label, *[str(b) for b in buckets], _sparkline(buckets))
+        any_rendered = True
+
+    if not any_rendered:
+        return
+    console.print(table)
+    console.print(
+        "  [dim]Counts of prompts by mean weighted score. "
+        "Shape is a sparkline across the five buckets (· = empty).[/dim]"
+    )
+    console.print()
+
+
+def print_differentiating_prompts(rows: list[ModelRow], top_n: int = 5) -> None:
+    """Rank shared prompts by score spread across models.
+
+    Hides prompts where models tied (gap == 0), surfacing only where they
+    diverge. Requires at least two models; does nothing otherwise.
+    """
+    if len(rows) < 2:
+        return
+
+    per_prompt: dict[str, dict[str, float]] = defaultdict(dict)
+    for row in rows:
+        for pid, score in row.pooled_prompt_means.items():
+            per_prompt[pid][row.label] = score
+
+    n_models = len(rows)
+    shared = {pid: s for pid, s in per_prompt.items() if len(s) == n_models}
+    diverging = {
+        pid: s for pid, s in shared.items()
+        if max(s.values()) - min(s.values()) > 0
+    }
+    if not diverging:
+        if shared:
+            console.print(
+                "  [dim]No differentiating prompts: all models tied on every "
+                "shared prompt.[/dim]"
+            )
+            console.print()
+        else:
+            console.print(
+                "[yellow]No prompts scored by all models; "
+                "differentiator table skipped.[/yellow]"
+            )
+        return
+
+    ranked = sorted(
+        diverging.items(),
+        key=lambda kv: max(kv[1].values()) - min(kv[1].values()),
+        reverse=True,
+    )[:top_n]
+
+    table = Table(
+        title=f"Top {top_n} Differentiating Prompts (largest score gap)",
+        title_style="bold",
+    )
+    table.add_column("Prompt", style="bold")
+    for row in rows:
+        model_label = f"{row.label} (n={row.n})" if row.n > 1 else row.label
+        table.add_column(model_label, justify="right")
+    table.add_column("Gap", justify="right", style="magenta")
+
+    for pid, scores in ranked:
+        vals = list(scores.values())
+        gap = max(vals) - min(vals)
+        cells = [pid]
+        for row in rows:
+            s = scores[row.label]
+            if gap > 0 and s == max(vals):
+                cells.append(f"[green]{s:.2f}[/green]")
+            elif gap > 0 and s == min(vals):
+                cells.append(f"[red]{s:.2f}[/red]")
+            else:
+                cells.append(f"{s:.2f}")
+        cells.append(f"{gap:.2f}")
+        table.add_row(*cells)
+
+    console.print(table)
+    console.print(
+        "  [dim]Prompts where model scores diverge most. "
+        "Green = top score, red = bottom score.[/dim]"
+    )
+    console.print()
+
+
 def print_leaderboard(
     scorecards: list[Scorecard],
     top_n: int = 3,
     result_dir: Path | None = None,
 ) -> None:
-    """Print ranked leaderboard table and best/worst prompts per model.
+    """Print ranked leaderboard, score distribution, and prompt-level drill-down.
 
-    Multiple scorecards for the same model (e.g. from --repeats) collapse
-    into a single row with mean scores, a ±half-range spread indicator, and
-    an n=<count> badge.
+    Multiple scorecards for the same model (e.g. from --repeats) collapse into
+    a single row with mean scores, a ±half-range spread indicator, and an
+    n=<count> badge. The drill-down is a differentiator table (prompts with the
+    largest score gap across models) when ≥2 models are present, falling back
+    to per-model best/worst when only one model is reported.
     """
     if not scorecards:
         console.print("[yellow]No comparable scorecards found.[/yellow]")
@@ -458,6 +588,12 @@ def print_leaderboard(
     console.print()
 
     if top_n <= 0:
+        return
+
+    print_score_distribution(rows)
+
+    if len(rows) >= 2:
+        print_differentiating_prompts(rows)
         return
 
     bw_table = Table(title="Best & Worst Prompts by Model", title_style="bold")

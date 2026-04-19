@@ -6,12 +6,17 @@ import pytest
 from porchbench.leaderboard import (
     MISSING_CRITERION_RATIONALE,
     PARSE_FAIL_RATIONALE,
+    ModelRow,
+    _bucket_weighted_scores,
     _clean_overall,
     _count_parse_failures,
     _normalize_rubric,
+    _sparkline,
     aggregate_by_model,
     discover_scorecards,
     group_scorecards,
+    print_differentiating_prompts,
+    print_score_distribution,
 )
 from porchbench.schemas import (
     AggregateScores,
@@ -384,3 +389,148 @@ class TestAggregateByModel:
 
     def test_empty_input_returns_empty_list(self):
         assert aggregate_by_model([]) == []
+
+
+# ---------------------------------------------------------------------------
+# Score distribution buckets and sparkline
+# ---------------------------------------------------------------------------
+
+
+class TestBucketWeightedScores:
+    def test_bucket_boundaries_are_left_closed(self):
+        # 4.0 lands in [4,5], not [3,4)
+        assert _bucket_weighted_scores([0.0, 1.0, 2.0, 3.0, 4.0]) == [1, 1, 1, 1, 1]
+
+    def test_ceiling_score_lands_in_top_bucket(self):
+        assert _bucket_weighted_scores([5.0]) == [0, 0, 0, 0, 1]
+
+    def test_sub_bucket_fractions(self):
+        assert _bucket_weighted_scores([0.9, 3.9, 4.99]) == [1, 0, 0, 1, 1]
+
+    def test_negative_scores_clamp_to_first_bucket(self):
+        assert _bucket_weighted_scores([-0.5, -10.0]) == [2, 0, 0, 0, 0]
+
+    def test_empty_input_returns_all_zero_buckets(self):
+        assert _bucket_weighted_scores([]) == [0, 0, 0, 0, 0]
+
+
+class TestSparkline:
+    def test_all_zero_counts_render_as_dots(self):
+        assert _sparkline([0, 0, 0, 0, 0]) == "·····"
+
+    def test_zero_buckets_interspersed_are_dots(self):
+        spark = _sparkline([0, 5, 0, 5, 0])
+        assert spark[0] == "·"
+        assert spark[2] == "·"
+        assert spark[4] == "·"
+        assert spark[1] == spark[3]  # equal counts → equal chars
+
+    def test_nonzero_counts_never_render_as_space(self):
+        # A single prompt in a 20-prompt bucket shouldn't round down to blank.
+        spark = _sparkline([1, 0, 0, 0, 20])
+        assert spark[0] != " "
+        assert spark[0] != "·"
+
+    def test_max_count_uses_full_block(self):
+        spark = _sparkline([0, 0, 0, 0, 10])
+        assert spark[-1] == "█"
+
+
+class TestPrintScoreDistribution:
+    def _row(self, label: str, scores: dict[str, float]) -> ModelRow:
+        return ModelRow(
+            label=label,
+            n=1,
+            mean_overall=sum(scores.values()) / len(scores),
+            overall_range=0.0,
+            mean_clean=None,
+            pooled_prompt_means=scores,
+        )
+
+    def test_renders_histogram_and_shape(self, capsys):
+        row = self._row("model-x", {"p1": 5.0, "p2": 4.5, "p3": 2.0})
+        print_score_distribution([row])
+        out = capsys.readouterr().out
+        assert "Score Distribution by Model" in out
+        assert "model-x" in out
+        # 1 prompt in [2,3), 0 in [3,4), 2 in [4,5]
+        assert "Shape" in out
+
+    def test_skips_rows_with_no_prompt_scores(self, capsys):
+        empty_row = ModelRow(
+            label="empty-model",
+            n=1,
+            mean_overall=0.0,
+            overall_range=0.0,
+            mean_clean=None,
+            pooled_prompt_means={},
+        )
+        print_score_distribution([empty_row])
+        out = capsys.readouterr().out
+        assert "empty-model" not in out
+
+
+# ---------------------------------------------------------------------------
+# Differentiating prompts
+# ---------------------------------------------------------------------------
+
+
+class TestPrintDifferentiatingPrompts:
+    def _row(self, label: str, prompt_scores: dict[str, float]) -> ModelRow:
+        return ModelRow(
+            label=label,
+            n=1,
+            mean_overall=sum(prompt_scores.values()) / len(prompt_scores),
+            overall_range=0.0,
+            mean_clean=None,
+            pooled_prompt_means=prompt_scores,
+        )
+
+    def test_silent_with_single_model(self, capsys):
+        row = self._row("only-one", {"p1": 5.0, "p2": 1.0})
+        print_differentiating_prompts([row])
+        assert capsys.readouterr().out == ""
+
+    def test_ranks_by_descending_gap(self, capsys):
+        a = self._row("a", {"big-gap": 5.0, "tiny-gap": 4.0, "mid-gap": 5.0})
+        b = self._row("b", {"big-gap": 1.0, "tiny-gap": 3.9, "mid-gap": 3.0})
+        print_differentiating_prompts([a, b])
+        out = capsys.readouterr().out
+        # The biggest-gap prompt should appear before smaller-gap ones
+        assert out.index("big-gap") < out.index("mid-gap") < out.index("tiny-gap")
+
+    def test_filters_zero_gap_prompts(self, capsys):
+        a = self._row("a", {"tied": 5.0, "diverged": 5.0})
+        b = self._row("b", {"tied": 5.0, "diverged": 2.0})
+        print_differentiating_prompts([a, b])
+        out = capsys.readouterr().out
+        assert "diverged" in out
+        assert "tied" not in out
+
+    def test_reports_all_tied_when_no_divergence(self, capsys):
+        a = self._row("a", {"p1": 5.0, "p2": 4.0})
+        b = self._row("b", {"p1": 5.0, "p2": 4.0})
+        print_differentiating_prompts([a, b])
+        out = capsys.readouterr().out
+        assert "tied" in out.lower()
+
+    def test_skips_prompts_not_scored_by_all_models(self, capsys):
+        a = self._row("a", {"shared": 5.0, "only-a": 2.0})
+        b = self._row("b", {"shared": 1.0, "only-b": 4.0})
+        print_differentiating_prompts([a, b])
+        out = capsys.readouterr().out
+        assert "shared" in out
+        assert "only-a" not in out
+        assert "only-b" not in out
+
+    def test_respects_top_n_cap(self, capsys):
+        a_scores = {f"p{i}": 5.0 for i in range(10)}
+        b_scores = {f"p{i}": 5.0 - i * 0.1 for i in range(10)}
+        a = self._row("a", a_scores)
+        b = self._row("b", b_scores)
+        print_differentiating_prompts([a, b], top_n=3)
+        out = capsys.readouterr().out
+        # Largest gaps are p9 (gap 0.9), p8 (0.8), p7 (0.7); p6 should not appear
+        assert "p9" in out
+        assert "p7" in out
+        assert "p6" not in out
