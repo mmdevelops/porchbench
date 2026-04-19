@@ -978,7 +978,7 @@ def overnight(
     ] = False,
     do_evaluate: Annotated[
         bool,
-        typer.Option("--evaluate", help="Score each run after inference completes."),
+        typer.Option("--evaluate", help="Score all runs in a single post-phase batch after inference completes (judge model stays resident)."),
     ] = False,
     eval_backend: Annotated[
         str,

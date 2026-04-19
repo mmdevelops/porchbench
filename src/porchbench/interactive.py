@@ -224,7 +224,7 @@ _RUN_TOGGLES = [
 ]
 
 _OVERNIGHT_TOGGLES = [
-    ("Evaluate after each run", "evaluate"),
+    ("Evaluate all runs in a batch after inference", "evaluate"),
     ("Profile system first", "profile"),
     ("Profile VRAM during inference", "profile_vram"),
     ("Resume (skip completed)", "resume"),

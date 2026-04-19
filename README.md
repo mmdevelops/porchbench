@@ -227,7 +227,7 @@ porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia
 
 - Python 3.11+
 - Ollama running locally (or specify `--host` for a remote instance)
-- For API-based evaluation: `pip install "porchbench[api]"` (adds Anthropic SDK)
+- For Anthropic-API-based LLM judge evaluation: `pip install "porchbench[api]"` (pulls in the Anthropic SDK; requires `PORCHBENCH_EVAL_BACKEND=api` + `ANTHROPIC_API_KEY`). Not needed for the default local-Ollama judge.
 
 ## License
 
