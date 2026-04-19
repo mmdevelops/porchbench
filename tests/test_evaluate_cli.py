@@ -356,3 +356,81 @@ def test_batch_survives_corrupt_result_file(tmp_path: Path):
     assert "load failed" in res.output
     assert "1 scored, 0 skipped, 1 failed" in res.output
     assert list(scorecards_dir.glob(f"*_{good_id[:8]}.json"))
+
+
+# ---------------------------------------------------------------------------
+# 8. Positional path argument — `porchbench evaluate path1 path2 ...` without `-r`
+# ---------------------------------------------------------------------------
+
+
+def test_positional_paths_are_accepted(tmp_path: Path):
+    """Positional paths should flow into the evaluation list just like -r flags.
+    This is the shell-glob-friendly form (`porchbench evaluate results/*.json`)."""
+    run_ids = [
+        "11111111-aaaa-bbbb-cccc-dddddddddddd",
+        "22222222-aaaa-bbbb-cccc-dddddddddddd",
+    ]
+    paths = []
+    for rid in run_ids:
+        p = tmp_path / f"{rid[:8]}.json"
+        _write_result(p, _make_run_result(rid))
+        paths.append(p)
+
+    scorecards_dir = tmp_path / "scorecards"
+
+    def _fake_eval(run_result, *args, **kwargs):
+        return _make_scorecard(run_result.run.id)
+
+    with (
+        patch("porchbench.evaluator.evaluate_run", new=AsyncMock(side_effect=_fake_eval)),
+        patch("porchbench.evaluator.load_rubric", return_value=_make_fake_rubric()),
+        patch("porchbench.evaluator.load_calibration_examples", return_value={}),
+        patch("porchbench.assets.find_rubric", return_value=tmp_path / "rubric.yaml"),
+    ):
+        res = runner.invoke(app, [
+            "evaluate",
+            *(str(p) for p in paths),  # positional, no -r
+            "--output-dir", str(scorecards_dir),
+            "--backend", "ollama",
+        ])
+
+    assert res.exit_code == 0, res.output
+    assert "2 scored, 0 skipped, 0 failed" in res.output
+
+
+def test_positional_and_flag_paths_compose(tmp_path: Path):
+    """Mixing `-r` and positional paths in one invocation merges both sets.
+    Supports the hybrid case: some paths glob-expanded, one or two added explicitly."""
+    run_ids = [
+        "11111111-aaaa-bbbb-cccc-dddddddddddd",
+        "22222222-aaaa-bbbb-cccc-dddddddddddd",
+    ]
+    positional, via_flag = [], []
+    for rid in run_ids:
+        p = tmp_path / f"{rid[:8]}.json"
+        _write_result(p, _make_run_result(rid))
+        if rid.startswith("11"):
+            positional.append(p)
+        else:
+            via_flag.append(p)
+
+    scorecards_dir = tmp_path / "scorecards"
+
+    def _fake_eval(run_result, *args, **kwargs):
+        return _make_scorecard(run_result.run.id)
+
+    with (
+        patch("porchbench.evaluator.evaluate_run", new=AsyncMock(side_effect=_fake_eval)),
+        patch("porchbench.evaluator.load_rubric", return_value=_make_fake_rubric()),
+        patch("porchbench.evaluator.load_calibration_examples", return_value={}),
+        patch("porchbench.assets.find_rubric", return_value=tmp_path / "rubric.yaml"),
+    ):
+        args = ["evaluate"]
+        args += [str(p) for p in positional]
+        for p in via_flag:
+            args += ["-r", str(p)]
+        args += ["--output-dir", str(scorecards_dir), "--backend", "ollama"]
+        res = runner.invoke(app, args)
+
+    assert res.exit_code == 0, res.output
+    assert "2 scored, 0 skipped, 0 failed" in res.output

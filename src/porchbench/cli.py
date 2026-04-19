@@ -307,9 +307,13 @@ def _print_summary(result) -> None:
 
 @app.command()
 def evaluate(
+    positional_paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Run result JSON files. Shell globs work on bash/zsh (e.g. `results/*.json`). Use --result/-r when shell expansion isn't available."),
+    ] = None,
     result_paths: Annotated[
         list[Path] | None,
-        typer.Option("--result", "-r", help="Run result JSON file(s). Repeat for multiple. Interactive picker if omitted."),
+        typer.Option("--result", "-r", help="Run result JSON file(s) — explicit form, composes with positional args. Interactive picker if all omitted."),
     ] = None,
     rubric_path: Annotated[
         Path | None,
@@ -361,10 +365,13 @@ def evaluate(
         write_scorecard,
     )
 
+    merged_paths = (positional_paths or []) + (result_paths or [])
+
     # Interactive selection when args omitted
-    if result_paths is None:
+    if not merged_paths:
         from porchbench.interactive import select_results
-        result_paths = select_results()
+        merged_paths = select_results()
+    result_paths = merged_paths
 
     # ---- one-time setup (shared across all results) ----
 
@@ -511,9 +518,13 @@ def evaluate(
 
 @app.command()
 def compare(
+    positional_paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Run result JSON files. Shell globs work on bash/zsh (e.g. `results/*.json`). Use --result/-r when shell expansion isn't available."),
+    ] = None,
     result_paths: Annotated[
         list[Path] | None,
-        typer.Option("--result", "-r", help="Run result JSON files to compare. Interactive picker if omitted."),
+        typer.Option("--result", "-r", help="Run result JSON files to compare — explicit form, composes with positional args. Interactive picker if all omitted."),
     ] = None,
     scorecard_paths: Annotated[
         list[Path] | None,
@@ -531,10 +542,13 @@ def compare(
     """Compare metrics and scores across models side-by-side."""
     from porchbench.compare import print_comparison_table
 
+    merged_paths = (positional_paths or []) + (result_paths or [])
+
     # Interactive selection when args omitted
-    if result_paths is None:
+    if not merged_paths:
         from porchbench.interactive import select_results
-        result_paths = select_results()
+        merged_paths = select_results()
+    result_paths = merged_paths
 
     runs = []
     for p in result_paths:
@@ -776,9 +790,13 @@ def profile(
 
 @app.command()
 def leaderboard(
+    positional_paths: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Scorecard JSON files. Shell globs work on bash/zsh (e.g. `scorecards/*.json`)."),
+    ] = None,
     scorecard_paths: Annotated[
         list[Path] | None,
-        typer.Option("--scorecard", help="Scorecard JSON files. Repeat for each."),
+        typer.Option("--scorecard", help="Scorecard JSON files — explicit form, composes with positional args."),
     ] = None,
     scorecard_dir: Annotated[
         Path,
@@ -809,9 +827,11 @@ def leaderboard(
         print_leaderboard,
     )
 
+    merged_paths = (positional_paths or []) + (scorecard_paths or [])
+
     scorecards = []
-    if scorecard_paths:
-        for p in scorecard_paths:
+    if merged_paths:
+        for p in merged_paths:
             try:
                 scorecards.append(load_json_model(p, Scorecard, "scorecard"))
             except UserError as exc:
@@ -823,6 +843,7 @@ def leaderboard(
             console.print("  Run [bold]porchbench evaluate[/bold] on a run result first to produce a scorecard.")
             raise typer.Exit(code=1)
         scorecards = discover_scorecards(scorecard_dir, verbose=verbose)
+    scorecard_paths = merged_paths if merged_paths else scorecard_paths
 
     if not scorecards:
         console.print("[yellow]No scorecards found.[/yellow]")
