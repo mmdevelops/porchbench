@@ -403,13 +403,17 @@ async def profile_system(
 
 async def _profile_single_model(model_name: str, backend: OllamaBackend) -> ModelProfile:
     """Profile a single model: load time, inference throughput, VRAM usage."""
+    from porchbench.errors import translate_inference_error
     from porchbench.schemas import ModelOptions
 
     messages = [{"role": "user", "content": BASELINE_PROMPT}]
     options = ModelOptions(temperature=0, seed=42, num_predict=256, num_ctx=4096)
 
     # First call may load the model — captures load_duration
-    result = await backend.chat(messages, model_name, options)
+    try:
+        result = await backend.chat(messages, model_name, options)
+    except Exception as exc:
+        raise translate_inference_error(exc, model_name, phase="profiling") from exc
     computed = compute_derived_metrics(result.metrics)
 
     load_time_s = result.metrics.load_duration / 1e9 if result.metrics.load_duration else None
@@ -442,17 +446,24 @@ async def _measure_swap_time(from_model: str, to_model: str, backend: OllamaBack
     Ensures from_model is loaded, then times a request to to_model
     (which forces the swap).
     """
+    from porchbench.errors import translate_inference_error
     from porchbench.schemas import ModelOptions
 
     messages = [{"role": "user", "content": "Hi"}]
     options = ModelOptions(temperature=0, seed=42, num_predict=1, num_ctx=2048)
 
     # Ensure from_model is loaded
-    await backend.chat(messages, from_model, options)
+    try:
+        await backend.chat(messages, from_model, options)
+    except Exception as exc:
+        raise translate_inference_error(exc, from_model, phase="swap measurement") from exc
 
     # Time the swap: request to to_model triggers unload + load
     start = time.monotonic()
-    await backend.chat(messages, to_model, options)
+    try:
+        await backend.chat(messages, to_model, options)
+    except Exception as exc:
+        raise translate_inference_error(exc, to_model, phase="swap measurement") from exc
     elapsed = time.monotonic() - start
 
     return SwapMeasurement(

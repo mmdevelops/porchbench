@@ -66,3 +66,37 @@ def _summarize_missing_fields(exc: pydantic.ValidationError) -> str:
             names.append("…")
             break
     return ", ".join(names)
+
+
+def translate_inference_error(exc: Exception, model: str, phase: str = "inference") -> UserError:
+    """Wrap an Ollama inference failure in a UserError with diagnostic context.
+
+    Adds the model name, phase (e.g. "profiling", "swap measurement"), a
+    pointer to the Ollama server log, and a specific hint for the known
+    AMD RDNA 4 (gfx1201) SOLVE_TRI kernel gap when a Qwen 3.5 family
+    model hits a load-time 500.
+    """
+    detail = str(exc).strip() or exc.__class__.__name__
+    lines = [f"{phase.capitalize()} failed for model '{model}': {detail}"]
+
+    looks_like_load_failure = (
+        "model failed to load" in detail.lower()
+        or "status code: 500" in detail.lower()
+    )
+    if looks_like_load_failure:
+        lines.append(
+            "Check the Ollama server log for the underlying cause "
+            "(Windows: %LOCALAPPDATA%\\Ollama\\server.log; "
+            "macOS: ~/.ollama/logs/server.log; "
+            "Linux: journalctl -u ollama -n 100)."
+        )
+        is_qwen35 = any(tag in model.lower() for tag in ("qwen3.5", "qwen-3.5", "qwen35"))
+        if is_qwen35:
+            lines.append(
+                "This model is in the Qwen 3.5 family. On AMD RDNA 4 (gfx1201), "
+                "Qwen 3.5 commonly hits a known 'SOLVE_TRI failed' kernel gap in "
+                "Ollama's rocBLAS. Swap to qwen2.5 / llama / gemma until Ollama "
+                "ships an updated ROCm build."
+            )
+
+    return UserError("\n".join(lines))

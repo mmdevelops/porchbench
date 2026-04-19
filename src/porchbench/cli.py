@@ -1295,6 +1295,9 @@ def main() -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled.[/yellow]")
         sys.exit(130)
+    except UserError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
