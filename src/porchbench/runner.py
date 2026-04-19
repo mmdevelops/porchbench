@@ -7,11 +7,13 @@ Errors on individual prompts are captured without aborting the run.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import platform
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any, TypeVar
 
 from rich.console import Console
 
@@ -63,6 +65,36 @@ def find_completed_prompt_ids(
     return completed
 
 console = Console()
+
+
+T = TypeVar("T")
+
+
+async def _run_with_heartbeat(
+    coro: Coroutine[Any, Any, T],
+    prompt_id: str,
+    heartbeat_s: float,
+) -> T:
+    """Await `coro`; emit a heartbeat line every `heartbeat_s` seconds while it runs.
+
+    Silent when the coroutine completes before the first interval elapses —
+    intended to reassure users during slow prompts (e.g. ROCm cold-start
+    kernel compiles) without adding noise on fast prompts.
+    """
+    task = asyncio.ensure_future(coro)
+    start = time.monotonic()
+    while not task.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=heartbeat_s)
+        except TimeoutError:
+            if task.done():
+                break
+            elapsed = time.monotonic() - start
+            mins, secs = divmod(int(elapsed), 60)
+            console.print(
+                rf"  [dim]\[...][/dim]   {prompt_id}  ({mins}m {secs:02d}s elapsed)"
+            )
+    return task.result()
 
 
 async def run_prompt(
@@ -171,12 +203,13 @@ async def run_suite(
     backend: InferenceBackend,
     prompt_ids: list[str] | None = None,
     output_dir: str | Path = "results",
-    on_prompt_complete: Callable[[str, bool], None] | None = None,
+    on_prompt_complete: Callable[[str, bool, float, int, int, PromptResult | None], None] | None = None,
     suite_dir: Path | None = None,
     repeat_index: int | None = None,
     total_repeats: int | None = None,
     resume: bool = False,
     profile_vram: bool = False,
+    heartbeat_s: float | None = None,
 ) -> RunResult:
     """Run a full suite against a single model.
 
@@ -187,10 +220,15 @@ async def run_suite(
         backend: Inference backend to use.
         prompt_ids: Optional filter — only run these prompt IDs.
         output_dir: Directory for writing result JSON.
-        on_prompt_complete: Optional callback(prompt_id, success) for progress reporting.
+        on_prompt_complete: Optional callback invoked after each prompt with
+            (prompt_id, success, duration_s, prompt_num, total, result_or_None).
+            `result` is None only when the inference raised before a
+            PromptResult could be built.
         suite_dir: Directory containing the suite YAML (for resolving fixture paths).
         repeat_index: 1-based repeat number (None for single runs).
         total_repeats: Total number of repeats planned (None for single runs).
+        heartbeat_s: If set, emit a "still running" line every N seconds while
+            an individual prompt is in flight. Silent on fast prompts.
 
     Returns:
         The completed RunResult (also written to disk).
@@ -231,48 +269,60 @@ async def run_suite(
     failed_count = 0
     run_start = time.monotonic()
 
-    for prompt in prompts:
+    total_prompts = len(prompts)
+    for prompt_num, prompt in enumerate(prompts, start=1):
         options = resolve_options(suite.defaults.options, prompt)
         messages = resolve_messages(prompt)
 
+        prompt_start = time.monotonic()
         try:
             if prompt.mode == "tool-use":
-                result = await _run_tool_use_prompt(
+                tool_coro = _run_tool_use_prompt(
                     prompt, model, options, messages, suite_dir, backend,
                 )
+                if heartbeat_s is not None:
+                    result = await _run_with_heartbeat(tool_coro, prompt.id, heartbeat_s)
+                else:
+                    result = await tool_coro
             else:
-                response_data, metrics = await run_prompt(
+                prompt_coro = run_prompt(
                     messages, model, options, backend=backend, profile_vram=profile_vram,
                 )
+                if heartbeat_s is not None:
+                    response_data, metrics = await _run_with_heartbeat(prompt_coro, prompt.id, heartbeat_s)
+                else:
+                    response_data, metrics = await prompt_coro
                 result = PromptResult(
                     prompt_id=prompt.id,
                     category=prompt.category,
                     difficulty=prompt.difficulty,
                     tags=prompt.tags,
                     contamination_risk=prompt.contamination_risk,
-        expected_answer=prompt.expected_answer,
+                    expected_answer=prompt.expected_answer,
                     options_used=options,
                     request=RequestData(messages=messages),
                     response=response_data,
                     metrics=metrics,
                 )
 
+            prompt_duration = time.monotonic() - prompt_start
             results.append(result)
             if on_prompt_complete:
-                on_prompt_complete(prompt.id, True, result)
+                on_prompt_complete(prompt.id, True, prompt_duration, prompt_num, total_prompts, result)
 
         except Exception as exc:
+            prompt_duration = time.monotonic() - prompt_start
             failed_count += 1
             console.print(f"[red]Error on prompt '{prompt.id}': {exc}[/red]")
 
             # Record the failure with empty response and metrics
-            results.append(PromptResult(
+            failed_result = PromptResult(
                 prompt_id=prompt.id,
                 category=prompt.category,
                 difficulty=prompt.difficulty,
                 tags=prompt.tags,
                 contamination_risk=prompt.contamination_risk,
-        expected_answer=prompt.expected_answer,
+                expected_answer=prompt.expected_answer,
                 options_used=options,
                 request=RequestData(messages=messages),
                 response=ResponseData(
@@ -280,9 +330,10 @@ async def run_suite(
                     done_reason=f"error: {exc}",
                 ),
                 metrics=PromptMetrics(),
-            ))
+            )
+            results.append(failed_result)
             if on_prompt_complete:
-                on_prompt_complete(prompt.id, False)
+                on_prompt_complete(prompt.id, False, prompt_duration, prompt_num, total_prompts, failed_result)
 
     run_elapsed = time.monotonic() - run_start
 

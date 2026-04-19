@@ -326,7 +326,9 @@ async def execute_plan(
     verbose: bool,
     on_task_start: Callable[[OvernightTask, str, int | None], None] | None = None,
     on_task_done: Callable[[OvernightResult], None] | None = None,
+    on_prompt_complete: Callable[..., None] | None = None,
     profile_vram: bool = False,
+    heartbeat_s: float | None = None,
 ) -> list[OvernightResult]:
     """Execute the overnight plan with error resilience.
 
@@ -393,6 +395,8 @@ async def execute_plan(
                             total_repeats=task.repeats if task.repeats > 1 else None,
                             resume=resume,
                             profile_vram=profile_vram,
+                            on_prompt_complete=on_prompt_complete,
+                            heartbeat_s=heartbeat_s,
                         )
                         result = OvernightResult(
                             task=task, model=model, repeat=repeat_i,

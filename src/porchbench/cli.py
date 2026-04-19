@@ -236,7 +236,7 @@ def run(
             ) as progress:
                 task = progress.add_task(f"Running {model}", total=prompt_count)
 
-                def on_complete(prompt_id: str, success: bool, result=None) -> None:
+                def on_complete(prompt_id: str, success: bool, duration_s: float, prompt_num: int, total: int, result=None) -> None:
                     status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
                     dur = result.metrics.total_duration if result else None
                     dur_str = f"{dur / 1e9:.1f}s" if dur else ""
@@ -1147,6 +1147,21 @@ def overnight(
         else:
             console.print(f"  [red]Failed: {result.error}[/red]")
 
+    def on_prompt_complete(prompt_id, success, duration_s, prompt_num, total, result=None):
+        if duration_s >= 60:
+            mins, secs = divmod(int(duration_s), 60)
+            dur_str = f"{mins}m {secs:02d}s"
+        else:
+            dur_str = f"{duration_s:.1f}s"
+        counter = f"{prompt_num}/{total}"
+        if success:
+            console.print(rf"  [green]\[ok][/green]    {counter}  {prompt_id}  ({dur_str})")
+        else:
+            err = ""
+            if result is not None and result.response.done_reason:
+                err = f" - {str(result.response.done_reason).splitlines()[0][:80]}"
+            console.print(rf"  [red]\[fail][/red]  {counter}  {prompt_id}  (failed after {dur_str}{err})")
+
     try:
         results = asyncio.run(
             execute_plan(
@@ -1157,7 +1172,9 @@ def overnight(
                 verbose=verbose,
                 on_task_start=on_start,
                 on_task_done=on_done,
+                on_prompt_complete=on_prompt_complete,
                 profile_vram=profile_vram,
+                heartbeat_s=60.0,
             )
         )
     except KeyboardInterrupt:

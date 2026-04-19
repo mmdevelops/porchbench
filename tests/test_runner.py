@@ -293,3 +293,56 @@ class TestResultPathFor:
         computed = result_path_for(rr, tmp_path)
         assert written == computed
         assert written.exists()
+
+
+class TestRunWithHeartbeat:
+    """_run_with_heartbeat is the knob that turns 'silent for 15 min' into
+    'visible progress' during slow ROCm cold-start compiles."""
+
+    async def test_returns_result_when_fast(self):
+        from porchbench.runner import _run_with_heartbeat
+
+        async def fast():
+            return 42
+
+        result = await _run_with_heartbeat(fast(), "p1", heartbeat_s=0.5)
+        assert result == 42
+
+    async def test_no_heartbeat_on_fast_coroutine(self, capsys):
+        from porchbench.runner import _run_with_heartbeat
+
+        async def fast():
+            return "done"
+
+        await _run_with_heartbeat(fast(), "p1", heartbeat_s=10.0)
+        captured = capsys.readouterr()
+        assert "still running" not in captured.out
+        assert "elapsed" not in captured.out
+
+    async def test_heartbeat_fires_on_slow_coroutine(self, capsys):
+        """A coroutine running longer than heartbeat_s must trigger at least one line.
+
+        Uses a short 0.05s heartbeat so the test stays fast while exercising the timeout path.
+        """
+        import asyncio
+
+        from porchbench.runner import _run_with_heartbeat
+
+        async def slow():
+            await asyncio.sleep(0.12)
+            return "done"
+
+        result = await _run_with_heartbeat(slow(), "slow-prompt", heartbeat_s=0.05)
+        assert result == "done"
+        captured = capsys.readouterr()
+        assert "slow-prompt" in captured.out
+        assert "elapsed" in captured.out
+
+    async def test_propagates_exception_from_coroutine(self):
+        from porchbench.runner import _run_with_heartbeat
+
+        async def boom():
+            raise RuntimeError("nope")
+
+        with pytest.raises(RuntimeError, match="nope"):
+            await _run_with_heartbeat(boom(), "p1", heartbeat_s=0.1)
