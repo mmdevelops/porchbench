@@ -49,7 +49,6 @@ routes_app = typer.Typer(
     help="Find which model handles each prompt type best.",
     no_args_is_help=True,
 )
-app.add_typer(routes_app)
 console = Console()
 
 
@@ -836,50 +835,6 @@ def analyze_routes_cmd(
 
 
 @app.command()
-def profile(
-    models: Annotated[
-        list[str] | None,
-        typer.Option("--model", "-m", help="Ollama model name(s) to profile. Interactive picker if omitted."),
-    ] = None,
-    backend_name: Annotated[
-        str,
-        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
-    ] = "ollama",
-    host: Annotated[
-        str | None,
-        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
-    ] = None,
-    output_dir: Annotated[
-        Path,
-        typer.Option("--output-dir", "-o", help="Directory for profile output."),
-    ] = Path("results"),
-) -> None:
-    """Measure GPU memory, model load times, and swap costs (Ollama only)."""
-    from porchbench.interactive import select_models
-    from porchbench.profiler import print_profile_summary, profile_system, write_profile
-
-    if backend_name != "ollama":
-        console.print(
-            f"[red]Profile requires Ollama backend (got '{backend_name}'). "
-            f"VRAM and swap profiling are Ollama-specific.[/red]"
-        )
-        raise typer.Exit(code=1)
-
-    backend = OllamaBackend(host=host)
-    check_server_or_exit(backend, "ollama")
-
-    if models is None:
-        models = select_models(backend)
-
-    sys_profile = asyncio.run(profile_system(models, backend=backend))
-
-    path = write_profile(sys_profile, output_dir)
-    console.print(f"\n[green]Profile written to {path}[/green]\n")
-
-    print_profile_summary(sys_profile)
-
-
-@app.command()
 def leaderboard(
     positional_paths: Annotated[
         list[Path] | None,
@@ -1418,6 +1373,53 @@ def doctor(
         render_report(report, console)
 
     raise typer.Exit(code=0 if report.ok else 1)
+
+
+app.add_typer(routes_app)
+
+
+@app.command()
+def profile(
+    models: Annotated[
+        list[str] | None,
+        typer.Option("--model", "-m", help="Ollama model name(s) to profile. Interactive picker if omitted."),
+    ] = None,
+    backend_name: Annotated[
+        str,
+        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend (only 'ollama' supported for profiling)."),
+    ] = "ollama",
+    host: Annotated[
+        str | None,
+        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
+    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-o", help="Directory for profile output."),
+    ] = Path("results"),
+) -> None:
+    """Measure GPU memory, model load times, and swap costs (Ollama only)."""
+    from porchbench.interactive import select_models
+    from porchbench.profiler import print_profile_summary, profile_system, write_profile
+
+    if backend_name != "ollama":
+        console.print(
+            f"[red]Profile requires Ollama backend (got '{backend_name}'). "
+            f"VRAM and swap profiling are Ollama-specific.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    backend = OllamaBackend(host=host)
+    check_server_or_exit(backend, "ollama")
+
+    if models is None:
+        models = select_models(backend)
+
+    sys_profile = asyncio.run(profile_system(models, backend=backend))
+
+    path = write_profile(sys_profile, output_dir)
+    console.print(f"\n[green]Profile written to {path}[/green]\n")
+
+    print_profile_summary(sys_profile)
 
 
 def main() -> None:
