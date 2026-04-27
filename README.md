@@ -50,6 +50,8 @@ porchbench evaluate --result results/<your-result-file>.json
 
 Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
+To collapse run + score into one step, pass `--evaluate` to `porchbench run` (mirrors the same flag on `overnight`). All inference completes first, then the judge model loads once and scores every result in a single post-phase batch — no swap thrashing between target model and judge. Compose with `--eval-backend ollama|api|claude-code` and `--eval-model <name>` to override defaults.
+
 ### Compare models
 
 ```bash

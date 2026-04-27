@@ -35,7 +35,7 @@ from porchbench.assets import (
 )
 from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from porchbench.errors import UserError, load_json_model
-from porchbench.runner import run_suite
+from porchbench.runner import result_path_for, run_suite
 from porchbench.schemas import RunResult, Scorecard
 from porchbench.suite import load_suite, make_suite_reference
 
@@ -162,6 +162,30 @@ def run(
         bool,
         typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
     ] = False,
+    do_evaluate: Annotated[
+        bool,
+        typer.Option("--evaluate", help="Score all results in a single post-phase batch after inference completes (judge model stays resident)."),
+    ] = False,
+    eval_backend: Annotated[
+        str,
+        typer.Option("--eval-backend", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
+    ] = "ollama",
+    eval_model: Annotated[
+        str | None,
+        typer.Option("--eval-model", envvar="PORCHBENCH_EVAL_MODEL", help="Judge model. Defaults per backend."),
+    ] = None,
+    rubric_path: Annotated[
+        Path | None,
+        typer.Option("--rubric", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
+    ] = None,
+    rubric_dir: Annotated[
+        Path | None,
+        typer.Option("--rubric-dir", help="Directory of category-specific rubrics."),
+    ] = None,
+    eval_timeout: Annotated[
+        int,
+        typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
+    ] = 120,
 ) -> None:
     """Run a benchmark suite against one or more models."""
     interactive = models is None or suite_path is None
@@ -218,6 +242,8 @@ def run(
 
     check_server_or_exit(backend, backend_name)
     check_models_or_exit(backend, models, backend_name)
+
+    eval_paths: list[Path] = []
 
     for model in models:
         for repeat_i in range(1, repeats + 1):
@@ -277,9 +303,25 @@ def run(
                     )
                 )
 
+            if do_evaluate:
+                eval_paths.append(result_path_for(result, output_dir))
+
             # Print summary table
             _print_summary(result)
             console.print()
+
+    if do_evaluate and eval_paths:
+        console.rule("[bold]Evaluation[/bold]")
+        _run_post_phase_evaluation(
+            eval_paths=eval_paths,
+            eval_backend_name=eval_backend,
+            eval_model=eval_model,
+            host=host,
+            eval_timeout=eval_timeout,
+            rubric_path=rubric_path,
+            rubric_dir=rubric_dir,
+            results=[],
+        )
 
 
 def _print_summary(result) -> None:
