@@ -117,3 +117,82 @@ def test_run_without_evaluate_skips_post_phase(
 
     assert res.exit_code == 0, res.output
     post_phase.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# --set KEY=VALUE override surface
+# ---------------------------------------------------------------------------
+
+
+class TestParseSetOverrides:
+    def test_empty_input_returns_empty_dict(self):
+        from porchbench.cli import parse_set_overrides
+        assert parse_set_overrides(None) == {}
+        assert parse_set_overrides([]) == {}
+
+    def test_yaml_typed_values_round_trip(self):
+        from porchbench.cli import parse_set_overrides
+        out = parse_set_overrides([
+            "think=false", "num_ctx=8192", "temperature=0.7", "label=hello",
+        ])
+        assert out == {
+            "think": False, "num_ctx": 8192, "temperature": 0.7, "label": "hello",
+        }
+
+    def test_null_value_parses_to_none(self):
+        from porchbench.cli import parse_set_overrides
+        out = parse_set_overrides(["think=null"])
+        assert out == {"think": None}
+
+    def test_value_with_equals_preserves_remainder(self):
+        from porchbench.cli import parse_set_overrides
+        # partition on first '=' so values can themselves contain '='
+        out = parse_set_overrides(["custom=a=b=c"])
+        assert out == {"custom": "a=b=c"}
+
+    def test_missing_equals_raises(self):
+        from porchbench.cli import parse_set_overrides
+        import typer
+        with pytest.raises(typer.BadParameter):
+            parse_set_overrides(["thinkfalse"])
+
+    def test_empty_key_raises(self):
+        from porchbench.cli import parse_set_overrides
+        import typer
+        with pytest.raises(typer.BadParameter):
+            parse_set_overrides(["=false"])
+
+
+def test_run_with_set_override_lands_in_resolved_options(
+    mocked_run_environment: RunResult, tmp_path: Path,
+):
+    """`--set think=false` must reach the suite's defaults.options before run_suite sees it."""
+    captured: dict = {}
+
+    async def _capture_suite(*args, **kwargs):
+        # run_suite receives the overridden suite — capture its defaults to assert on
+        captured["suite"] = kwargs.get("suite") or args[0]
+        return mocked_run_environment
+
+    with (
+        patch("porchbench.cli.run_suite", new=_capture_suite),
+        patch("porchbench.cli.construct_backend", return_value=MagicMock()),
+        patch("porchbench.cli.check_server_or_exit"),
+        patch("porchbench.cli.check_models_or_exit"),
+    ):
+        res = runner.invoke(
+            app,
+            [
+                "run",
+                "--suite", "coding-basics",
+                "--model", "qwen2.5:3b",
+                "--output-dir", str(tmp_path),
+                "--set", "think=false",
+                "--set", "num_ctx=8192",
+            ],
+        )
+
+    assert res.exit_code == 0, res.output
+    suite = captured["suite"]
+    assert suite.defaults.options.think is False
+    assert suite.defaults.options.num_ctx == 8192

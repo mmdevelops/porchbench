@@ -94,6 +94,23 @@ def resolve_options(suite_defaults: ModelOptions, prompt: Prompt) -> ModelOption
     return ModelOptions.model_validate(base)
 
 
+def apply_option_overrides(suite: Suite, overrides: dict[str, object]) -> Suite:
+    """Layer CLI-supplied overrides onto the suite's defaults.options.
+
+    Returns a new suite with merged defaults; per-prompt option overrides in
+    `prompts[].options` remain authoritative for those prompts (resolved later
+    by `resolve_options`). Pass-through fields are preserved via ModelOptions'
+    `extra="allow"` config.
+    """
+    if not overrides:
+        return suite
+    merged = suite.defaults.options.model_dump()
+    merged.update(overrides)
+    new_options = ModelOptions.model_validate(merged)
+    new_defaults = suite.defaults.model_copy(update={"options": new_options})
+    return suite.model_copy(update={"defaults": new_defaults})
+
+
 def resolve_messages(prompt: Prompt, system_message: str | None = None) -> list[Message]:
     """Build the final message list, optionally prepending a system message.
 

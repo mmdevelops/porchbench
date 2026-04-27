@@ -223,7 +223,15 @@ porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia
 
 **AMD / ROCm: kernel errors on gfx1201 (RDNA 4)** — a rocblas override usually fixes most models. Some quantized models (notably parts of the Qwen 3.5 family) hit a missing `SOLVE_TRI` kernel upstream; fall back to a different model family until ROCm ships the fix.
 
-**Reasoning-mode models run slow by default** — Qwen 3, DeepSeek-R1, and other models with a thinking mode emit `<think>...</think>` reasoning tokens before every answer unless explicitly disabled. Porchbench strips thinking tags before judging, but still pays the full generation cost per prompt. To disable thinking at inference time, set `think: false` in your suite's `defaults.options`:
+**Reasoning-mode models run slow by default** — Qwen 3, DeepSeek-R1, and other models with a thinking mode emit `<think>...</think>` reasoning tokens before every answer unless explicitly disabled. Porchbench strips thinking tags before judging, but still pays the full generation cost per prompt. The fastest way to disable for a single run is the `--set` override:
+
+```bash
+porchbench run --suite coding-basics --model qwen3:8b --set think=false
+```
+
+`--set KEY=VALUE` is repeatable and layers over the suite's `defaults.options` (`--set think=false --set num_ctx=8192` is fine). Values parse as YAML so booleans, ints, and `null` round-trip to the right Python types. The override is captured in each `PromptResult.options_used` so the run JSON reflects what actually executed.
+
+For a more permanent change, set `think: false` in your suite's `defaults.options` block instead:
 
 ```yaml
 defaults:
@@ -233,7 +241,7 @@ defaults:
     think: false   # disable reasoning tokens for thinking-capable models
 ```
 
-Or leave it unset to benchmark with-thinking performance. Applies only to the Ollama backend; OpenAI-compatible servers ignore the field.
+Applies only to the Ollama backend; OpenAI-compatible servers ignore the field.
 
 Not every thinking-model family honors `think: false`. Qwen 3 and DeepSeek-R1 respect the flag; some other families (e.g. LFM2.5-thinking) ignore it and continue emitting `<think>` blocks regardless. If you set `think: false` and still see prompts scored zero with the "truncated before answer emitted" diagnostic, the model's family likely doesn't honor the flag — raise `num_predict` to give it room to close the thinking trace, or pick a non-thinking variant if benchmark wall-clock matters.
 

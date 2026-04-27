@@ -5,14 +5,26 @@ import tempfile
 import pytest
 
 from porchbench.assets import find_suite
-from porchbench.schemas import Message, ModelOptions, Prompt
+from porchbench.schemas import Message, ModelOptions, Prompt, Suite, SuiteDefaults, SuiteMetadata
 from porchbench.suite import (
+    apply_option_overrides,
     compute_suite_hash,
     load_suite,
     make_suite_reference,
     resolve_messages,
     resolve_options,
 )
+
+
+def _make_suite(defaults: ModelOptions | None = None, prompts: list[Prompt] | None = None) -> Suite:
+    return Suite(
+        suite=SuiteMetadata(name="T", version="1.0"),
+        defaults=SuiteDefaults(options=defaults or ModelOptions()),
+        prompts=prompts or [Prompt(
+            id="p1", category="coding", difficulty="easy",
+            messages=[Message(role="user", content="Hi")],
+        )],
+    )
 
 # ---------------------------------------------------------------------------
 # Option merging
@@ -52,6 +64,50 @@ class TestResolveOptions:
         resolved = resolve_options(defaults, prompt)
         assert resolved.temperature == 0.5
         assert resolved.seed == 99
+
+
+class TestApplyOptionOverrides:
+    def test_empty_overrides_returns_suite_unchanged(self):
+        suite = _make_suite(ModelOptions(temperature=0, num_ctx=4096))
+        out = apply_option_overrides(suite, {})
+        assert out is suite
+
+    def test_override_lands_in_defaults(self):
+        suite = _make_suite(ModelOptions(num_ctx=4096))
+        out = apply_option_overrides(suite, {"think": False, "num_ctx": 8192})
+        assert out.defaults.options.think is False
+        assert out.defaults.options.num_ctx == 8192
+
+    def test_unset_defaults_preserved(self):
+        suite = _make_suite(ModelOptions(temperature=0.5, seed=99))
+        out = apply_option_overrides(suite, {"think": False})
+        assert out.defaults.options.temperature == 0.5
+        assert out.defaults.options.seed == 99
+
+    def test_per_prompt_options_still_win(self):
+        # CLI sets think=False; one prompt explicitly opts in to think=True.
+        prompt_with_think = Prompt(
+            id="p1", category="coding", difficulty="easy",
+            messages=[Message(role="user", content="Hi")],
+            options=ModelOptions(think=True),
+        )
+        suite = _make_suite(prompts=[prompt_with_think])
+        suite = apply_option_overrides(suite, {"think": False})
+        # After per-prompt resolve, the explicit per-prompt value wins.
+        resolved = resolve_options(suite.defaults.options, suite.prompts[0])
+        assert resolved.think is True
+
+    def test_unknown_keys_pass_through_via_extra_allow(self):
+        # ModelOptions has extra="allow" so forwarded Ollama options round-trip.
+        suite = _make_suite()
+        out = apply_option_overrides(suite, {"repeat_penalty": 1.1})
+        dumped = out.defaults.options.model_dump()
+        assert dumped.get("repeat_penalty") == 1.1
+
+    def test_invalid_type_raises_validation_error(self):
+        suite = _make_suite()
+        with pytest.raises(Exception):  # pydantic ValidationError subclass
+            apply_option_overrides(suite, {"num_ctx": "not-an-int"})
 
 
 # ---------------------------------------------------------------------------

@@ -82,11 +82,21 @@ def build_plan(
     suite_paths: list[Path],
     models: list[str],
     repeats: int,
+    option_overrides: dict[str, object] | None = None,
 ) -> list[OvernightTask]:
-    """Load suites, classify them, and build an ordered task list."""
+    """Load suites, classify them, and build an ordered task list.
+
+    `option_overrides`, when provided, is layered onto each suite's
+    `defaults.options` before tasks are built — used by the CLI's `--set`
+    flag so users can flip e.g. `think=false` without editing suite YAML.
+    """
+    from porchbench.suite import apply_option_overrides
+
     tasks: list[OvernightTask] = []
     for path in suite_paths:
         suite = load_suite(path)
+        if option_overrides:
+            suite = apply_option_overrides(suite, option_overrides)
         suite_ref = make_suite_reference(path, suite)
         dispatch = classify_suite(suite)
         n_prompts = len(suite.prompts)

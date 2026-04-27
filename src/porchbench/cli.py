@@ -87,6 +87,41 @@ def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
         raise typer.Exit(code=1)
 
 
+def parse_set_overrides(items: list[str] | None) -> dict[str, object]:
+    """Parse repeated `--set KEY=VALUE` flags into a typed override dict.
+
+    Values are interpreted with YAML rules so `false`/`true`/`null`/ints/floats
+    round-trip to the right Python types. Used to override `defaults.options` on
+    the loaded suite without editing the suite YAML.
+    """
+    import yaml
+
+    if not items:
+        return {}
+    out: dict[str, object] = {}
+    for item in items:
+        if "=" not in item:
+            raise typer.BadParameter(
+                f"--set requires KEY=VALUE format, got: {item!r}",
+                param_hint="--set",
+            )
+        key, _, raw_value = item.partition("=")
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter(
+                f"--set: empty key in {item!r}",
+                param_hint="--set",
+            )
+        try:
+            out[key] = yaml.safe_load(raw_value)
+        except yaml.YAMLError as exc:
+            raise typer.BadParameter(
+                f"--set {key}: could not parse value {raw_value!r}: {exc}",
+                param_hint="--set",
+            )
+    return out
+
+
 def check_models_or_exit(
     backend: InferenceBackend, models: list[str], backend_name: str,
 ) -> None:
@@ -186,6 +221,10 @@ def run(
         int,
         typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
     ] = 120,
+    set_overrides: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="Override a suite default option as KEY=VALUE (e.g. --set think=false). Repeatable. Values parsed as YAML so booleans/ints/nulls round-trip."),
+    ] = None,
 ) -> None:
     """Run a benchmark suite against one or more models."""
     interactive = models is None or suite_path is None
@@ -223,6 +262,16 @@ def run(
     except Exception as exc:
         console.print(f"[red]Failed to load suite: {exc}[/red]")
         raise typer.Exit(code=1)
+
+    overrides = parse_set_overrides(set_overrides)
+    if overrides:
+        from porchbench.suite import apply_option_overrides
+        try:
+            suite = apply_option_overrides(suite, overrides)
+        except Exception as exc:
+            console.print(f"[red]Invalid --set value: {exc}[/red]")
+            raise typer.Exit(code=1)
+        console.print(f"Overrides: {overrides}")
 
     suite_ref = make_suite_reference(suite_path, suite)
 
@@ -1067,6 +1116,10 @@ def overnight(
         bool,
         typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
     ] = False,
+    set_overrides: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="Override a suite default option as KEY=VALUE (e.g. --set think=false). Repeatable. Values parsed as YAML so booleans/ints/nulls round-trip."),
+    ] = None,
 ) -> None:
     """Queue multiple suites and models for unattended batch benchmarking."""
     import time as _time
@@ -1114,9 +1167,13 @@ def overnight(
         resume = opts["resume"]
         verbose = opts["verbose"]
 
+    overrides = parse_set_overrides(set_overrides)
+    if overrides:
+        console.print(f"Overrides: {overrides}")
+
     # 2. Build plan
     try:
-        plan = build_plan(paths, models, repeats)
+        plan = build_plan(paths, models, repeats, option_overrides=overrides)
     except Exception as exc:
         console.print(f"[red]Failed to build plan: {exc}[/red]")
         raise typer.Exit(code=1)
