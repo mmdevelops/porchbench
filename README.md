@@ -233,6 +233,8 @@ defaults:
 
 Or leave it unset to benchmark with-thinking performance. Applies only to the Ollama backend; OpenAI-compatible servers ignore the field.
 
+Not every thinking-model family honors `think: false`. Qwen 3 and DeepSeek-R1 respect the flag; some other families (e.g. LFM2.5-thinking) ignore it and continue emitting `<think>` blocks regardless. If you set `think: false` and still see prompts scored zero with the "truncated before answer emitted" diagnostic, the model's family likely doesn't honor the flag — raise `num_predict` to give it room to close the thinking trace, or pick a non-thinking variant if benchmark wall-clock matters.
+
 **Results file not where you expected** — output goes to `--output-dir` (default `results/`). Check the command's `--help` for the relevant flag.
 
 ## Methodology notes
