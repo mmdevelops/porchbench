@@ -8,6 +8,7 @@ error resilience. Designed for hobbyists queuing benchmarks overnight.
 from __future__ import annotations
 
 import asyncio
+import statistics
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ from porchbench.backend import InferenceBackend, OllamaBackend
 from porchbench.profiler import detect_gpu
 from porchbench.routing import run_discovery
 from porchbench.runner import run_suite
-from porchbench.schemas import Suite, SuiteReference
+from porchbench.schemas import RunResult, Suite, SuiteReference
 from porchbench.suite import load_suite, make_suite_reference
 
 console = Console()
@@ -127,8 +128,70 @@ def estimate_duration(
     plan: list[OvernightTask],
     seconds_per_prompt: float = SECONDS_PER_PROMPT_DEFAULT,
 ) -> float:
-    """Estimate total runtime in seconds."""
+    """Estimate total runtime in seconds at a constant per-prompt rate.
+
+    Pure helper. Use `estimate_duration_from_history` instead when you have
+    access to a results directory — it produces a far better estimate by
+    measuring the actual per-(model, suite) rate from past runs.
+    """
     return sum(task.run_count * seconds_per_prompt for task in plan)
+
+
+def _seconds_per_prompt_from_history(
+    model: str, suite_slug: str, results_dir: Path,
+) -> float | None:
+    """Median per-prompt total_duration (seconds) for past (model, suite) runs.
+
+    Reads matching `RunResult` JSON files in `results_dir` and aggregates the
+    per-prompt `metrics.total_duration` field. Returns None when no matching
+    run exists, or when matching runs contain no usable timing data. No
+    filtering by hardware — assumes the results dir reflects runs on this
+    machine; cross-machine result trees may yield estimates that don't
+    match local performance.
+    """
+    if not results_dir.is_dir():
+        return None
+    model_slug = model.replace(":", "-").replace("/", "-")
+    pattern = f"*_{suite_slug}_{model_slug}*.json"
+    durations: list[float] = []
+    for path in results_dir.glob(pattern):
+        try:
+            text = path.read_text(encoding="utf-8")
+            rr = RunResult.model_validate_json(text)
+        except Exception:
+            continue
+        for r in rr.results:
+            if r.metrics.total_duration:
+                durations.append(r.metrics.total_duration / 1e9)
+    if not durations:
+        return None
+    return statistics.median(durations)
+
+
+def estimate_duration_from_history(
+    plan: list[OvernightTask], results_dir: Path,
+) -> tuple[float, int, int]:
+    """Estimate plan runtime from prior-run timings per (model, suite).
+
+    Returns `(total_seconds, calls_with_history, calls_total)`. The estimate
+    only covers calls for which a per-(model, suite) rate is available;
+    calls without history are excluded from the time and surfaced via the
+    coverage tuple so callers can render partial-coverage honestly rather
+    than fabricating a number.
+    """
+    total_seconds = 0.0
+    calls_with_history = 0
+    calls_total = 0
+    for task in plan:
+        suite_slug = task.suite.suite.name.lower().replace(" ", "-")
+        per_model_calls = task.run_count // max(len(task.models), 1)
+        for model in task.models:
+            calls_total += per_model_calls
+            rate = _seconds_per_prompt_from_history(model, suite_slug, results_dir)
+            if rate is not None:
+                total_seconds += per_model_calls * rate
+                calls_with_history += per_model_calls
+    return total_seconds, calls_with_history, calls_total
 
 
 def format_estimate(seconds: float) -> str:
@@ -291,8 +354,18 @@ async def run_preflight(
 # ---------------------------------------------------------------------------
 
 
-def print_plan(plan: list[OvernightTask], models: list[str]) -> None:
-    """Print the execution plan as a Rich table."""
+def print_plan(
+    plan: list[OvernightTask],
+    models: list[str],
+    results_dir: Path | None = None,
+) -> None:
+    """Print the execution plan as a Rich table.
+
+    When `results_dir` is provided, the duration estimate is computed from
+    prior runs of each (model, suite) pair found there. Calls without prior
+    history are flagged in the coverage line rather than estimated against
+    a fabricated default.
+    """
     table = Table(title="Overnight Plan", title_style="bold")
     table.add_column("Suite", style="bold")
     table.add_column("Type")
@@ -317,9 +390,30 @@ def print_plan(plan: list[OvernightTask], models: list[str]) -> None:
     console.print(f"Models: {', '.join(models)}")
 
     total_runs = sum(t.run_count for t in plan)
-    estimate = estimate_duration(plan)
     console.print(f"Total inference calls: [bold]{total_runs}[/bold]")
-    console.print(f"Estimated duration: [bold]{format_estimate(estimate)}[/bold]")
+
+    if results_dir is not None:
+        total_seconds, with_history, total_calls = estimate_duration_from_history(
+            plan, results_dir,
+        )
+        if total_calls == 0:
+            pass  # empty plan; nothing to estimate
+        elif with_history == 0:
+            console.print(
+                "Estimated duration: [dim]no prior runs of these (model, suite) pairs "
+                f"in {results_dir}/ — first run, no estimate[/dim]"
+            )
+        elif with_history == total_calls:
+            console.print(
+                f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+                "[dim](median of prior runs)[/dim]"
+            )
+        else:
+            console.print(
+                f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+                f"[dim]for {with_history}/{total_calls} calls "
+                "(no history for the rest)[/dim]"
+            )
     console.print()
 
 

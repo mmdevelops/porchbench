@@ -8,19 +8,32 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from porchbench.overnight import (
+    OvernightTask,
+    _seconds_per_prompt_from_history,
     build_plan,
     classify_suite,
     estimate_duration,
+    estimate_duration_from_history,
     format_estimate,
 )
 from porchbench.schemas import (
     Message,
+    ModelInfo,
     ModelOptions,
     Prompt,
+    PromptMetrics,
+    PromptResult,
+    RequestData,
+    ResponseData,
+    ResponseMessage,
+    RunMetadata,
+    RunResult,
+    RunSummary,
     Strategy,
     Suite,
     SuiteDefaults,
     SuiteMetadata,
+    SuiteReference,
 )
 from porchbench.suite import discover_suites
 
@@ -166,6 +179,140 @@ class TestFormatEstimate:
 
     def test_zero(self):
         assert format_estimate(0) == "~0m"
+
+
+# ---------------------------------------------------------------------------
+# History-aware duration estimator
+# ---------------------------------------------------------------------------
+
+
+def _write_fake_run(
+    results_dir: Path, suite_name: str, model: str,
+    per_prompt_seconds: list[float], timestamp: str = "2026-04-25T10-00-00",
+) -> Path:
+    """Write a RunResult JSON shaped to match the runner's filename convention."""
+    suite_slug = suite_name.lower().replace(" ", "-")
+    model_slug = model.replace(":", "-").replace("/", "-")
+    path = results_dir / f"{timestamp}_{suite_slug}_{model_slug}.json"
+
+    prompt_results = []
+    for i, secs in enumerate(per_prompt_seconds):
+        prompt_results.append(PromptResult(
+            prompt_id=f"p{i}",
+            category="coding",
+            difficulty="easy",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="q")]),
+            response=ResponseData(message=ResponseMessage(content="a")),
+            metrics=PromptMetrics(total_duration=int(secs * 1e9)),
+        ))
+
+    rr = RunResult(
+        run=RunMetadata(
+            suite=SuiteReference(
+                name=suite_name, version="1.0",
+                file=f"{suite_slug}.yaml", sha256="x",
+            ),
+            model=ModelInfo(name=model),
+        ),
+        results=prompt_results,
+        summary=RunSummary(
+            total_prompts=len(prompt_results),
+            completed=len(prompt_results),
+            failed=0,
+            total_duration_s=sum(per_prompt_seconds),
+        ),
+    )
+    path.write_text(rr.model_dump_json(), encoding="utf-8")
+    return path
+
+
+def _make_task(suite_name: str, models: list[str], run_count: int) -> OvernightTask:
+    suite = Suite(
+        suite=SuiteMetadata(name=suite_name, version="1.0"),
+        defaults=SuiteDefaults(options=ModelOptions()),
+        prompts=[Prompt(
+            id="p0", category="coding", difficulty="easy",
+            messages=[Message(role="user", content="q")],
+        )],
+    )
+    suite_ref = SuiteReference(
+        name=suite_name, version="1.0",
+        file=f"{suite_name}.yaml", sha256="x",
+    )
+    return OvernightTask(
+        suite_path=Path(f"{suite_name}.yaml"),
+        suite=suite,
+        suite_ref=suite_ref,
+        dispatch_type="standard",
+        models=models,
+        repeats=1,
+        prompt_count=run_count // len(models),
+        strategy_count=1,
+        run_count=run_count,
+    )
+
+
+class TestSecondsPerPromptFromHistory:
+    def test_returns_none_when_results_dir_missing(self, tmp_path: Path):
+        out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path / "missing")
+        assert out is None
+
+    def test_returns_none_when_no_matching_files(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Other Suite", "qwen3:8b", [10.0])
+        out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path)
+        assert out is None
+
+    def test_returns_median_across_prompts(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [10.0, 20.0, 30.0])
+        out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path)
+        assert out == 20.0
+
+    def test_aggregates_across_multiple_runs(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [10.0, 20.0],
+                        timestamp="2026-04-20T10-00-00")
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [30.0, 40.0],
+                        timestamp="2026-04-21T10-00-00")
+        out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path)
+        assert out == 25.0  # median of [10, 20, 30, 40]
+
+    def test_skips_malformed_files(self, tmp_path: Path):
+        # malformed file matching the glob is skipped; valid one still scored
+        (tmp_path / "garbage_coding-basics_qwen3-8b.json").write_text("{not json", encoding="utf-8")
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [15.0])
+        out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path)
+        assert out == 15.0
+
+
+class TestEstimateDurationFromHistory:
+    def test_empty_plan_returns_zero_coverage(self, tmp_path: Path):
+        total, with_hist, total_calls = estimate_duration_from_history([], tmp_path)
+        assert (total, with_hist, total_calls) == (0.0, 0, 0)
+
+    def test_no_history_returns_zero_seconds_with_full_call_count(self, tmp_path: Path):
+        task = _make_task("Coding Basics", ["qwen3:8b"], run_count=10)
+        total, with_hist, total_calls = estimate_duration_from_history([task], tmp_path)
+        assert total == 0.0
+        assert with_hist == 0
+        assert total_calls == 10
+
+    def test_full_history_sums_per_model_estimate(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [12.0, 12.0, 12.0])
+        task = _make_task("Coding Basics", ["qwen3:8b"], run_count=5)
+        total, with_hist, total_calls = estimate_duration_from_history([task], tmp_path)
+        assert total == 60.0  # 5 calls * 12s median
+        assert with_hist == 5
+        assert total_calls == 5
+
+    def test_partial_history_flags_uncovered_calls(self, tmp_path: Path):
+        # qwen3:8b has history (10s/prompt), llama3.1:8b does not
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [10.0, 10.0])
+        task = _make_task("Coding Basics", ["qwen3:8b", "llama3.1:8b"], run_count=10)
+        total, with_hist, total_calls = estimate_duration_from_history([task], tmp_path)
+        # Per-model split: 5 calls each. qwen has rate, llama doesn't.
+        assert total == 50.0  # 5 * 10s for qwen only
+        assert with_hist == 5
+        assert total_calls == 10
 
 
 class TestCheckVramCofit:

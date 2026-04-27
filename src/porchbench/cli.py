@@ -1180,7 +1180,7 @@ def overnight(
 
     # 3. Display plan
     console.print()
-    print_plan(plan, models)
+    print_plan(plan, models, results_dir=output_dir)
 
     # 4. Preflight checks
     backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
