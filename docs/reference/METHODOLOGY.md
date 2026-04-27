@@ -79,7 +79,11 @@ Analysis Intelligence Index v4.0 methodology*
   finding — it indicates non-determinism in the model or runtime.
 
 *Reference: Belem et al. (2024), "Towards Reproducible LLM Evaluation" (arXiv 2410.03492);
-Song et al. (2025), "Evaluation of LLMs Should Not Ignore Non-Determinism" (NAACL 2025)*
+Song et al. (2025), "Evaluation of LLMs Should Not Ignore Non-Determinism" (NAACL 2025);
+Khatchadourian & Franco (2025), "LLM Output Drift: Cross-Provider Validation & Mitigation
+for Financial Workflows" (arXiv 2511.07585) — empirical cross-provider output-consistency
+measurement at T=0 ranged 12.5%-100%, motivating "verify empirically" rather than "assume
+deterministic at T=0"*
 
 ---
 
@@ -391,6 +395,7 @@ estimation.
 ### Reproducibility and statistics
 - Belem et al. (2024), "Towards Reproducible LLM Evaluation" (arXiv 2410.03492)
 - Song et al. (2025), "Evaluation of LLMs Should Not Ignore Non-Determinism" (NAACL 2025)
+- Khatchadourian & Franco (2025), "LLM Output Drift: Cross-Provider Validation & Mitigation for Financial Workflows" (arXiv 2511.07585)
 - Wolfe (2025), "Applying Statistics to LLM Evaluations"
 
 ### Biases in LLM-as-judge
