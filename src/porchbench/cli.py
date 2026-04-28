@@ -498,13 +498,24 @@ def run(
                         tps = result.metrics.tokens_per_second
                         toks = result.metrics.eval_count
                         done = result.response.done_reason or "?"
-                        tps_str = f"{tps:.1f} tok/s" if tps else "n/a"
-                        toks_str = f"{toks} tokens" if toks else "n/a"
                         vram = result.metrics.peak_vram_bytes
-                        vram_str = f", {vram / (1024**3):.2f}GB VRAM" if vram else ""
+                        # Only join populated metric parts so tool-use runs
+                        # (no per-token data) don't render as ', n/a, n/a'.
+                        parts = []
+                        if dur_str:
+                            parts.append(dur_str)
+                        if toks:
+                            parts.append(f"{toks} tokens")
+                        if tps:
+                            parts.append(f"{tps:.1f} tok/s")
+                        parts.append(f"done={done}")
+                        if vram:
+                            parts.append(f"{vram / (1024**3):.2f}GB VRAM")
+                        metrics_str = ", ".join(parts)
+                        sep = "  " if metrics_str else ""
                         progress.console.print(
-                            f"  {prompt_id}: {status}{val_badge}  "
-                            f"[dim]{dur_str}, {toks_str}, {tps_str}, done={done}{vram_str}[/dim]"
+                            f"  {prompt_id}: {status}{val_badge}{sep}"
+                            f"[dim]{metrics_str}[/dim]"
                         )
                         preview = result.response.message.content[:200].replace("\n", " ")
                         progress.console.print(f"    [dim]{preview}...[/dim]")
