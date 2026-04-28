@@ -530,8 +530,11 @@ def run(
                     )
                 )
 
+            written_path = result_path_for(result, output_dir)
+            console.print(f"[green]Results written to {written_path}[/green]")
+
             if do_evaluate:
-                eval_paths.append(result_path_for(result, output_dir))
+                eval_paths.append(written_path)
 
             # Print summary table
             _print_summary(result)
@@ -1453,7 +1456,8 @@ def overnight(
 
     def on_done(result):
         if result.success:
-            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s)")
+            path_part = f" → {result.result_path.name}" if result.result_path else ""
+            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s){path_part}")
         else:
             console.print(f"  [red]Failed: {result.error}[/red]")
 

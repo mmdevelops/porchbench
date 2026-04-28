@@ -353,9 +353,11 @@ async def run_suite(
 
     run_result = RunResult(run=run_meta, results=results, summary=summary)
 
-    # Write to disk
-    output_path = _write_result(run_result, output_dir)
-    console.print(f"[green]Results written to {output_path}[/green]")
+    # Write to disk. The CLI caller is responsible for announcing the path
+    # *after* its progress context exits — printing here interleaves with
+    # the live rich Progress bar in `porchbench run`. Callers that want the
+    # path can compute it via `result_path_for(run_result, output_dir)`.
+    _write_result(run_result, output_dir)
 
     return run_result
 
