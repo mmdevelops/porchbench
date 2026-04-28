@@ -168,3 +168,33 @@ class TestCompositeValidator:
         ])
         passed, _ = await v.validate(sandbox)
         assert passed is False
+
+    @pytest.mark.asyncio
+    async def test_dedupes_identical_failure_reasons(self, sandbox):
+        """Multiple sub-validators against a missing file should report it once.
+
+        Without dedupe the user sees 'X.csv not found; X.csv not found' for
+        every sub-check that hit the same FileNotFoundError, which is noise.
+        """
+        v = CompositeValidator([
+            FileExistsValidator("missing.csv"),
+            ContentContainsValidator("missing.csv", ["whatever"]),
+        ])
+        passed, reason = await v.validate(sandbox)
+        assert passed is False
+        # Both sub-validators raise the same 'missing.csv not found' message;
+        # dedupe collapses them to one occurrence.
+        assert reason.count("missing.csv not found") == 1
+
+    @pytest.mark.asyncio
+    async def test_preserves_distinct_reasons(self, sandbox):
+        """Dedupe must not collapse genuinely different reasons."""
+        await sandbox.write_files([FileContent(path="out.txt", content="hi")])
+        v = CompositeValidator([
+            FileExistsValidator("out.txt", min_size=100),  # too-small failure
+            ContentContainsValidator("out.txt", ["bye"]),  # missing-substring failure
+        ])
+        passed, reason = await v.validate(sandbox)
+        assert passed is False
+        assert "too small" in reason
+        assert "Missing required substring" in reason or "missing" in reason.lower()

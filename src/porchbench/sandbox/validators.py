@@ -213,5 +213,10 @@ class CompositeValidator:
             if not passed:
                 all_passed = False
 
-        summary = "; ".join(results)
+        # Dedupe identical reasons while preserving order — when sub-validators
+        # all fail with the same root cause (e.g. multiple checks against a
+        # file that doesn't exist), the user sees one 'X not found' instead
+        # of N repeats of the same message.
+        deduped = list(dict.fromkeys(results))
+        summary = "; ".join(deduped)
         return all_passed, summary
