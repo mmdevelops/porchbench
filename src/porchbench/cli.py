@@ -121,6 +121,62 @@ def parse_set_overrides(items: list[str] | None) -> dict[str, object]:
     return out
 
 
+def resolve_eval_model_or_exit(
+    backend_name: str,
+    explicit_model: str | None,
+    backend: InferenceBackend | None,
+    *,
+    interactive: bool,
+) -> str:
+    """Resolve which model to use as the LLM-as-judge evaluator.
+
+    Precedence: explicit (--eval-model or PORCHBENCH_EVAL_MODEL env) > stable
+    cloud-backend default > interactive picker (ollama). For ollama with no
+    explicit model, prompts the user to pick from currently-available models
+    and offers to persist the choice to ./.env so future runs skip the prompt.
+    """
+    from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
+
+    if explicit_model:
+        return explicit_model
+
+    if backend_name in EVAL_BACKEND_DEFAULTS:
+        return EVAL_BACKEND_DEFAULTS[backend_name]
+
+    if not interactive:
+        console.print(
+            f"[red]No evaluator model specified for {backend_name} backend.[/red]\n"
+            f"Pass [bold]--eval-model <name>[/bold] or set "
+            f"[bold]PORCHBENCH_EVAL_MODEL[/bold] in .env."
+        )
+        raise typer.Exit(code=1)
+
+    if not isinstance(backend, OllamaBackend):
+        console.print(
+            f"[red]Cannot pick evaluator interactively for {backend_name} backend.[/red]\n"
+            f"Pass --eval-model <name>."
+        )
+        raise typer.Exit(code=1)
+
+    from porchbench.interactive import select_evaluator_model
+
+    chosen = select_evaluator_model(backend)
+
+    if typer.confirm(f"Save '{chosen}' as default evaluator in .env?", default=True):
+        _persist_eval_model_default(chosen)
+
+    return chosen
+
+
+def _persist_eval_model_default(model: str, dotenv_path: Path = Path(".env")) -> None:
+    """Upsert PORCHBENCH_EVAL_MODEL=<model> in ./.env, creating the file if absent."""
+    from dotenv import set_key
+
+    dotenv_path.touch(exist_ok=True)
+    set_key(str(dotenv_path), "PORCHBENCH_EVAL_MODEL", model, quote_mode="never")
+    console.print(f"[green]Saved PORCHBENCH_EVAL_MODEL={model} to {dotenv_path}[/green]")
+
+
 def check_models_or_exit(
     backend: InferenceBackend, models: list[str], backend_name: str,
 ) -> None:
@@ -291,6 +347,13 @@ def run(
     check_server_or_exit(backend, backend_name)
     check_models_or_exit(backend, models, backend_name)
 
+    if do_evaluate:
+        eval_model = resolve_eval_model_or_exit(
+            eval_backend, eval_model, backend, interactive=True,
+        )
+        if eval_backend == "ollama":
+            check_models_or_exit(backend, [eval_model], "ollama")
+
     eval_paths: list[Path] = []
 
     for model in models:
@@ -411,7 +474,7 @@ def evaluate(
     ] = None,
     evaluator_model: Annotated[
         str | None,
-        typer.Option("--evaluator", "-e", envvar="PORCHBENCH_EVAL_MODEL", help="Model to use as judge. Defaults per backend: ollama=gemma4:e4b, api=claude-sonnet-4-6, claude-code=sonnet."),
+        typer.Option("--evaluator", "-e", envvar="PORCHBENCH_EVAL_MODEL", help="Judge model. Defaults: api=claude-sonnet-4-6, claude-code=sonnet. For ollama, prompts to pick from available models on first use and persists choice to .env."),
     ] = None,
     backend: Annotated[
         str,
@@ -444,7 +507,6 @@ def evaluate(
 ) -> None:
     """Score one or more model responses for quality using an LLM-as-judge evaluator."""
     from porchbench.evaluator import (
-        EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
         ClaudeCodeEvalBackend,
         OllamaEvalBackend,
@@ -465,8 +527,12 @@ def evaluate(
 
     # ---- one-time setup (shared across all results) ----
 
-    if evaluator_model is None:
-        evaluator_model = EVAL_BACKEND_DEFAULTS.get(backend, "gemma4:e4b")
+    probe_backend = OllamaBackend(host=host) if backend == "ollama" else None
+    evaluator_model = resolve_eval_model_or_exit(
+        backend, evaluator_model, probe_backend, interactive=True,
+    )
+    if backend == "ollama":
+        check_models_or_exit(probe_backend, [evaluator_model], "ollama")
 
     rubrics_by_category = None
     if rubric_dir:
@@ -1158,11 +1224,19 @@ def overnight(
     status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
     console.print(f"  {status} GPU acceleration: {gpu_msg}")
 
+    # Resolve + validate the evaluator model before any inference work begins.
+    # Without this, a missing eval model would surface only after hours of
+    # inference, when post-phase scoring fails for every result.
+    if do_evaluate:
+        eval_model = resolve_eval_model_or_exit(
+            eval_backend, eval_model, backend, interactive=not yes,
+        )
+        if eval_backend == "ollama":
+            check_models_or_exit(backend, [eval_model], "ollama")
+
     # VRAM co-fit check — only meaningful when --evaluate will load a judge on the same GPU
     if do_evaluate and eval_backend == "ollama":
-        from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
-        resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get("ollama", "gemma4:e4b")
-        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, resolved_eval_model))
+        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, eval_model))
         if cofit_ok:
             console.print(f"  [green]PASS[/green] VRAM cofit: {cofit_msg}")
         else:
@@ -1193,7 +1267,7 @@ def overnight(
     if do_evaluate:
         console.print(
             f"[bold]Post-run evaluation[/bold] will run after all inference completes "
-            f"([cyan]{eval_backend}/{eval_model or 'default'}[/cyan])."
+            f"([cyan]{eval_backend}/{eval_model}[/cyan])."
         )
         console.print()
 
@@ -1283,7 +1357,7 @@ def overnight(
 def _run_post_phase_evaluation(
     eval_paths: list[Path],
     eval_backend_name: str,
-    eval_model: str | None,
+    eval_model: str,
     host: str | None,
     eval_timeout: int,
     rubric_path: Path | None,
@@ -1295,10 +1369,10 @@ def _run_post_phase_evaluation(
     Holds the judge model resident once for the whole batch — no swap
     thrashing between target-model inference and judge-model scoring.
     Scores feed back into `OvernightResult.eval_score` so the final
-    summary can show them.
+    summary can show them. Caller is responsible for resolving `eval_model`
+    via `resolve_eval_model_or_exit` before invoking this function.
     """
     from porchbench.evaluator import (
-        EVAL_BACKEND_DEFAULTS,
         AnthropicEvalBackend,
         ClaudeCodeEvalBackend,
         OllamaEvalBackend,
@@ -1306,19 +1380,17 @@ def _run_post_phase_evaluation(
         load_rubric_dir,
     )
 
-    resolved_eval_model = eval_model or EVAL_BACKEND_DEFAULTS.get(eval_backend_name, "gemma4:e4b")
-
     if eval_backend_name == "ollama":
-        eval_be = OllamaEvalBackend(model=resolved_eval_model, host=host)
+        eval_be = OllamaEvalBackend(model=eval_model, host=host)
     elif eval_backend_name == "api":
-        eval_be = AnthropicEvalBackend(model=resolved_eval_model)
+        eval_be = AnthropicEvalBackend(model=eval_model)
     elif eval_backend_name == "claude-code":
-        eval_be = ClaudeCodeEvalBackend(model=resolved_eval_model, timeout_s=eval_timeout)
+        eval_be = ClaudeCodeEvalBackend(model=eval_model, timeout_s=eval_timeout)
     else:
         console.print(f"[red]Unknown eval backend: {eval_backend_name}[/red]")
         return
 
-    backend_label = f"{eval_backend_name}/{resolved_eval_model}"
+    backend_label = f"{eval_backend_name}/{eval_model}"
     eval_rubrics_by_cat = load_rubric_dir(resolve_rubric_dir(rubric_dir))
 
     console.print(f"Evaluator: {backend_label}")

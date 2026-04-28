@@ -39,15 +39,22 @@ def _prompt_models_manually() -> list[str]:
 def select_models(backend: InferenceBackend) -> list[str]:
     """Prompt user to pick one or more models from the backend's available list.
 
-    Falls back to manual text entry when the backend cannot list models.
+    Falls back to manual text entry when the server can't be queried for a
+    model list (e.g. some openai-compat servers). When the server is reachable
+    but reports zero models, exits with a pull hint rather than asking the
+    user to type a name they don't have pulled.
     """
     try:
         models = asyncio.run(backend.list_available_models())
     except Exception:
-        models = []
+        return _prompt_models_manually()
 
     if not models:
-        return _prompt_models_manually()
+        console.print(
+            "[red]No models available on the server.[/red]\n"
+            "Run [bold]ollama pull <model>[/bold] (e.g. qwen3:8b) and retry."
+        )
+        raise typer.Exit(code=1)
 
     console.print("[bold]Select model(s)[/bold] (space to toggle, enter to confirm):")
     selected = select_multiple(
@@ -61,6 +68,33 @@ def select_models(backend: InferenceBackend) -> list[str]:
         raise typer.Exit(code=1)
 
     return selected
+
+
+def select_evaluator_model(backend: InferenceBackend) -> str:
+    """Pick a single model from the server's available list to use as LLM-as-judge."""
+    try:
+        models = asyncio.run(backend.list_available_models())
+    except Exception:
+        models = []
+
+    if not models:
+        console.print(
+            "[red]No models available to use as evaluator.[/red]\n"
+            "Run [bold]ollama pull <model>[/bold] (e.g. gemma3:4b) and retry."
+        )
+        raise typer.Exit(code=1)
+
+    console.print("[bold]Pick a model to use as evaluator (LLM-as-judge):[/bold]")
+    chosen = select(
+        options=models,
+        pagination=len(models) > 15,
+        page_size=15,
+    )
+    if chosen is None:
+        console.print("[red]No evaluator selected.[/red]")
+        raise typer.Exit(code=1)
+
+    return chosen
 
 
 def select_suite(suite_dir: Path | None = None) -> Path:

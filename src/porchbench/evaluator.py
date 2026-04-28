@@ -52,11 +52,11 @@ from porchbench.schemas import (
 
 console = Console()
 
-DEFAULT_OLLAMA_EVALUATOR = "gemma4:e4b"
-
-# Per-backend default models — used when --evaluator is not explicitly set
+# Per-backend default judge models. Cloud backends pin to a stable Anthropic-
+# managed name. Ollama is intentionally absent — local model availability varies
+# per machine, so the CLI prompts the user to pick (and persists the choice to
+# .env) instead of hardcoding a model that may not be pulled.
 EVAL_BACKEND_DEFAULTS: dict[str, str] = {
-    "ollama": "gemma4:e4b",
     "api": "claude-sonnet-4-6",
     "claude-code": "sonnet",
 }

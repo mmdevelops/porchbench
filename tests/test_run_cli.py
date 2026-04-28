@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -196,3 +196,121 @@ def test_run_with_set_override_lands_in_resolved_options(
     suite = captured["suite"]
     assert suite.defaults.options.think is False
     assert suite.defaults.options.num_ctx == 8192
+
+
+# ---------------------------------------------------------------------------
+# Evaluator-model resolution: explicit > env-default > picker (ollama)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveEvalModelOrExit:
+    def test_explicit_model_wins_without_touching_backend(self):
+        from porchbench.cli import resolve_eval_model_or_exit
+        out = resolve_eval_model_or_exit(
+            "ollama", "user-pick", backend=None, interactive=True,
+        )
+        assert out == "user-pick"
+
+    def test_api_backend_returns_stable_default(self):
+        from porchbench.cli import resolve_eval_model_or_exit
+        out = resolve_eval_model_or_exit(
+            "api", None, backend=None, interactive=False,
+        )
+        assert out == "claude-sonnet-4-6"
+
+    def test_claude_code_backend_returns_stable_default(self):
+        from porchbench.cli import resolve_eval_model_or_exit
+        out = resolve_eval_model_or_exit(
+            "claude-code", None, backend=None, interactive=False,
+        )
+        assert out == "sonnet"
+
+    def test_ollama_no_model_non_interactive_exits(self):
+        """--yes (or any non-interactive flow) must hard-fail rather than try to prompt."""
+        import typer
+
+        from porchbench.cli import resolve_eval_model_or_exit
+        with pytest.raises(typer.Exit) as exc_info:
+            resolve_eval_model_or_exit(
+                "ollama", None, backend=MagicMock(), interactive=False,
+            )
+        assert exc_info.value.exit_code == 1
+
+    def test_ollama_interactive_persists_choice_when_confirmed(self, tmp_path: Path, monkeypatch):
+        from porchbench.backend import OllamaBackend
+        from porchbench.cli import resolve_eval_model_or_exit
+
+        monkeypatch.chdir(tmp_path)
+        fake_backend = MagicMock(spec=OllamaBackend)
+
+        with (
+            patch(
+                "porchbench.interactive.select_evaluator_model",
+                return_value="my-judge:8b",
+            ),
+            patch("typer.confirm", return_value=True),
+        ):
+            out = resolve_eval_model_or_exit(
+                "ollama", None, backend=fake_backend, interactive=True,
+            )
+
+        assert out == "my-judge:8b"
+        env_text = (tmp_path / ".env").read_text()
+        assert "PORCHBENCH_EVAL_MODEL=my-judge:8b" in env_text
+
+    def test_ollama_interactive_skips_persist_when_declined(self, tmp_path: Path, monkeypatch):
+        from porchbench.backend import OllamaBackend
+        from porchbench.cli import resolve_eval_model_or_exit
+
+        monkeypatch.chdir(tmp_path)
+        fake_backend = MagicMock(spec=OllamaBackend)
+
+        with (
+            patch(
+                "porchbench.interactive.select_evaluator_model",
+                return_value="my-judge:8b",
+            ),
+            patch("typer.confirm", return_value=False),
+        ):
+            out = resolve_eval_model_or_exit(
+                "ollama", None, backend=fake_backend, interactive=True,
+            )
+
+        assert out == "my-judge:8b"
+        # User declined — .env should not have been created.
+        assert not (tmp_path / ".env").exists()
+
+    def test_ollama_non_ollama_backend_with_no_model_fails(self):
+        """If backend isn't OllamaBackend (e.g. openai-compat), the picker can't help."""
+        import typer
+
+        from porchbench.cli import resolve_eval_model_or_exit
+        with pytest.raises(typer.Exit) as exc_info:
+            resolve_eval_model_or_exit(
+                "ollama", None, backend=MagicMock(), interactive=True,
+            )
+        assert exc_info.value.exit_code == 1
+
+
+class TestSelectModelsEmptyServer:
+    def test_empty_model_list_exits_with_pull_hint(self):
+        """Server up but no models pulled → exit, don't drop into manual entry."""
+        import typer
+
+        from porchbench.interactive import select_models
+
+        backend = MagicMock()
+        backend.list_available_models = AsyncMock(return_value=[])
+        with pytest.raises(typer.Exit) as exc_info:
+            select_models(backend)
+        assert exc_info.value.exit_code == 1
+
+    def test_listing_exception_falls_back_to_manual_entry(self):
+        """Backend can't list (e.g. some openai-compat servers) → manual prompt path."""
+        from porchbench.interactive import select_models
+
+        backend = MagicMock()
+        backend.list_available_models = AsyncMock(side_effect=RuntimeError("no listing"))
+        with patch("porchbench.interactive._prompt_models_manually", return_value=["m"]):
+            out = select_models(backend)
+        assert out == ["m"]
