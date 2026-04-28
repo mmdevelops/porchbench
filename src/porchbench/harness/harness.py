@@ -21,7 +21,7 @@ from porchbench.sandbox.base import (
     ExecutionRequest,
     Sandbox,
 )
-from porchbench.schemas import ModelOptions
+from porchbench.schemas import ModelOptions, PromptMetrics, compute_derived_metrics
 
 
 @dataclass
@@ -51,6 +51,38 @@ class HarnessResult:
     outcome: Outcome
     tool_use_metrics: ToolUseMetrics
     stopped_reason: str  # "done" | "max_tool_calls" | "max_turns" | "error"
+    aggregated_metrics: PromptMetrics | None = None  # summed across chat() turns
+
+
+def _accumulate_metrics(acc: PromptMetrics, turn: PromptMetrics) -> PromptMetrics:
+    """Sum raw Ollama timing fields across one harness turn into the accumulator.
+
+    The harness makes N chat() calls per prompt (one per turn). Each call returns
+    its own per-turn metrics; the runner needs a single per-prompt PromptMetrics.
+    Raw token/duration fields sum naturally; tokens_per_second is derived from
+    the totals afterwards. peak_vram_bytes takes the max because it's a
+    high-water mark, not a flow rate.
+    """
+    return PromptMetrics(
+        prompt_eval_count=(acc.prompt_eval_count or 0) + (turn.prompt_eval_count or 0)
+        if (acc.prompt_eval_count is not None or turn.prompt_eval_count is not None)
+        else None,
+        prompt_eval_duration=(acc.prompt_eval_duration or 0) + (turn.prompt_eval_duration or 0)
+        if (acc.prompt_eval_duration is not None or turn.prompt_eval_duration is not None)
+        else None,
+        eval_count=(acc.eval_count or 0) + (turn.eval_count or 0)
+        if (acc.eval_count is not None or turn.eval_count is not None)
+        else None,
+        eval_duration=(acc.eval_duration or 0) + (turn.eval_duration or 0)
+        if (acc.eval_duration is not None or turn.eval_duration is not None)
+        else None,
+        load_duration=(acc.load_duration or 0) + (turn.load_duration or 0)
+        if (acc.load_duration is not None or turn.load_duration is not None)
+        else None,
+        peak_vram_bytes=max(
+            acc.peak_vram_bytes or 0, turn.peak_vram_bytes or 0,
+        ) or None,
+    )
 
 
 # Default tool dispatch: maps tool names to sandbox operations
@@ -180,6 +212,7 @@ class Harness:
 
         transcript: list[dict] = list(messages)
         metrics = ToolUseMetrics()
+        agg_metrics = PromptMetrics()
         tool_call_count = 0
         turn_count = 0
         last_error = False
@@ -194,6 +227,7 @@ class Harness:
                 options=opts,
                 tools=self.tools,
             )
+            agg_metrics = _accumulate_metrics(agg_metrics, result.metrics)
 
             tool_calls = result.tool_calls or []
 
@@ -208,6 +242,7 @@ class Harness:
                     outcome=await self._capture_outcome(),
                     tool_use_metrics=metrics,
                     stopped_reason="done",
+                    aggregated_metrics=compute_derived_metrics(agg_metrics),
                 )
 
             # Process tool calls
@@ -266,6 +301,7 @@ class Harness:
                         outcome=await self._capture_outcome(),
                         tool_use_metrics=metrics,
                         stopped_reason="max_tool_calls",
+                        aggregated_metrics=compute_derived_metrics(agg_metrics),
                     )
 
         return HarnessResult(
@@ -273,6 +309,7 @@ class Harness:
             outcome=await self._capture_outcome(),
             tool_use_metrics=metrics,
             stopped_reason="max_turns",
+            aggregated_metrics=compute_derived_metrics(agg_metrics),
         )
 
     async def _capture_outcome(self) -> Outcome:

@@ -121,6 +121,51 @@ class TestToolUseDispatch:
         assert result.metrics.total_duration == 5_000_000_000
 
     @pytest.mark.asyncio
+    async def test_merges_aggregated_metrics_with_elapsed_ns(self):
+        """Harness's per-turn-summed metrics flow into PromptResult.metrics.
+
+        Without this, tool-use prompts have eval_count/tokens_per_second=None
+        even though the harness summed them across turns. The compare table
+        and verbose run output rely on these fields.
+        """
+        from porchbench.schemas import PromptMetrics
+
+        prompt = _make_tool_use_prompt()
+        # Harness aggregated_metrics: 80 tokens at 100 tok/s
+        harness_result = _make_harness_result(
+            aggregated_metrics=PromptMetrics(
+                prompt_eval_count=220,
+                eval_count=80,
+                eval_duration=800_000_000,  # 0.8s
+                tokens_per_second=100.0,
+            ),
+        )
+        messages = [Message(role="user", content="x")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": True,
+            "validation_reason": "ok",
+            "elapsed_ns": 5_000_000_000,
+        }
+
+        with patch(
+            "porchbench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "m", ModelOptions(), messages, None, None,
+            )
+
+        # Wall-clock from elapsed_ns wins over any harness-summed total_duration
+        assert result.metrics.total_duration == 5_000_000_000
+        # Token counts and tok/s come from the harness aggregate
+        assert result.metrics.prompt_eval_count == 220
+        assert result.metrics.eval_count == 80
+        assert result.metrics.tokens_per_second == 100.0
+
+    @pytest.mark.asyncio
     async def test_extracts_final_assistant_message(self):
         """Response content is taken from the last assistant message in transcript."""
         prompt = _make_tool_use_prompt()

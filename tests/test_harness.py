@@ -104,6 +104,106 @@ async def test_harness_terminates_when_model_emits_no_tool_calls():
     assert result.transcript[-1]["content"] == "Tool said hello back."
 
 
+def _chat_result_with_metrics(
+    content: str = "",
+    tool_calls: list[ToolCall] | None = None,
+    *,
+    prompt_eval_count: int | None = None,
+    eval_count: int | None = None,
+    prompt_eval_duration: int | None = None,
+    eval_duration: int | None = None,
+    peak_vram_bytes: int | None = None,
+) -> ChatResult:
+    return ChatResult(
+        content=content,
+        role="assistant",
+        done_reason="stop",
+        metrics=PromptMetrics(
+            prompt_eval_count=prompt_eval_count,
+            eval_count=eval_count,
+            prompt_eval_duration=prompt_eval_duration,
+            eval_duration=eval_duration,
+            peak_vram_bytes=peak_vram_bytes,
+        ),
+        tool_calls=tool_calls,
+    )
+
+
+@pytest.mark.asyncio
+async def test_harness_aggregates_metrics_across_turns():
+    """Per-turn metrics from each chat() sum into HarnessResult.aggregated_metrics.
+
+    Without aggregation, tool-use prompts produce all-None metrics in the
+    runner's PromptResult — `compare`'s per-prompt table renders as all
+    dashes, the duration estimator can't see tokens, and verbose run output
+    can't show tok/s for tool-use.
+    """
+    async def fake_tool(arg: str = "") -> str:
+        return "ok"
+
+    backend = ScriptedBackend([
+        _chat_result_with_metrics(
+            content="Calling.",
+            tool_calls=[ToolCall(name="fake_tool", arguments={"arg": "x"})],
+            prompt_eval_count=100, eval_count=50,
+            prompt_eval_duration=200_000_000, eval_duration=500_000_000,  # ns
+            peak_vram_bytes=8 * 1024**3,
+        ),
+        _chat_result_with_metrics(
+            content="Done.",
+            prompt_eval_count=120, eval_count=30,
+            prompt_eval_duration=180_000_000, eval_duration=300_000_000,
+            peak_vram_bytes=9 * 1024**3,  # higher than first turn — should win
+        ),
+    ])
+
+    harness = Harness(
+        model="fake-model",
+        sandbox=StubSandbox(),
+        backend=backend,
+        dispatch={"fake_tool": fake_tool},
+        tools=[{"type": "function", "function": {"name": "fake_tool"}}],
+    )
+
+    result = await harness.run(messages=[{"role": "user", "content": "go"}])
+
+    assert result.aggregated_metrics is not None
+    agg = result.aggregated_metrics
+    assert agg.prompt_eval_count == 220  # 100 + 120
+    assert agg.eval_count == 80  # 50 + 30
+    assert agg.prompt_eval_duration == 380_000_000
+    assert agg.eval_duration == 800_000_000  # 500M + 300M ns
+    # tokens_per_second = 80 tokens / 0.8s = 100
+    assert agg.tokens_per_second == pytest.approx(100.0)
+    # peak_vram is a high-water mark, not a sum
+    assert agg.peak_vram_bytes == 9 * 1024**3
+
+
+@pytest.mark.asyncio
+async def test_harness_aggregates_metrics_when_no_tool_calls():
+    """Single-turn run (model emits text immediately) still captures the one turn."""
+    backend = ScriptedBackend([
+        _chat_result_with_metrics(
+            content="Direct answer.",
+            prompt_eval_count=10, eval_count=5,
+            prompt_eval_duration=50_000_000, eval_duration=100_000_000,
+        ),
+    ])
+
+    harness = Harness(
+        model="fake-model",
+        sandbox=StubSandbox(),
+        backend=backend,
+        tools=[],
+    )
+
+    result = await harness.run(messages=[{"role": "user", "content": "hi"}])
+    assert result.stopped_reason == "done"
+    assert result.aggregated_metrics is not None
+    assert result.aggregated_metrics.eval_count == 5
+    assert result.aggregated_metrics.prompt_eval_count == 10
+
+
 @pytest.mark.asyncio
 async def test_harness_stops_at_max_tool_calls():
     """Circuit breaker: model keeps calling tools -> stopped_reason='max_tool_calls'."""

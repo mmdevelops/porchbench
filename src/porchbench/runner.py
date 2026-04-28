@@ -140,6 +140,20 @@ async def run_prompt(
     return response_data, metrics
 
 
+def _merge_tool_use_metrics(harness_result, elapsed_ns: int | None) -> PromptMetrics:
+    """Build per-prompt PromptMetrics for a tool-use prompt.
+
+    Combines summed Ollama metrics from the harness's per-turn chat() calls
+    (tokens, eval/prompt durations, derived tok/s) with the wall-clock
+    `elapsed_ns` measured around the harness run. Wall-clock is used for
+    `total_duration` rather than summed Ollama `total_duration` because the
+    latter omits sandbox/subprocess time between turns — wall-clock matches
+    what users perceive and what the duration estimator should learn from.
+    """
+    agg = getattr(harness_result, "aggregated_metrics", None) or PromptMetrics()
+    return agg.model_copy(update={"total_duration": elapsed_ns})
+
+
 async def _run_tool_use_prompt(
     prompt,
     model: str,
@@ -182,7 +196,7 @@ async def _run_tool_use_prompt(
             message=ResponseMessage(content=final_content),
             done_reason=harness_result.stopped_reason,
         ),
-        metrics=PromptMetrics(total_duration=result.get("elapsed_ns")),
+        metrics=_merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
         validation_passed=result["validation_passed"],
         validation_reason=result["validation_reason"],
         stopped_reason=harness_result.stopped_reason,
