@@ -143,11 +143,15 @@ def _seconds_per_prompt_from_history(
     """Median per-prompt total_duration (seconds) for past (model, suite) runs.
 
     Reads matching `RunResult` JSON files in `results_dir` and aggregates the
-    per-prompt `metrics.total_duration` field. Returns None when no matching
-    run exists, or when matching runs contain no usable timing data. No
+    per-prompt `metrics.total_duration` field. When a file has no per-prompt
+    timing (tool-use runs leave `metrics.total_duration` empty because the
+    sandbox harness doesn't populate Ollama's standard PromptMetrics), falls
+    back to the run-level `summary.total_duration_s` averaged across the
+    file's prompts so users still get an estimate. Returns None only when no
+    matching run exists or no usable timing data of either kind is found. No
     filtering by hardware — assumes the results dir reflects runs on this
-    machine; cross-machine result trees may yield estimates that don't
-    match local performance.
+    machine; cross-machine result trees may yield estimates that don't match
+    local performance.
     """
     if not results_dir.is_dir():
         return None
@@ -160,9 +164,16 @@ def _seconds_per_prompt_from_history(
             rr = RunResult.model_validate_json(text)
         except Exception:
             continue
-        for r in rr.results:
-            if r.metrics.total_duration:
-                durations.append(r.metrics.total_duration / 1e9)
+        per_prompt = [
+            r.metrics.total_duration / 1e9
+            for r in rr.results
+            if r.metrics.total_duration
+        ]
+        if per_prompt:
+            durations.extend(per_prompt)
+        elif rr.summary.total_duration_s and rr.results:
+            avg = rr.summary.total_duration_s / len(rr.results)
+            durations.extend([avg] * len(rr.results))
     if not durations:
         return None
     return statistics.median(durations)

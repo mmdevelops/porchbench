@@ -277,6 +277,52 @@ class TestSecondsPerPromptFromHistory:
         out = _seconds_per_prompt_from_history("qwen3:8b", "coding-basics", tmp_path)
         assert out == 25.0  # median of [10, 20, 30, 40]
 
+    def test_falls_back_to_summary_when_per_prompt_missing(self, tmp_path: Path):
+        """Tool-use runs leave metrics.total_duration empty.
+
+        Without the fallback the estimator returns None for any past tool-use
+        run and users see 'no prior runs' even when timing is available at
+        the run-summary level.
+        """
+        # Build a fake run with empty per-prompt durations but a populated
+        # summary.total_duration_s — mirrors what the tool-use harness writes.
+        suite_slug = "tool-use-discovery"
+        model = "gemma4:e2b"
+        model_slug = model.replace(":", "-")
+        path = tmp_path / f"2026-04-28T10-00-00_{suite_slug}_{model_slug}.json"
+        run_dict = {
+            "run": {
+                "id": "abc123",
+                "timestamp": "2026-04-28T10:00:00Z",
+                "suite": {
+                    "name": "Tool Use Discovery", "version": "1.0",
+                    "file": "x", "sha256": "y",
+                },
+                "model": {"name": model},
+            },
+            "results": [
+                {
+                    "prompt_id": f"p-{i}",
+                    "category": "tool-use", "difficulty": "easy",
+                    "options_used": {},
+                    "request": {"messages": [{"role": "user", "content": "q"}]},
+                    "response": {"message": {"role": "assistant", "content": "a"}},
+                    "metrics": {},  # all None — tool-use harness leaves these empty
+                }
+                for i in range(10)
+            ],
+            "summary": {
+                "total_prompts": 10, "completed": 10, "failed": 0,
+                "total_duration_s": 200.0,  # ~20s per prompt averaged
+            },
+        }
+        import json
+
+        path.write_text(json.dumps(run_dict), encoding="utf-8")
+
+        rate = _seconds_per_prompt_from_history(model, suite_slug, tmp_path)
+        assert rate == 20.0  # 200s / 10 prompts
+
     def test_skips_malformed_files(self, tmp_path: Path):
         # malformed file matching the glob is skipped; valid one still scored
         (tmp_path / "garbage_coding-basics_qwen3-8b.json").write_text("{not json", encoding="utf-8")
