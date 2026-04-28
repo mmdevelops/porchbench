@@ -492,6 +492,7 @@ def run(
                     status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
                     dur = result.metrics.total_duration if result else None
                     dur_str = f"{dur / 1e9:.1f}s" if dur else ""
+                    val_badge = _format_validation_badge(result)
 
                     if verbose and result:
                         tps = result.metrics.tokens_per_second
@@ -502,14 +503,14 @@ def run(
                         vram = result.metrics.peak_vram_bytes
                         vram_str = f", {vram / (1024**3):.2f}GB VRAM" if vram else ""
                         progress.console.print(
-                            f"  {prompt_id}: {status}  "
+                            f"  {prompt_id}: {status}{val_badge}  "
                             f"[dim]{dur_str}, {toks_str}, {tps_str}, done={done}{vram_str}[/dim]"
                         )
                         preview = result.response.message.content[:200].replace("\n", " ")
                         progress.console.print(f"    [dim]{preview}...[/dim]")
                     else:
                         time_part = f"  [dim]{dur_str}[/dim]" if dur_str else ""
-                        progress.console.print(f"  {prompt_id}: {status}{time_part}")
+                        progress.console.print(f"  {prompt_id}: {status}{val_badge}{time_part}")
                     progress.advance(task)
 
                 result = asyncio.run(
@@ -548,6 +549,28 @@ def run(
             rubric_dir=rubric_dir,
             results=[],
         )
+
+
+def _format_validation_badge(result) -> str:
+    """Format the per-prompt validator outcome as a compact inline badge.
+
+    Returns the empty string when the prompt has no validator (e.g. text-mode
+    prompts) so non-tool-use suites are unaffected. For tool-use prompts the
+    result is already in `result.validation_passed` from the per-prompt
+    sandbox check that ran during inference — surfacing it inline lets users
+    see pass/fail as it happens instead of only in the final summary.
+    """
+    if result is None:
+        return ""
+    passed = getattr(result, "validation_passed", None)
+    if passed is None:
+        return ""
+    if passed:
+        return " [bold green]\\[pass][/bold green]"
+    reason = getattr(result, "validation_reason", "") or ""
+    short_reason = reason.splitlines()[0][:60] if reason else ""
+    suffix = f": {short_reason}" if short_reason else ""
+    return f" [bold yellow]\\[val-fail][/bold yellow]{suffix}"
 
 
 def _print_summary(result) -> None:
@@ -1441,8 +1464,9 @@ def overnight(
         else:
             dur_str = f"{duration_s:.1f}s"
         counter = f"{prompt_num}/{total}"
+        val_badge = _format_validation_badge(result)
         if success:
-            console.print(rf"  [green]\[ok][/green]    {counter}  {prompt_id}  ({dur_str})")
+            console.print(rf"  [green]\[ok][/green]{val_badge}    {counter}  {prompt_id}  ({dur_str})")
         else:
             err = ""
             if result is not None and result.response.done_reason:

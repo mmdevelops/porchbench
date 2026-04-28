@@ -292,6 +292,73 @@ class TestResolveEvalModelOrExit:
         assert exc_info.value.exit_code == 1
 
 
+class TestFormatValidationBadge:
+    """Inline pass/fail badge so users see validator outcomes during the run."""
+
+    def _result_with_validation(self, passed, reason=None):
+        from porchbench.schemas import (
+            Message,
+            ModelOptions,
+            PromptMetrics,
+            PromptResult,
+            RequestData,
+            ResponseData,
+            ResponseMessage,
+        )
+
+        return PromptResult(
+            prompt_id="p",
+            category="tool-use",
+            difficulty="easy",
+            options_used=ModelOptions(),
+            request=RequestData(messages=[Message(role="user", content="x")]),
+            response=ResponseData(message=ResponseMessage(content="ok")),
+            metrics=PromptMetrics(),
+            validation_passed=passed,
+            validation_reason=reason,
+        )
+
+    def test_no_result_returns_empty(self):
+        from porchbench.cli import _format_validation_badge
+
+        assert _format_validation_badge(None) == ""
+
+    def test_no_validator_returns_empty(self):
+        """Text-mode prompts have validation_passed=None — no badge."""
+        from porchbench.cli import _format_validation_badge
+
+        result = self._result_with_validation(passed=None)
+        assert _format_validation_badge(result) == ""
+
+    def test_pass_badge(self):
+        from porchbench.cli import _format_validation_badge
+
+        result = self._result_with_validation(passed=True)
+        badge = _format_validation_badge(result)
+        assert "pass" in badge
+        assert "green" in badge
+
+    def test_fail_badge_includes_short_reason(self):
+        from porchbench.cli import _format_validation_badge
+
+        result = self._result_with_validation(
+            passed=False, reason="file not created at expected path",
+        )
+        badge = _format_validation_badge(result)
+        assert "val-fail" in badge
+        assert "file not created" in badge
+
+    def test_fail_badge_truncates_long_reason(self):
+        from porchbench.cli import _format_validation_badge
+
+        long_reason = "A" * 200
+        result = self._result_with_validation(passed=False, reason=long_reason)
+        badge = _format_validation_badge(result)
+        # Reason chunk is capped at 60 chars
+        assert "A" * 60 in badge
+        assert "A" * 70 not in badge
+
+
 class TestSameFamilyJudgeWarning:
     """LLM-as-judge bias: same-family judges over-rate same-family responses."""
 
