@@ -14,6 +14,7 @@ from porchbench.overnight import (
     classify_suite,
     estimate_duration,
     estimate_duration_from_history,
+    estimate_single_suite_duration_from_history,
     format_estimate,
 )
 from porchbench.schemas import (
@@ -313,6 +314,49 @@ class TestEstimateDurationFromHistory:
         assert total == 50.0  # 5 * 10s for qwen only
         assert with_hist == 5
         assert total_calls == 10
+
+
+class TestEstimateSingleSuiteDurationFromHistory:
+    """`porchbench run`'s estimator — same partial-coverage semantics as overnight's."""
+
+    def test_no_history_reports_zero_coverage_with_full_call_count(self, tmp_path: Path):
+        total, with_hist, total_calls = estimate_single_suite_duration_from_history(
+            models=["qwen3:8b"],
+            suite_name="Coding Basics",
+            prompt_count=5,
+            repeats=2,
+            results_dir=tmp_path,
+        )
+        assert total == 0.0
+        assert with_hist == 0
+        assert total_calls == 10  # 5 prompts * 2 repeats
+
+    def test_full_history_uses_median(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [12.0, 12.0, 12.0])
+        total, with_hist, total_calls = estimate_single_suite_duration_from_history(
+            models=["qwen3:8b"],
+            suite_name="Coding Basics",
+            prompt_count=4,
+            repeats=1,
+            results_dir=tmp_path,
+        )
+        assert total == 48.0  # 4 calls * 12s
+        assert with_hist == 4
+        assert total_calls == 4
+
+    def test_partial_coverage_excludes_no_history_models_from_seconds(self, tmp_path: Path):
+        _write_fake_run(tmp_path, "Coding Basics", "qwen3:8b", [10.0, 10.0])
+        total, with_hist, total_calls = estimate_single_suite_duration_from_history(
+            models=["qwen3:8b", "llama3.1:8b"],
+            suite_name="Coding Basics",
+            prompt_count=3,
+            repeats=1,
+            results_dir=tmp_path,
+        )
+        # qwen has rate (3 calls × 10s); llama doesn't (3 calls excluded from seconds)
+        assert total == 30.0
+        assert with_hist == 3
+        assert total_calls == 6
 
 
 class TestCheckVramCofit:

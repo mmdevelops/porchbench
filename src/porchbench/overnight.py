@@ -168,6 +168,34 @@ def _seconds_per_prompt_from_history(
     return statistics.median(durations)
 
 
+def estimate_single_suite_duration_from_history(
+    models: list[str],
+    suite_name: str,
+    prompt_count: int,
+    repeats: int,
+    results_dir: Path,
+) -> tuple[float, int, int]:
+    """Estimate runtime for a single-suite run (`porchbench run`) from history.
+
+    Returns `(total_seconds, calls_with_history, calls_total)`. Same partial-
+    coverage semantics as `estimate_duration_from_history`: calls without a
+    prior per-(model, suite) rate are excluded from the time and counted
+    separately so the caller can render coverage honestly.
+    """
+    suite_slug = suite_name.lower().replace(" ", "-")
+    per_model_calls = prompt_count * repeats
+    total_seconds = 0.0
+    calls_with_history = 0
+    calls_total = 0
+    for model in models:
+        calls_total += per_model_calls
+        rate = _seconds_per_prompt_from_history(model, suite_slug, results_dir)
+        if rate is not None:
+            total_seconds += per_model_calls * rate
+            calls_with_history += per_model_calls
+    return total_seconds, calls_with_history, calls_total
+
+
 def estimate_duration_from_history(
     plan: list[OvernightTask], results_dir: Path,
 ) -> tuple[float, int, int]:

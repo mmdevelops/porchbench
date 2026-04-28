@@ -339,6 +339,36 @@ def run(
     if prompt_ids:
         console.print(f"Filter: {', '.join(prompt_ids)}")
 
+    from porchbench.overnight import (
+        estimate_single_suite_duration_from_history,
+        format_estimate,
+    )
+
+    prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
+    total_seconds, with_history, total_calls = estimate_single_suite_duration_from_history(
+        models=models,
+        suite_name=suite.suite.name,
+        prompt_count=prompt_count,
+        repeats=repeats,
+        results_dir=output_dir,
+    )
+    if total_calls == 0 or with_history == 0:
+        console.print(
+            f"Estimated duration: [dim]no prior runs of these (model, suite) pairs "
+            f"in {output_dir}/ — first run, no estimate[/dim]"
+        )
+    elif with_history == total_calls:
+        console.print(
+            f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+            "[dim](median of prior runs)[/dim]"
+        )
+    else:
+        console.print(
+            f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+            f"[dim]for {with_history}/{total_calls} calls "
+            "(no history for the rest)[/dim]"
+        )
+
     console.print()
 
     # Build backend and verify connectivity
