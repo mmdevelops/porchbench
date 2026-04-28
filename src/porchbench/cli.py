@@ -512,7 +512,7 @@ def run(
                         if vram:
                             parts.append(f"{vram / (1024**3):.2f}GB VRAM")
                         metrics_str = ", ".join(parts)
-                        sep = "  " if metrics_str else ""
+                        sep = " " if metrics_str else ""
                         progress.console.print(
                             f"  {prompt_id}: {status}{val_badge}{sep}"
                             f"[dim]{metrics_str}[/dim]"
@@ -520,7 +520,7 @@ def run(
                         preview = result.response.message.content[:200].replace("\n", " ")
                         progress.console.print(f"    [dim]{preview}...[/dim]")
                     else:
-                        time_part = f"  [dim]{dur_str}[/dim]" if dur_str else ""
+                        time_part = f" [dim]{dur_str}[/dim]" if dur_str else ""
                         progress.console.print(f"  {prompt_id}: {status}{val_badge}{time_part}")
                     progress.advance(task)
 
