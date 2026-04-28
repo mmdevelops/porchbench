@@ -168,6 +168,40 @@ def resolve_eval_model_or_exit(
     return chosen
 
 
+def _model_family(model: str) -> str:
+    """Best-effort 'family' identifier for an Ollama model name.
+
+    Takes the first colon-separated segment, lowercased, so 'gemma4:e4b' and
+    'gemma4:e2b' share the family 'gemma4'. Used to flag same-family judge
+    setups; intentionally exact-match on the segment rather than fuzzy across
+    generations (gemma4 vs gemma3 stay distinct), to avoid crying wolf on
+    every cross-version comparison.
+    """
+    return model.split(":", 1)[0].strip().lower()
+
+
+def warn_if_same_family_judge(target_model: str, eval_model: str) -> None:
+    """Print a one-line warning if the LLM-as-judge is from the target's model family.
+
+    Same-family judges over-rate same-family responses (Panickssery et al. 2024).
+    Soft warning, not a block — the user may have valid reasons (calibration
+    test, only one judge available). Only fires when both segments resolve to
+    the same family root; pure cloud-vs-local pairs (ollama target judged by
+    Anthropic) never trigger.
+    """
+    if not target_model or not eval_model:
+        return
+    if _model_family(target_model) != _model_family(eval_model):
+        return
+    console.print(
+        f"  [yellow]WARN[/yellow] Evaluator '{eval_model}' is same-family as "
+        f"target '{target_model}'.\n"
+        f"       Same-family judges over-rate same-family responses "
+        f"(Panickssery et al. 2024); scores may be inflated.\n"
+        f"       Consider a different-family judge for cross-checks."
+    )
+
+
 def _persist_eval_model_default(model: str, dotenv_path: Path = Path(".env")) -> None:
     """Upsert PORCHBENCH_EVAL_MODEL=<model> in ./.env, creating the file if absent."""
     from dotenv import set_key
@@ -693,6 +727,8 @@ def evaluate(
             )
             summary.append((run_label, "skipped", None))
             continue
+
+        warn_if_same_family_judge(run_result.run.model.name, evaluator_model)
 
         if skip_scored:
             existing = list(output_dir.glob(f"*_{run_result.run.id[:8]}.json"))
@@ -1499,6 +1535,16 @@ def _run_post_phase_evaluation(
 
     console.print(f"Evaluator: {backend_label}")
     console.print(f"Results to score: [bold]{len(eval_paths)}[/bold]\n")
+
+    # Surface same-family judge bias upfront — one warn per unique target model
+    # whose family root matches the judge. Prints before scoring so the user
+    # sees the methodology caveat alongside the run-by-run progress.
+    seen_targets: set[str] = set()
+    for r in results:
+        target = getattr(r, "model", None)
+        if target and target not in seen_targets:
+            warn_if_same_family_judge(target, eval_model)
+            seen_targets.add(target)
 
     summary = asyncio.run(batch_evaluate_results(
         result_paths=eval_paths,

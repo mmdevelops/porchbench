@@ -292,6 +292,47 @@ class TestResolveEvalModelOrExit:
         assert exc_info.value.exit_code == 1
 
 
+class TestSameFamilyJudgeWarning:
+    """LLM-as-judge bias: same-family judges over-rate same-family responses."""
+
+    def test_same_family_match_lowercased_first_segment(self):
+        from porchbench.cli import _model_family
+
+        assert _model_family("gemma4:e4b") == _model_family("gemma4:e2b") == "gemma4"
+        assert _model_family("Qwen3:8B") == "qwen3"
+        assert _model_family("model_with_no_colon") == "model_with_no_colon"
+
+    def test_different_generations_are_different_families(self):
+        from porchbench.cli import _model_family
+
+        # Cross-version stays distinct on purpose — gemma4 ↔ gemma3 may share
+        # lineage but the bias literature is strongest within an exact family.
+        assert _model_family("gemma4:e4b") != _model_family("gemma3:4b")
+        assert _model_family("qwen2.5:7b") != _model_family("qwen3:8b")
+
+    def test_warn_fires_for_same_family_pair(self, capsys):
+        from porchbench.cli import warn_if_same_family_judge
+
+        warn_if_same_family_judge("gemma4:e2b", "gemma4:e4b")
+        out = capsys.readouterr().out
+        assert "WARN" in out
+        assert "same-family" in out
+        assert "Panickssery" in out
+
+    def test_warn_silent_for_cross_family_pair(self, capsys):
+        from porchbench.cli import warn_if_same_family_judge
+
+        warn_if_same_family_judge("qwen3:8b", "gemma4:e4b")
+        assert capsys.readouterr().out == ""
+
+    def test_warn_silent_for_empty_inputs(self, capsys):
+        from porchbench.cli import warn_if_same_family_judge
+
+        warn_if_same_family_judge("", "gemma4:e4b")
+        warn_if_same_family_judge("gemma4:e4b", "")
+        assert capsys.readouterr().out == ""
+
+
 class TestCheckToolSupportOrExit:
     """Preflight that fails fast if a model can't tool-call on a tool-use suite."""
 
