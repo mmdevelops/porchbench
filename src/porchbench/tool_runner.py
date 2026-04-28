@@ -7,6 +7,7 @@ outcome validation, and result packaging.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,11 @@ async def run_tool_use_prompt(
         harness_result: HarnessResult from the agent loop
         validation_passed: bool | None
         validation_reason: str
-        transcript: list[dict] (the full conversation)
+        elapsed_ns: int — wall-clock duration of the harness run, ready
+            to drop into PromptMetrics.total_duration so per-prompt
+            timing is recorded for tool-use the same way it is for
+            single-turn prompts (Ollama's API gives us total_duration
+            for free; multi-turn harness runs need explicit timing).
     """
     sandbox_config_raw = prompt.sandbox or {}
     config = SandboxConfig(
@@ -51,11 +56,13 @@ async def run_tool_use_prompt(
 
         harness = Harness(model=model, sandbox=sandbox, backend=backend)
 
+        start = time.monotonic()
         harness_result = await harness.run(
             messages=[{"role": m.role, "content": m.content} for m in messages],
             options=options,
             max_tool_calls=prompt.max_tool_calls or 10,
         )
+        elapsed_ns = int((time.monotonic() - start) * 1e9)
 
         validation_passed, validation_reason = await _validate_outcome(
             prompt, sandbox, harness_result
@@ -65,6 +72,7 @@ async def run_tool_use_prompt(
             "harness_result": harness_result,
             "validation_passed": validation_passed,
             "validation_reason": validation_reason,
+            "elapsed_ns": elapsed_ns,
         }
 
     finally:

@@ -91,6 +91,36 @@ class TestToolUseDispatch:
         assert result.tool_use_metrics.tool_call_breakdown == {"read_file": 1}
 
     @pytest.mark.asyncio
+    async def test_records_elapsed_ns_into_total_duration(self):
+        """Per-prompt timing measured in tool_runner lands in PromptMetrics.
+
+        Without this, the duration estimator sees metrics.total_duration=None
+        on every tool-use result and falls back to the run-summary average,
+        losing per-prompt variance.
+        """
+        prompt = _make_tool_use_prompt()
+        harness_result = _make_harness_result()
+        messages = [Message(role="user", content="Read data.txt")]
+
+        mock_return = {
+            "harness_result": harness_result,
+            "validation_passed": True,
+            "validation_reason": "ok",
+            "elapsed_ns": 5_000_000_000,  # 5 seconds in ns
+        }
+
+        with patch(
+            "porchbench.tool_runner.run_tool_use_prompt",
+            new_callable=AsyncMock,
+            return_value=mock_return,
+        ):
+            result = await _run_tool_use_prompt(
+                prompt, "m", ModelOptions(), messages, None, None,
+            )
+
+        assert result.metrics.total_duration == 5_000_000_000
+
+    @pytest.mark.asyncio
     async def test_extracts_final_assistant_message(self):
         """Response content is taken from the last assistant message in transcript."""
         prompt = _make_tool_use_prompt()

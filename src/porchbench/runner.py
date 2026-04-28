@@ -182,7 +182,7 @@ async def _run_tool_use_prompt(
             message=ResponseMessage(content=final_content),
             done_reason=harness_result.stopped_reason,
         ),
-        metrics=PromptMetrics(),
+        metrics=PromptMetrics(total_duration=result.get("elapsed_ns")),
         validation_passed=result["validation_passed"],
         validation_reason=result["validation_reason"],
         stopped_reason=harness_result.stopped_reason,
