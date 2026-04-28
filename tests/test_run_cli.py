@@ -292,6 +292,53 @@ class TestResolveEvalModelOrExit:
         assert exc_info.value.exit_code == 1
 
 
+class TestDiscoverResultFiles:
+    """Picker scans `results/` and must skip non-RunResult JSONs (profiles, analyses)."""
+
+    def test_skips_system_profile_json(self, tmp_path: Path):
+        import json
+
+        from porchbench.interactive import _discover_result_files
+
+        # A real run-result JSON
+        run_result = tmp_path / "2026-04-28_coding_qwen.json"
+        run_result.write_text(
+            json.dumps({"run": {"model": {"name": "qwen"}, "suite": {"name": "Coding", "version": "1.0"}}}),
+            encoding="utf-8",
+        )
+        # A system-profile JSON (no `run` block)
+        profile = tmp_path / "2026-04-28_system-profile.json"
+        profile.write_text(
+            json.dumps({"timestamp": "2026-04-28", "models": {}, "gpu": {}}),
+            encoding="utf-8",
+        )
+        # A routing-analysis JSON (also no `run` block)
+        analysis = tmp_path / "2026-04-28_routing-analysis.json"
+        analysis.write_text(
+            json.dumps({"models_tested": ["qwen"], "headline": {}, "patterns": []}),
+            encoding="utf-8",
+        )
+
+        entries = _discover_result_files(tmp_path)
+
+        assert len(entries) == 1
+        label, path = entries[0]
+        assert path == run_result
+        assert "qwen" in label
+        assert "?" not in label
+
+    def test_skips_files_missing_required_fields(self, tmp_path: Path):
+        """Defense in depth: a parseable JSON with empty model/suite is also skipped."""
+        import json
+
+        from porchbench.interactive import _discover_result_files
+
+        bad = tmp_path / "incomplete.json"
+        bad.write_text(json.dumps({"run": {"model": {}, "suite": {}}}), encoding="utf-8")
+
+        assert _discover_result_files(tmp_path) == []
+
+
 class TestSelectModelsEmptyServer:
     def test_empty_model_list_exits_with_pull_hint(self):
         """Server up but no models pulled → exit, don't drop into manual entry."""

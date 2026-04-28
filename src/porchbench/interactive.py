@@ -151,15 +151,24 @@ def select_suites(suite_dir: Path | None = None) -> list[Path]:
 
 
 def _discover_result_files(result_dir: Path) -> list[tuple[str, Path]]:
-    """Scan result_dir for run-result JSONs, return (label, path) sorted newest-first."""
+    """Scan result_dir for run-result JSONs, return (label, path) sorted newest-first.
+
+    Skips non-RunResult JSONs that share the directory (system profiles,
+    routing-analysis files) — they parse but lack `run.model.name` /
+    `run.suite.name`, so picker users would otherwise see a `? — ? v ()`
+    entry for each one.
+    """
     entries: list[tuple[str, Path]] = []
     for p in sorted(result_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
-            run = data.get("run", {})
-            model = run.get("model", {}).get("name", "?")
-            suite_name = run.get("suite", {}).get("name", "?")
-            suite_ver = run.get("suite", {}).get("version", "")
+            run = data.get("run") or {}
+            model = (run.get("model") or {}).get("name")
+            suite = run.get("suite") or {}
+            suite_name = suite.get("name")
+            if not model or not suite_name:
+                continue
+            suite_ver = suite.get("version", "")
             ts = run.get("timestamp", "")[:10]
             label = f"{model} — {suite_name} v{suite_ver} ({ts})"
             entries.append((label, p))
