@@ -1332,8 +1332,6 @@ def overnight(
         console.print(f"Elapsed: {elapsed:.0f}s")
         raise typer.Exit(code=130)
 
-    elapsed = _time.monotonic() - start
-
     # 9. Post-run batch evaluation — single judge-model load for all results
     if do_evaluate:
         eval_paths = [r.result_path for r in results if r.success and r.result_path is not None]
@@ -1349,6 +1347,10 @@ def overnight(
                 rubric_dir=rubric_dir,
                 results=results,
             )
+
+    # Capture elapsed after eval so the Overnight Complete duration covers
+    # both inference and judge-model scoring.
+    elapsed = _time.monotonic() - start
 
     # 10. Summary
     print_summary(results, elapsed)
