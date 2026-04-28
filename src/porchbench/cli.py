@@ -582,8 +582,14 @@ def _format_validation_badge(result) -> str:
     if passed:
         return " [bold green]\\[pass][/bold green]"
     reason = getattr(result, "validation_reason", "") or ""
-    short_reason = reason.splitlines()[0][:60] if reason else ""
-    suffix = f": {short_reason}" if short_reason else ""
+    suffix = ""
+    if reason:
+        first_line = reason.splitlines()[0]
+        # 120 chars keeps composite-validator chains like 'X exists (N bytes);
+        # X missing required <field>' readable; ellipsis flags truncation so
+        # users know to check the result JSON for the full reason.
+        short_reason = first_line if len(first_line) <= 120 else first_line[:117] + "..."
+        suffix = f": {short_reason}"
     return f" [bold yellow]\\[val-fail][/bold yellow]{suffix}"
 
 

@@ -348,15 +348,24 @@ class TestFormatValidationBadge:
         assert "val-fail" in badge
         assert "file not created" in badge
 
-    def test_fail_badge_truncates_long_reason(self):
+    def test_fail_badge_truncates_long_reason_with_ellipsis(self):
         from porchbench.cli import _format_validation_badge
 
         long_reason = "A" * 200
         result = self._result_with_validation(passed=False, reason=long_reason)
         badge = _format_validation_badge(result)
-        # Reason chunk is capped at 60 chars
-        assert "A" * 60 in badge
-        assert "A" * 70 not in badge
+        # Reason chunk caps at 120 chars (117 + "...") to flag truncation
+        assert "A" * 117 + "..." in badge
+        assert "A" * 121 not in badge
+
+    def test_fail_badge_keeps_short_reason_intact(self):
+        from porchbench.cli import _format_validation_badge
+
+        short = "dairy.csv not found"
+        result = self._result_with_validation(passed=False, reason=short)
+        badge = _format_validation_badge(result)
+        assert short in badge
+        assert "..." not in badge
 
 
 class TestSameFamilyJudgeWarning:
