@@ -43,14 +43,16 @@ Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If yo
 ### Evaluate quality with an LLM judge
 
 ```bash
-# Score results using a local Ollama model as judge (default: gemma4:e4b).
+# Score results using a local Ollama model as judge.
 # --rubric is auto-resolved from the result file if omitted.
 porchbench evaluate --result results/<your-result-file>.json
 ```
 
+The first time you run an Ollama-backed eval without `--evaluator`, porchbench prompts you to pick a judge from your locally-pulled models and offers to save the choice as `PORCHBENCH_EVAL_MODEL` in `./.env`. Subsequent runs skip the prompt. Override anytime with `--evaluator <name>` or by editing `.env`. Cloud backends (`--backend api`, `--backend claude-code`) use stable defaults (`claude-sonnet-4-6`, `sonnet`) without prompting.
+
 Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
-To collapse run + score into one step, pass `--evaluate` to `porchbench run` (mirrors the same flag on `overnight`). All inference completes first, then the judge model loads once and scores every result in a single post-phase batch — no swap thrashing between target model and judge. Compose with `--eval-backend ollama|api|claude-code` and `--eval-model <name>` to override defaults.
+To collapse run + score into one step, pass `--evaluate` to `porchbench run` (mirrors the same flag on `overnight`). All inference completes first, then the judge model loads once and scores every result in a single post-phase batch — no swap thrashing between target model and judge. Compose with `--eval-backend ollama|api|claude-code` and `--eval-model <name>` to override defaults. With `--yes` (unattended) on `overnight`, you must pass `--eval-model` or set `PORCHBENCH_EVAL_MODEL` — the picker won't fire.
 
 ### Compare models
 
@@ -191,7 +193,7 @@ Defaults work out of the box. Override any of these via shell export or a projec
 | `PORCHBENCH_BASE_URL` | OpenAI-compatible server URL (when `PORCHBENCH_BACKEND=openai-compat`) |
 | `PORCHBENCH_API_KEY` | API key for the OpenAI-compatible server |
 | `PORCHBENCH_EVAL_BACKEND` | Judge backend: `ollama` (default), `api`, or `claude-code` |
-| `PORCHBENCH_EVAL_MODEL` | Judge model override (defaults differ per backend) |
+| `PORCHBENCH_EVAL_MODEL` | Judge model override. Cloud backends have stable defaults; for ollama, the first `--evaluate` prompts you to pick and persists your choice here in `.env`. |
 | `ANTHROPIC_API_KEY` | Required only when `PORCHBENCH_EVAL_BACKEND=api` |
 | `PORCHBENCH_SEED` | RNG seed for bootstrap CIs in `porchbench compare` (default `42`). Override to probe sensitivity. |
 
@@ -219,7 +221,7 @@ porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia
 
 **`porchbench: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install porchbench` inside the active venv (or `pip install -e .` from a checkout), or invoke via `python -m porchbench`.
 
-**Interactive picker shows no options** — either Ollama has no pulled models (`ollama list` to check) or your `suites/` / `results/` directory is empty. You can always pass `--model` / `--suite` / `--result` explicitly.
+**Interactive picker shows no options** — your `results/` directory is empty (for `evaluate` / `compare` / `leaderboard`) or you have no `suites/` directory and the packaged suites failed to resolve. You can always pass `--model` / `--suite` / `--result` explicitly. (For the model picker, an empty server now exits with an `ollama pull` hint rather than showing a blank picker.)
 
 **AMD / ROCm: kernel errors on gfx1201 (RDNA 4)** — a rocblas override usually fixes most models. Some quantized models (notably parts of the Qwen 3.5 family) hit a missing `SOLVE_TRI` kernel upstream; fall back to a different model family until ROCm ships the fix.
 
