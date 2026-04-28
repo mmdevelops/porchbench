@@ -202,6 +202,56 @@ def check_models_or_exit(
             )
 
 
+def check_tool_support_or_exit(
+    backend: InferenceBackend,
+    models: list[str],
+    suite,
+    backend_name: str,
+) -> None:
+    """Hard-fail if the suite needs tool-calling and any chosen model lacks it.
+
+    Without this, models like medgemma or pure-vision variants get queued
+    against `tool-use` and waste minutes producing a 0/19 score because they
+    can't issue tool calls at all. Capability is read from Ollama's
+    `client.show(model).capabilities` array — only checked for ollama; other
+    backends silently skip (we don't have a portable capability probe).
+    """
+    if backend_name != "ollama":
+        return
+    if not isinstance(backend, OllamaBackend):
+        return
+    if not any(getattr(p, "mode", "text") == "tool-use" for p in suite.prompts):
+        return
+
+    from ollama import AsyncClient
+
+    async def _caps(model: str) -> list[str]:
+        client = AsyncClient(host=backend.host)
+        info = await client.show(model)
+        if hasattr(info, "model_dump"):
+            info = info.model_dump()
+        return info.get("capabilities") or []
+
+    for model in models:
+        try:
+            caps = asyncio.run(_caps(model))
+        except Exception as exc:
+            console.print(
+                f"[yellow]Could not verify tool capability for {model} "
+                f"({type(exc).__name__}: {exc}). Continuing.[/yellow]"
+            )
+            continue
+        if "tools" not in caps:
+            console.print(
+                f"[red]Model '{model}' does not support tool calling "
+                f"(capabilities: {caps}).[/red]\n"
+                f"This suite requires tool-use. Pick a model with 'tools' "
+                f"in its capabilities, or run a non-tool-use suite.\n"
+                f"  Check capabilities: [bold]ollama show <model>[/bold]"
+            )
+            raise typer.Exit(code=1)
+
+
 @app.command()
 def run(
     suite_path: Annotated[
@@ -376,6 +426,7 @@ def run(
 
     check_server_or_exit(backend, backend_name)
     check_models_or_exit(backend, models, backend_name)
+    check_tool_support_or_exit(backend, models, suite, backend_name)
 
     if do_evaluate:
         eval_model = resolve_eval_model_or_exit(
@@ -626,6 +677,22 @@ def evaluate(
             continue
 
         run_label = f"{run_result.run.model.name} ({run_result.run.id[:8]})"
+
+        # Tool-use runs are scored by sandbox validators, not LLM judges.
+        # Refusing here prevents writing a misleading 0.00 scorecard from an
+        # empty `scorable` list (evaluator filters out tool-call done_reasons).
+        validator_results = [
+            r for r in run_result.results if r.validation_passed is not None
+        ]
+        if validator_results and len(validator_results) == len(run_result.results):
+            passed = sum(1 for r in validator_results if r.validation_passed)
+            console.print(
+                f"  [yellow]skipped — tool-use run, scored by validators "
+                f"({passed}/{len(validator_results)} passed). LLM judging "
+                f"does not apply.[/yellow]"
+            )
+            summary.append((run_label, "skipped", None))
+            continue
 
         if skip_scored:
             existing = list(output_dir.glob(f"*_{run_result.run.id[:8]}.json"))
@@ -1253,6 +1320,11 @@ def overnight(
         gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
     status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
     console.print(f"  {status} GPU acceleration: {gpu_msg}")
+
+    # Tool-calling capability check per (model, suite) — fail fast before
+    # queueing hours of inference that would just produce 0/N validations.
+    for task in plan:
+        check_tool_support_or_exit(backend, task.models, task.suite, backend_name)
 
     # Resolve + validate the evaluator model before any inference work begins.
     # Without this, a missing eval model would surface only after hours of

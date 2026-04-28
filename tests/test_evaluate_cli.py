@@ -54,7 +54,12 @@ runner = CliRunner()
 # ---------------------------------------------------------------------------
 
 
-def _make_run_result(run_id: str, model: str = "m", suite_rubric: str | None = "reasoning") -> RunResult:
+def _make_run_result(
+    run_id: str,
+    model: str = "m",
+    suite_rubric: str | None = "reasoning",
+    validation_passed: bool | None = None,
+) -> RunResult:
     return RunResult(
         run=RunMetadata(
             id=run_id,
@@ -72,6 +77,7 @@ def _make_run_result(run_id: str, model: str = "m", suite_rubric: str | None = "
                 request=RequestData(messages=[Message(role="user", content="q")]),
                 response=ResponseData(message=ResponseMessage(content="a")),
                 metrics=PromptMetrics(),
+                validation_passed=validation_passed,
             )
         ],
         summary=RunSummary(total_prompts=1, completed=1, failed=0, total_duration_s=1.0),
@@ -167,6 +173,43 @@ def test_single_result_prints_detailed_aggregate_table(tmp_path: Path):
     assert "Scorecard written to" in res.output
     # Batch summary block should NOT appear for single-result invocations
     assert "Batch Evaluation Summary" not in res.output
+
+
+def test_tool_use_run_is_skipped_with_validator_summary(tmp_path: Path):
+    """Tool-use runs are scored by sandbox validators, not LLM judges.
+
+    Without the early-skip, evaluator.evaluate_run filters out tool-call
+    done_reasons → empty scorable list → misleading 0.00 scorecard. The CLI
+    should refuse and tell the user where the real score lives.
+    """
+    result_path = tmp_path / "tool-use.json"
+    _write_result(
+        result_path,
+        _make_run_result(
+            "44444444-aaaa-bbbb-cccc-dddddddddddd", validation_passed=True,
+        ),
+    )
+
+    scorecards_dir = tmp_path / "scorecards"
+
+    with (
+        patch("porchbench.evaluator.load_rubric", return_value=_make_fake_rubric()),
+        patch("porchbench.evaluator.load_calibration_examples", return_value={}),
+        patch("porchbench.assets.find_rubric", return_value=tmp_path / "rubric.yaml"),
+    ):
+        res = runner.invoke(app, [
+            "evaluate",
+            "-r", str(result_path),
+            "--output-dir", str(scorecards_dir),
+            "--backend", "ollama",
+        ])
+
+    assert res.exit_code == 0, res.output
+    assert "tool-use run" in res.output
+    assert "validators" in res.output
+    assert "1/1 passed" in res.output
+    # Crucially: no scorecard file was written.
+    assert not scorecards_dir.exists() or not list(scorecards_dir.glob("*.json"))
 
 
 # ---------------------------------------------------------------------------

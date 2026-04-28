@@ -292,6 +292,111 @@ class TestResolveEvalModelOrExit:
         assert exc_info.value.exit_code == 1
 
 
+class TestCheckToolSupportOrExit:
+    """Preflight that fails fast if a model can't tool-call on a tool-use suite."""
+
+    def _make_suite_with_modes(self, modes: list[str]):
+        """Build a minimal Suite where each prompt has the given mode."""
+        from porchbench.schemas import (
+            Message,
+            ModelOptions,
+            Prompt,
+            Suite,
+            SuiteDefaults,
+            SuiteMetadata,
+        )
+
+        prompts = [
+            Prompt(
+                id=f"p-{i}",
+                category="tool-use",
+                difficulty="easy",
+                mode=mode,
+                messages=[Message(role="user", content="x")],
+            )
+            for i, mode in enumerate(modes)
+        ]
+        return Suite(
+            suite=SuiteMetadata(name="T", version="1.0"),
+            defaults=SuiteDefaults(options=ModelOptions()),
+            prompts=prompts,
+        )
+
+    def test_skips_when_no_tool_use_prompts(self):
+        from porchbench.cli import check_tool_support_or_exit
+
+        suite = self._make_suite_with_modes(["text", "text"])
+        # Capability probe should never run — backend.host won't even be touched.
+        check_tool_support_or_exit(MagicMock(), ["any-model"], suite, "ollama")
+
+    def test_skips_for_non_ollama_backend(self):
+        from porchbench.cli import check_tool_support_or_exit
+
+        suite = self._make_suite_with_modes(["tool-use"])
+        # openai-compat path: silently returns (no portable capability probe)
+        check_tool_support_or_exit(MagicMock(), ["any-model"], suite, "openai-compat")
+
+    def test_passes_when_model_has_tools_capability(self):
+        import typer
+
+        from porchbench.backend import OllamaBackend
+        from porchbench.cli import check_tool_support_or_exit
+
+        suite = self._make_suite_with_modes(["tool-use"])
+        backend = MagicMock(spec=OllamaBackend)
+        backend.host = None
+
+        async def _fake_show(model):
+            return {"capabilities": ["completion", "tools", "thinking"]}
+
+        with patch("ollama.AsyncClient") as ac:
+            ac.return_value.show = _fake_show
+            try:
+                check_tool_support_or_exit(backend, ["qwen2.5:7b"], suite, "ollama")
+            except typer.Exit:
+                pytest.fail("Should not have exited for tool-capable model")
+
+    def test_exits_when_model_lacks_tools_capability(self):
+        import typer
+
+        from porchbench.backend import OllamaBackend
+        from porchbench.cli import check_tool_support_or_exit
+
+        suite = self._make_suite_with_modes(["tool-use"])
+        backend = MagicMock(spec=OllamaBackend)
+        backend.host = None
+
+        async def _fake_show(model):
+            return {"capabilities": ["completion", "vision"]}
+
+        with patch("ollama.AsyncClient") as ac:
+            ac.return_value.show = _fake_show
+            with pytest.raises(typer.Exit) as exc_info:
+                check_tool_support_or_exit(backend, ["medgemma:4b"], suite, "ollama")
+        assert exc_info.value.exit_code == 1
+
+    def test_continues_with_warning_when_capability_probe_errors(self):
+        """If show() throws, warn but don't block — better than false-positive failures."""
+        import typer
+
+        from porchbench.backend import OllamaBackend
+        from porchbench.cli import check_tool_support_or_exit
+
+        suite = self._make_suite_with_modes(["tool-use"])
+        backend = MagicMock(spec=OllamaBackend)
+        backend.host = None
+
+        async def _fake_show(model):
+            raise RuntimeError("network blip")
+
+        with patch("ollama.AsyncClient") as ac:
+            ac.return_value.show = _fake_show
+            try:
+                check_tool_support_or_exit(backend, ["mystery-model"], suite, "ollama")
+            except typer.Exit:
+                pytest.fail("Probe failure should warn, not exit")
+
+
 class TestDiscoverResultFiles:
     """Picker scans `results/` and must skip non-RunResult JSONs (profiles, analyses)."""
 
