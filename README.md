@@ -221,6 +221,8 @@ porchbench runs anywhere Ollama runs. GPU detection and VRAM polling try `nvidia
 
 **`porchbench: command not found`** — the package installed but the entry point isn't on `PATH`. Re-run `pip install porchbench` inside the active venv (or `pip install -e .` from a checkout), or invoke via `python -m porchbench`.
 
+**Commands return silently with no output (Windows PowerShell)** — open a new PowerShell window, re-activate your venv, and re-run. Rich-CLI tools that mix interactive pickers and live progress bars can occasionally leave PowerShell's terminal in a half-restored state after an aborted picker or a quirky exit; subsequent commands write output that the terminal swallows. A fresh shell resets the state. Same class of issue affects `uv`, `gh`, and other rich-CLI tools on Windows; not specific to porchbench.
+
 **Interactive picker shows no options** — your `results/` directory is empty (for `evaluate` / `compare` / `leaderboard`) or you have no `suites/` directory and the packaged suites failed to resolve. You can always pass `--model` / `--suite` / `--result` explicitly. (For the model picker, an empty server now exits with an `ollama pull` hint rather than showing a blank picker.)
 
 **AMD / ROCm: kernel errors on gfx1201 (RDNA 4)** — a rocblas override usually fixes most models. Some quantized models (notably parts of the Qwen 3.5 family) hit a missing `SOLVE_TRI` kernel upstream; fall back to a different model family until ROCm ships the fix.
