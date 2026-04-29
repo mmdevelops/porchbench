@@ -13,10 +13,27 @@ from rich.console import Console
 from rich.table import Table
 
 from porchbench.metrics import describe, extract_tokens_per_second
-from porchbench.schemas import PromptResult, RunResult, Scorecard
+from porchbench.schemas import ModelOptions, PromptResult, RunResult, Scorecard
 from porchbench.statistics import PairedTestResult, paired_comparison
 
 console = Console()
+
+
+def _format_options(opts: ModelOptions) -> str:
+    """Compact display of resolved-option values that differ from class defaults.
+
+    Defaults (temperature=0, num_ctx=4096, etc.) are uninteresting in a
+    comparison context — what matters is what the user/suite changed. Extras
+    (anything in `extra="allow"` like `think=false`) are always shown since
+    they're definitionally non-default. Returns '(defaults)' when the run
+    used everything as-is.
+    """
+    defaults = ModelOptions()
+    parts = []
+    for field, value in opts.model_dump().items():
+        if value != getattr(defaults, field, None):
+            parts.append(f"{field}={value}")
+    return ", ".join(parts) if parts else "(defaults)"
 
 
 def load_run_result(path: str | Path) -> RunResult:
@@ -206,6 +223,18 @@ def print_comparison_table(
             else:
                 val_row.append("-")
         summary_table.add_row(*val_row)
+
+    # Resolved options (non-default values from the first prompt's options_used).
+    # Disambiguates same-model runs that differ in `--set` or suite-level
+    # overrides (e.g. think=false vs default) — the column header alone
+    # gives no clue when comparing two gemma4:e2b runs.
+    opts_row = ["Options"]
+    for run in runs:
+        if run.results:
+            opts_row.append(_format_options(run.results[0].options_used))
+        else:
+            opts_row.append("-")
+    summary_table.add_row(*opts_row)
 
     # Quantization
     quant_row = ["Quantization"]

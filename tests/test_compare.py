@@ -138,6 +138,51 @@ def test_validation_columns_omitted_when_no_run_has_validator_data():
     assert "Validation" not in out
 
 
+def test_options_row_shows_non_default_values():
+    """The Options row disambiguates same-model runs with different overrides.
+
+    Without it, two columns labelled 'gemma4:e2b' (one with think=false, one
+    without) are indistinguishable and users can't tell which is which.
+    """
+    pr_with_think_off = _make_pr(
+        "p1", eval_count=10, total_duration=1_000_000_000,
+        tokens_per_second=10.0, validation_passed=True,
+    )
+    # Override options on this prompt to simulate a --set think=false run
+    pr_with_think_off.options_used = ModelOptions(num_ctx=8192, think=False)
+
+    pr_default = _make_pr(
+        "p1", eval_count=15, total_duration=1_500_000_000,
+        tokens_per_second=10.0, validation_passed=True,
+    )
+    # Default ModelOptions for the second run
+
+    run_a = _make_run("a", "gemma4:e2b", prompt_results=[pr_with_think_off])
+    run_b = _make_run("b", "gemma4:e2b", prompt_results=[pr_default])
+
+    out = _capture([run_a, run_b])
+
+    assert "Options" in out
+    # Run A overrides shown, run B is on defaults
+    assert "think=False" in out
+    assert "num_ctx=8192" in out
+    assert "(defaults)" in out
+
+
+def test_format_options_returns_defaults_marker_when_unchanged():
+    from porchbench.compare import _format_options
+
+    assert _format_options(ModelOptions()) == "(defaults)"
+
+
+def test_format_options_includes_extras():
+    """Pydantic extras (e.g. think) are always non-default — must be surfaced."""
+    from porchbench.compare import _format_options
+
+    out = _format_options(ModelOptions(think=False))
+    assert "think=False" in out
+
+
 def test_mixed_runs_show_dash_for_prompts_without_validator():
     """When some prompts have validators and others don't, missing cells show '-'."""
     pr_with_val = _make_pr("p1", eval_count=10, total_duration=1_000_000_000,
