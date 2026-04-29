@@ -406,6 +406,13 @@ async def profile_system(
     console.print(f"Models to profile: {', '.join(models)}")
     console.print()
 
+    # Force-unload any currently-resident models so the *first* profile call
+    # measures a true cold load. Subsequent models are inherently cold (Ollama
+    # hadn't loaded them yet), so a one-shot eviction at the start covers the
+    # common 'someone ran ollama run X earlier' case without taxing the rest
+    # of the profile run with extra unloads.
+    await _evict_all_running_models(backend)
+
     # Phase 1: profile each model individually
     model_profiles: dict[str, ModelProfile] = {}
     for model_name in models:
@@ -463,6 +470,38 @@ async def profile_system(
         recommended_hot_tier=hot_tier,
         cold_tier=cold_tier,
     )
+
+
+async def _evict_all_running_models(backend: OllamaBackend) -> None:
+    """Unload every currently-resident Ollama model so the next chat() is cold.
+
+    Calls `generate(model, prompt='', keep_alive=0)` per running model — the
+    standard Ollama eviction trick. Best-effort: errors are swallowed because
+    a stale ps() entry or a model deleted between calls shouldn't fail the
+    whole profile. Quiet on success; users only see noise if it goes wrong.
+    """
+    try:
+        running = await backend.list_running_models()
+    except Exception:
+        return
+
+    if not running:
+        return
+
+    from ollama import AsyncClient
+
+    client = AsyncClient(host=backend.host)
+    for entry in running:
+        name = entry.get("name") or entry.get("model")
+        if not name:
+            continue
+        try:
+            await client.generate(model=name, prompt="", keep_alive=0)
+        except Exception as exc:
+            console.print(
+                f"  [yellow]Could not evict {name} before profiling "
+                f"({type(exc).__name__}: {exc}). Continuing.[/yellow]"
+            )
 
 
 async def _profile_single_model(model_name: str, backend: OllamaBackend) -> ModelProfile:
