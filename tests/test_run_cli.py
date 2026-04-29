@@ -560,6 +560,71 @@ class TestDiscoverResultFiles:
 
         assert _discover_result_files(tmp_path) == []
 
+    def test_same_day_same_model_runs_get_distinct_labels(self, tmp_path: Path):
+        """Two runs of the same model+suite on the same day must NOT share a label.
+
+        Identical labels caused the picker's labels.index() lookup to collapse
+        every duplicate-label selection to the first file's path, silently
+        rendering N identical columns in `compare`.
+        """
+        import json
+
+        from porchbench.interactive import _discover_result_files
+
+        a = tmp_path / "run_a.json"
+        a.write_text(json.dumps({
+            "run": {
+                "id": "aaaaaaaa-1111-1111-1111-111111111111",
+                "timestamp": "2026-04-29T15:58:39.123456",
+                "model": {"name": "gemma4:e2b"},
+                "suite": {"name": "Coding Basics", "version": "2.0"},
+            },
+        }), encoding="utf-8")
+
+        b = tmp_path / "run_b.json"
+        b.write_text(json.dumps({
+            "run": {
+                "id": "bbbbbbbb-2222-2222-2222-222222222222",
+                "timestamp": "2026-04-29T17:42:11.654321",
+                "model": {"name": "gemma4:e2b"},
+                "suite": {"name": "Coding Basics", "version": "2.0"},
+            },
+        }), encoding="utf-8")
+
+        entries = _discover_result_files(tmp_path)
+        labels = [lbl for lbl, _ in entries]
+        assert len(set(labels)) == len(labels), (
+            f"Duplicate labels would collapse picker selections: {labels}"
+        )
+        # Each label includes minute-precision timestamp
+        assert any("15:58" in lbl for lbl in labels)
+        assert any("17:42" in lbl for lbl in labels)
+
+    def test_same_minute_collisions_get_run_id_suffix(self, tmp_path: Path):
+        """Two runs that finish in the same minute still get distinct labels."""
+        import json
+
+        from porchbench.interactive import _discover_result_files
+
+        for i, run_id in enumerate([
+            "aaaaaaaa-1111-1111-1111-111111111111",
+            "bbbbbbbb-2222-2222-2222-222222222222",
+        ]):
+            (tmp_path / f"run_{i}.json").write_text(json.dumps({
+                "run": {
+                    "id": run_id,
+                    "timestamp": "2026-04-29T15:58:00.000000",
+                    "model": {"name": "gemma4:e2b"},
+                    "suite": {"name": "Coding Basics", "version": "2.0"},
+                },
+            }), encoding="utf-8")
+
+        entries = _discover_result_files(tmp_path)
+        labels = [lbl for lbl, _ in entries]
+        assert len(set(labels)) == 2, f"Expected unique labels: {labels}"
+        # The second occurrence picks up a [run_id_prefix] suffix
+        assert any("[" in lbl and "]" in lbl for lbl in labels)
+
 
 class TestSelectModelsEmptyServer:
     def test_empty_model_list_exits_with_pull_hint(self):

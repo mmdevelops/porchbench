@@ -157,8 +157,17 @@ def _discover_result_files(result_dir: Path) -> list[tuple[str, Path]]:
     routing-analysis files) — they parse but lack `run.model.name` /
     `run.suite.name`, so picker users would otherwise see a `? — ? v ()`
     entry for each one.
+
+    Labels include date + time of day. Date alone (YYYY-MM-DD) caused
+    same-day same-model runs to share an identical label, which made the
+    picker's `labels.index(s)` lookup collapse every duplicate-label
+    selection to the first file's path — silently rendering N identical
+    columns in `compare`. Including HH:MM keeps human-readable while
+    guaranteeing within-minute uniqueness; the run-id suffix is the
+    final tie-breaker for the rare same-minute case.
     """
     entries: list[tuple[str, Path]] = []
+    seen_labels: dict[str, int] = {}
     for p in sorted(result_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
@@ -169,8 +178,17 @@ def _discover_result_files(result_dir: Path) -> list[tuple[str, Path]]:
             if not model or not suite_name:
                 continue
             suite_ver = suite.get("version", "")
-            ts = run.get("timestamp", "")[:10]
-            label = f"{model} — {suite_name} v{suite_ver} ({ts})"
+            ts_iso = run.get("timestamp", "")
+            # 'YYYY-MM-DDTHH:MM:SS...' → 'YYYY-MM-DD HH:MM' (16 chars, T→space)
+            ts_human = ts_iso[:16].replace("T", " ") if ts_iso else ""
+            run_id = run.get("id", "") or ""
+            ts_part = f" ({ts_human})" if ts_human else ""
+            label = f"{model} — {suite_name} v{suite_ver}{ts_part}"
+            # Defensive disambiguation for the rare same-minute case: append
+            # a short run-id suffix when a label would otherwise collide.
+            if label in seen_labels and run_id:
+                label = f"{label} [{run_id[:6]}]"
+            seen_labels[label] = seen_labels.get(label, 0) + 1
             entries.append((label, p))
         except Exception:
             continue
@@ -190,12 +208,20 @@ def select_result(result_dir: Path = Path("results")) -> Path:
 
     labels = [label for label, _ in entries]
     console.print("[bold]Select a result:[/bold]")
-    chosen = select(options=labels, pagination=len(labels) > 15, page_size=15)
-    if chosen is None:
+    # return_index avoids labels.index() — which silently returns the first
+    # match when duplicate labels exist, collapsing distinct selections to
+    # the same path.
+    chosen_idx = select(
+        options=labels,
+        pagination=len(labels) > 15,
+        page_size=15,
+        return_index=True,
+    )
+    if chosen_idx is None:
         console.print("[red]No result selected.[/red]")
         raise typer.Exit(code=1)
 
-    return entries[labels.index(chosen)][1]
+    return entries[chosen_idx][1]
 
 
 def select_results(result_dir: Path = Path("results")) -> list[Path]:
@@ -211,17 +237,23 @@ def select_results(result_dir: Path = Path("results")) -> list[Path]:
 
     labels = [label for label, _ in entries]
     console.print("[bold]Select result(s)[/bold] (space to toggle, enter to confirm):")
-    selected = select_multiple(
+    # return_indices avoids the labels.index() bug — when two result files
+    # share a label (e.g. same model, same suite, same minute), looking up
+    # by string equality always returns the first index, which collapsed
+    # multi-selections of distinct files to N copies of the first file in
+    # downstream commands like compare.
+    selected_idx = select_multiple(
         options=labels,
         minimal_count=1,
         pagination=len(labels) > 15,
         page_size=15,
+        return_indices=True,
     )
-    if not selected:
+    if not selected_idx:
         console.print("[red]No results selected.[/red]")
         raise typer.Exit(code=1)
 
-    return [entries[labels.index(s)][1] for s in selected]
+    return [entries[i][1] for i in selected_idx]
 
 
 # ---------------------------------------------------------------------------
