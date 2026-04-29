@@ -359,6 +359,35 @@ model file SHA (from `ollama.show()` digest) and Ollama server version.
   limitation; tool-use benchmarks should focus on 7B+ models.
 - Context window of 32k+ improves tool calling reliability.
 
+### Thinking mode can hurt tool-use accuracy
+
+Reasoning-mode models (Qwen 3, DeepSeek-R1, Gemma 4, etc.) emit `<think>...</think>`
+preambles before answering by default. The conventional assumption is that thinking
+helps reasoning-heavy tasks; for tool-use, an N=1 observation on porchbench's
+`tool-use` suite found the opposite:
+
+| Run                          | Validation | Total tokens | Total time |
+|------------------------------|-----------:|-------------:|-----------:|
+| `gemma4:e2b` (default)       |      14/19 |       37,512 |     244.6s |
+| `gemma4:e2b --set think=false` |    16/19 |        8,692 |      74.7s |
+
+Same model, same hardware, same suite (Tool Use Discovery v1.0), 19 prompts each.
+Disabling thinking improved validator pass rate (16/19 vs 14/19) **and** cut token
+spend by ~4.3x and wall-clock by ~3.3x. Plausible explanation: the reasoning
+preamble distracts from tool-call planning rather than reinforcing it on this
+suite's tasks (file I/O, CSV manipulation, multi-step pipelines), where the
+"plan" is mechanical rather than inferential.
+
+Caveats: single model, single suite, single hardware configuration — replicate
+on other tool-capable thinking models (`qwen3:8b`, `deepseek-r1:8b`) before
+generalizing. Treat as motivation for **always benchmarking tool-use suites
+with both `think=true` and `think=false`** so model-suite interactions surface
+rather than hide behind a default.
+
+Compare runs with `porchbench compare` — the `Options` row in the model
+summary surfaces the `think=false` differentiator so same-model A/B runs are
+easy to read.
+
 ### Server version detection
 
 The `ollama` Python client does not expose server version. Use a direct HTTP call:
