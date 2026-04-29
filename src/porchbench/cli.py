@@ -1102,8 +1102,12 @@ def leaderboard(
     ] = Path("results"),
     strict: Annotated[
         bool,
-        typer.Option("--strict", help="Require same evaluator in addition to same rubric."),
+        typer.Option("--strict", help="Require same evaluator in addition to same rubric. Auto-picks the largest evaluator group when multiple exist; use --evaluator to pin a specific judge."),
     ] = False,
+    evaluator_filter: Annotated[
+        str | None,
+        typer.Option("--evaluator", help="Filter to scorecards from this judge (e.g. 'ollama/phi4:14b'). Implies --strict. Use when you want to compare under a specific judge instead of the default largest-group pick."),
+    ] = None,
     top_n: Annotated[
         int,
         typer.Option("--top-n", "-n", help="Number of best/worst prompts to show per model."),
@@ -1153,7 +1157,9 @@ def leaderboard(
         selected = scorecards
 
     # Evaluator consistency check + --strict filtering on the selected group
-    comparable = filter_comparable(selected, strict=strict)
+    comparable = filter_comparable(
+        selected, strict=strict, evaluator=evaluator_filter,
+    )
 
     print_leaderboard(comparable, top_n=top_n, result_dir=result_dir)
 

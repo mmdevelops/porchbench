@@ -114,12 +114,15 @@ def group_scorecards(scorecards: list[Scorecard]) -> dict[str, list[Scorecard]]:
 def filter_comparable(
     scorecards: list[Scorecard],
     strict: bool = False,
+    evaluator: str | None = None,
 ) -> list[Scorecard]:
     """Filter scorecards to a comparable set sharing the same rubric.
 
     Groups by normalized rubric, picks the largest group. Warns when exact
     rubric strings differ within a group (version changes). When strict=True,
-    also requires the same evaluator.
+    also requires the same evaluator (auto-picks the largest evaluator
+    sub-group). When `evaluator` is provided, filters to that exact evaluator
+    label instead of auto-picking — implies strict.
     """
     if not scorecards:
         return []
@@ -150,7 +153,25 @@ def filter_comparable(
 
     # Check evaluator consistency
     evaluators = {sc.evaluation.evaluator for sc in group}
-    if len(evaluators) > 1:
+
+    # Explicit --evaluator takes priority: pin to that judge regardless of size
+    if evaluator is not None:
+        if evaluator not in evaluators:
+            console.print(
+                f"[red]No scorecards found with evaluator '{evaluator}'. "
+                f"Available evaluators in this rubric group: "
+                f"{', '.join(repr(e) for e in sorted(evaluators))}[/red]"
+            )
+            return []
+        excluded_evals = [e for e in evaluators if e != evaluator]
+        group = [sc for sc in group if sc.evaluation.evaluator == evaluator]
+        if excluded_evals:
+            console.print(
+                f"[yellow]--evaluator: filtered to '{evaluator}' "
+                f"({len(group)} scorecards). Excluded scorecards with "
+                f"evaluators: {', '.join(repr(e) for e in excluded_evals)}[/yellow]"
+            )
+    elif len(evaluators) > 1:
         if strict:
             eval_counts: dict[str, int] = defaultdict(int)
             for sc in group:
@@ -161,14 +182,16 @@ def filter_comparable(
                 f"[yellow]--strict: filtered to evaluator '{best_eval}' "
                 f"({len(group)} scorecards). "
                 f"Excluded scorecards with evaluators: "
-                f"{', '.join(repr(e) for e in evaluators if e != best_eval)}[/yellow]"
+                f"{', '.join(repr(e) for e in evaluators if e != best_eval)}. "
+                f"Use --evaluator <label> to pick a different judge.[/yellow]"
             )
         else:
             console.print(
                 f"[yellow]Warning: mixed evaluators in this rubric group: "
                 f"{', '.join(repr(e) for e in sorted(evaluators))}. "
                 f"Scores may not be directly comparable. Use --strict to enforce "
-                f"same evaluator.[/yellow]"
+                f"same evaluator (auto-picks largest), or --evaluator <label> "
+                f"to pin a specific judge.[/yellow]"
             )
 
     return group

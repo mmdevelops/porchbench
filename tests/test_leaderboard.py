@@ -14,6 +14,7 @@ from porchbench.leaderboard import (
     _sparkline,
     aggregate_by_model,
     discover_scorecards,
+    filter_comparable,
     group_scorecards,
     print_differentiating_prompts,
     print_score_distribution,
@@ -113,6 +114,50 @@ class TestGroupScorecards:
 
     def test_empty_list(self):
         assert group_scorecards([]) == {}
+
+
+# ---------------------------------------------------------------------------
+# filter_comparable: rubric grouping + evaluator filtering
+# ---------------------------------------------------------------------------
+
+
+class TestFilterComparableEvaluatorPin:
+    """--evaluator <label> overrides --strict's largest-group default."""
+
+    def test_explicit_evaluator_pins_to_smaller_group(self):
+        # 5 cards from gemma judge, 2 from phi judge — strict alone would pick gemma.
+        cards = (
+            [_make_scorecard(evaluator="ollama/gemma4:e4b") for _ in range(5)]
+            + [_make_scorecard(evaluator="ollama/phi4:14b") for _ in range(2)]
+        )
+        out = filter_comparable(cards, evaluator="ollama/phi4:14b")
+        assert len(out) == 2
+        assert all(sc.evaluation.evaluator == "ollama/phi4:14b" for sc in out)
+
+    def test_explicit_evaluator_overrides_strict(self):
+        cards = (
+            [_make_scorecard(evaluator="ollama/gemma4:e4b") for _ in range(5)]
+            + [_make_scorecard(evaluator="ollama/phi4:14b") for _ in range(2)]
+        )
+        out = filter_comparable(
+            cards, strict=True, evaluator="ollama/phi4:14b",
+        )
+        assert all(sc.evaluation.evaluator == "ollama/phi4:14b" for sc in out)
+
+    def test_unknown_evaluator_returns_empty_with_error(self):
+        cards = [_make_scorecard(evaluator="ollama/gemma4:e4b")]
+        out = filter_comparable(cards, evaluator="ollama/nonexistent:8b")
+        assert out == []
+
+    def test_strict_without_evaluator_picks_largest(self):
+        """Backwards-compatible: --strict alone still auto-picks the largest group."""
+        cards = (
+            [_make_scorecard(evaluator="ollama/gemma4:e4b") for _ in range(5)]
+            + [_make_scorecard(evaluator="ollama/phi4:14b") for _ in range(2)]
+        )
+        out = filter_comparable(cards, strict=True)
+        assert len(out) == 5
+        assert all(sc.evaluation.evaluator == "ollama/gemma4:e4b" for sc in out)
 
 
 # ---------------------------------------------------------------------------
