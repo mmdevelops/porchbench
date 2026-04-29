@@ -85,10 +85,23 @@ def print_comparison_table(
                 score_lookups.append({})
     has_scores = bool(score_lookups) and any(score_lookups)
 
+    # Detect tool-use runs by presence of validator outcomes — when ANY run
+    # carries validation_passed data, surface it as the leftmost data column
+    # (the most actionable signal for tool-use comparisons; tokens/tok/s are
+    # secondary when the question is "did the model do the task at all").
+    has_validation = any(
+        any(r.validation_passed is not None for r in run.results)
+        for run in runs
+    )
+
     # Per-prompt comparison — metrics grouped with models side-by-side
     table = Table(title="Per-Prompt Comparison", title_style="bold")
     table.add_column("Prompt", style="bold")
 
+    # Validation columns (one per model) — leftmost data when applicable
+    if has_validation:
+        for name in model_names:
+            table.add_column(f"{name}\nvalid", justify="center")
     # Tokens columns (one per model)
     for name in model_names:
         table.add_column(f"{name}\ntokens", justify="right")
@@ -105,6 +118,16 @@ def print_comparison_table(
 
     for pid, results_row in aligned.items():
         row: list[str] = [pid]
+
+        # Validation outcome (pass / fail / dash for non-validator prompts)
+        if has_validation:
+            for pr in results_row:
+                if pr is None or pr.validation_passed is None:
+                    row.append("-")
+                elif pr.validation_passed:
+                    row.append("[green]pass[/green]")
+                else:
+                    row.append("[yellow]fail[/yellow]")
 
         # Tokens
         for pr in results_row:
@@ -171,6 +194,18 @@ def print_comparison_table(
     for run in runs:
         comp_row.append(f"{run.summary.completed}/{run.summary.total_prompts}")
     summary_table.add_row(*comp_row)
+
+    # Validation pass rate (when any run has validator outcomes)
+    if has_validation:
+        val_row = ["Validation"]
+        for run in runs:
+            scored = [r for r in run.results if r.validation_passed is not None]
+            if scored:
+                passed = sum(1 for r in scored if r.validation_passed)
+                val_row.append(f"{passed}/{len(scored)}")
+            else:
+                val_row.append("-")
+        summary_table.add_row(*val_row)
 
     # Quantization
     quant_row = ["Quantization"]
