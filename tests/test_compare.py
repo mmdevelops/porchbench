@@ -183,6 +183,137 @@ def test_format_options_includes_extras():
     assert "think=False" in out
 
 
+# ---------------------------------------------------------------------------
+# Auto-discovery: compare matches scorecards to results by run_id prefix
+# ---------------------------------------------------------------------------
+
+
+def _make_scorecard_with_score(run_id: str, prompt_id: str, weighted: float, overall: float):
+    """Build a Scorecard with one realistic PromptScore (matches what evaluate writes)."""
+    from porchbench.schemas import (
+        AggregateScores,
+        CriterionScore,
+        EvaluationMetadata,
+        PromptScore,
+        Scorecard,
+    )
+
+    return Scorecard(
+        evaluation=EvaluationMetadata(
+            run_id=run_id, evaluator="test/judge", rubric="r v1.0",
+            model_name="m", suite_name="T",
+        ),
+        scores=[
+            PromptScore(
+                prompt_id=prompt_id,
+                criteria={"correctness": CriterionScore(score=int(round(weighted)), rationale="ok")},
+                weighted_score=weighted,
+                summary="ok",
+            )
+        ],
+        aggregate=AggregateScores(overall_weighted=overall),
+    )
+
+
+def test_compare_auto_discovers_scorecards_by_run_id_prefix(tmp_path):
+    """`porchbench compare` should pair scorecards to results without users
+    having to specify --scorecard for each -r. Scorecards are written to
+    `scorecards/{ts}_{run_id[:8]}.json`, so the prefix glob is unambiguous."""
+    from typer.testing import CliRunner
+
+    from porchbench.cli import app
+
+    runner = CliRunner()
+    results_dir = tmp_path / "results"
+    scorecards_dir = tmp_path / "scorecards"
+    results_dir.mkdir()
+    scorecards_dir.mkdir()
+
+    # Two run results with distinct run IDs
+    run_a = _make_run(
+        "aaaaaaaa-1111-1111-1111-111111111111", "m1",
+        prompt_results=[_make_pr("p1", eval_count=10, total_duration=1_000_000_000,
+                                 tokens_per_second=10.0)],
+    )
+    run_b = _make_run(
+        "bbbbbbbb-2222-2222-2222-222222222222", "m2",
+        prompt_results=[_make_pr("p1", eval_count=20, total_duration=2_000_000_000,
+                                 tokens_per_second=10.0)],
+    )
+    rp_a = results_dir / "result_a.json"
+    rp_b = results_dir / "result_b.json"
+    rp_a.write_text(run_a.model_dump_json(), encoding="utf-8")
+    rp_b.write_text(run_b.model_dump_json(), encoding="utf-8")
+
+    # Matching scorecards named with run_id[:8] prefix; realistic shape
+    sc_a = _make_scorecard_with_score(run_a.run.id, "p1", weighted=4.5, overall=4.5)
+    sc_b = _make_scorecard_with_score(run_b.run.id, "p1", weighted=3.5, overall=3.5)
+    (scorecards_dir / "2026-04-29T10-00-00_aaaaaaaa.json").write_text(
+        sc_a.model_dump_json(), encoding="utf-8",
+    )
+    (scorecards_dir / "2026-04-29T10-01-00_bbbbbbbb.json").write_text(
+        sc_b.model_dump_json(), encoding="utf-8",
+    )
+
+    res = runner.invoke(app, [
+        "compare",
+        "-r", str(rp_a), "-r", str(rp_b),
+        "--scorecard-dir", str(scorecards_dir),
+    ])
+
+    assert res.exit_code == 0, res.output
+    # Scorecards were picked up — Avg score row should appear and per-prompt
+    # score column should render with the expected values.
+    assert "Avg score" in res.output
+    assert "4.50" in res.output
+    assert "3.50" in res.output
+
+
+def test_compare_warns_when_some_results_lack_scorecards(tmp_path):
+    """Auto-discovery is best-effort: missing scorecards get a friendly note,
+    not a hard failure. Users see which models still need evaluating."""
+    from typer.testing import CliRunner
+
+    from porchbench.cli import app
+
+    runner = CliRunner()
+    results_dir = tmp_path / "results"
+    scorecards_dir = tmp_path / "scorecards"
+    results_dir.mkdir()
+    scorecards_dir.mkdir()
+
+    run_a = _make_run(
+        "aaaaaaaa-1111-1111-1111-111111111111", "m1",
+        prompt_results=[_make_pr("p1", eval_count=10, total_duration=1_000_000_000,
+                                 tokens_per_second=10.0)],
+    )
+    run_b = _make_run(
+        "bbbbbbbb-2222-2222-2222-222222222222", "m2-not-scored",
+        prompt_results=[_make_pr("p1", eval_count=20, total_duration=2_000_000_000,
+                                 tokens_per_second=10.0)],
+    )
+    (results_dir / "a.json").write_text(run_a.model_dump_json(), encoding="utf-8")
+    (results_dir / "b.json").write_text(run_b.model_dump_json(), encoding="utf-8")
+
+    # Only score run_a; run_b has no scorecard
+    sc_a = _make_scorecard_with_score(run_a.run.id, "p1", weighted=4.5, overall=4.5)
+    (scorecards_dir / "ts_aaaaaaaa.json").write_text(
+        sc_a.model_dump_json(), encoding="utf-8",
+    )
+
+    res = runner.invoke(app, [
+        "compare",
+        "-r", str(results_dir / "a.json"),
+        "-r", str(results_dir / "b.json"),
+        "--scorecard-dir", str(scorecards_dir),
+    ])
+
+    assert res.exit_code == 0, res.output
+    # Friendly note names the un-scored model and points to evaluate
+    assert "m2-not-scored" in res.output
+    assert "porchbench evaluate" in res.output
+
+
 def test_mixed_runs_show_dash_for_prompts_without_validator():
     """When some prompts have validators and others don't, missing cells show '-'."""
     pr_with_val = _make_pr("p1", eval_count=10, total_duration=1_000_000_000,

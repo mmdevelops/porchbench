@@ -866,8 +866,12 @@ def compare(
     ] = None,
     scorecard_paths: Annotated[
         list[Path] | None,
-        typer.Option("--scorecard", help="Scorecard JSON files (same order as results)."),
+        typer.Option("--scorecard", help="Scorecard JSON files (same order as results). Auto-discovered from scorecard_dir by run_id when omitted."),
     ] = None,
+    scorecard_dir: Annotated[
+        Path,
+        typer.Option("--scorecard-dir", help="Directory to auto-discover scorecards in when --scorecard is not given."),
+    ] = Path("scorecards"),
     seed: Annotated[
         int,
         typer.Option(
@@ -905,6 +909,35 @@ def compare(
             except UserError as exc:
                 console.print(f"[yellow]Warning: {exc}[/yellow]")
                 scorecards.append(None)
+    elif scorecard_dir.is_dir():
+        # Auto-discover scorecards by run_id prefix — saves users from
+        # hand-pairing -r and --scorecard arguments. Scorecards are named
+        # `{ts}_{run_id[:8]}.json` so a glob on the prefix is unambiguous.
+        scorecards = []
+        found_any = False
+        for run in runs:
+            prefix = run.run.id[:8]
+            matches = sorted(scorecard_dir.glob(f"*_{prefix}.json"))
+            if matches:
+                try:
+                    scorecards.append(load_json_model(matches[0], Scorecard, "scorecard"))
+                    found_any = True
+                except UserError as exc:
+                    console.print(f"[yellow]Warning: {exc}[/yellow]")
+                    scorecards.append(None)
+            else:
+                scorecards.append(None)
+        if not found_any:
+            scorecards = None  # nothing to add, drop the all-None list
+        elif any(sc is None for sc in scorecards):
+            unscored = [
+                runs[i].run.model.name for i, sc in enumerate(scorecards) if sc is None
+            ]
+            console.print(
+                f"[dim]Note: no scorecard found in {scorecard_dir}/ for: "
+                f"{', '.join(unscored)}. Run [bold]porchbench evaluate[/bold] "
+                f"on the corresponding result(s) to populate score columns.[/dim]"
+            )
 
     print_comparison_table(runs, scorecards, seed=seed)
 
