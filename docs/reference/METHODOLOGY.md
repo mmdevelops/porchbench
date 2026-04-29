@@ -234,14 +234,46 @@ users should be aware of when interpreting scorecards.
   rates each response against the rubric in isolation. Position bias (which applies
   to pairwise judging) therefore does not arise in the current pipeline.
 
-**Operator guidance (not automated)**
+**Operator guidance**
 
 - **Judge-family separation.** To reduce self-preference bias, use a different
   model family for the judge than the models under test (e.g., a Gemma judge
-  scoring Qwen responses, or vice versa). The default Ollama judge is
-  `gemma4:e4b`; the default API / Claude-Code judge is Claude Sonnet. porchbench does
-  **not** warn when the judge family overlaps with a model under test — that
-  check is the user's responsibility.
+  scoring Qwen responses, or vice versa). porchbench prompts the user to pick
+  an Ollama judge on first `--evaluate` use and persists the choice to
+  `.env`; cloud backends default to Claude Sonnet. The CLI emits a yellow
+  `WARN` when the resolved judge shares the first-colon-segment family with
+  any target model, but does not block — the user can override at the source
+  with `--evaluator <name>`.
+
+**Judge reliability matters as much as judge family**
+
+A second axis of judge quality is structural reliability — does the judge
+return valid JSON conforming to the scoring schema? Parse failures score the
+prompt 0 across all criteria (visible as the `Flags: N parse fail` column on
+the leaderboard) and silently deflate the model's reported score relative to
+its actual response quality. An N=1 comparison run during porchbench v0.1 UAT
+on the `coding-basics` suite, scoring three models (gemma4:e2b, mistral-nemo:12b,
+qwen2.5:7b, n=2 each) under two local judges:
+
+| Judge          | Parse-fail rate | Resulting #1   |
+|----------------|----------------:|----------------|
+| `gemma4:e4b`   |  11/13 cards (~30% of evaluations) | mistral-nemo:12b (4.56) |
+| `phi4:14b`     |   2/13 cards (~3% of evaluations)  | gemma4:e2b (4.80)        |
+
+Same scorecards, same rubric, only the judge changed — and the headline
+ranking flipped. The lower-parse-fail judge produces a substantially cleaner
+ranking signal. **For local-Ollama evaluation, prefer `phi4:14b` over
+`gemma4:e4b` when both are pulled.** This is N=1 motivation, not a definitive
+recommendation; replicate on your own scorecard pool before trusting the
+preference.
+
+Notable contrast with the same-family-bias literature: the `gemma4:e4b`
+judge had *more* parse failures on `gemma4:e2b` responses than on the other
+families, not fewer. So the bias direction here is structural-parsing rather
+than self-preference inflation. The flagged "WARN: same-family" line still
+applies (preference bias is the well-established failure mode), but parse
+reliability is an independent axis worth checking with `--strict` /
+`--evaluator` to compare under different judges.
 
 **Known gaps — not implemented in v0.1**
 
