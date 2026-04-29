@@ -34,6 +34,13 @@ console = Console()
 
 _GPU_CACHE_TTL_SECONDS = 24 * 60 * 60  # Hardware doesn't change; re-probe daily to catch driver/firmware shifts.
 
+# Reserved VRAM the hot/cold tier classifier holds back for KV cache growth and
+# system overhead during sustained alternating use. Looser than the per-pair
+# coexistence check (which uses 1 GB) on purpose: pair fit answers 'will Ollama
+# OOM if I load both right now?' while tier classification answers 'is it safe
+# to keep these resident across a long benchmark run?'.
+TIER_HEADROOM_GB = 2.0
+
 
 def _gpu_cache_path() -> Path:
     return Path.home() / ".porchbench" / "cache" / "gpu.json"
@@ -574,7 +581,7 @@ def _compute_tiers(
     hot: list[str] = []
     total_vram = 0.0
     total = vram_total_gb or 16.0
-    vram_limit = total - 2.0  # leave 2GB headroom
+    vram_limit = total - TIER_HEADROOM_GB
 
     for m in sorted_models:
         m_vram = profiles.get(m, ModelProfile()).vram_gb or 0
@@ -644,7 +651,21 @@ def print_profile_summary(profile: SystemProfile) -> None:
         console.print(coresid_table)
 
     # Tiers
-    if profile.recommended_hot_tier:
-        console.print(f"\n[bold]Hot tier[/bold] (co-resident): {', '.join(profile.recommended_hot_tier)}")
-    if profile.cold_tier:
-        console.print(f"[bold]Cold tier[/bold] (swap required): {', '.join(profile.cold_tier)}")
+    if profile.recommended_hot_tier or profile.cold_tier:
+        budget_note = ""
+        if profile.vram_total_gb:
+            usable = profile.vram_total_gb - TIER_HEADROOM_GB
+            budget_note = (
+                f" [dim](budget: {usable:.1f} GB usable, "
+                f"{TIER_HEADROOM_GB:.1f} GB reserved for KV cache + system)[/dim]"
+            )
+        if profile.recommended_hot_tier:
+            console.print(
+                f"\n[bold]Hot tier[/bold] (co-resident): "
+                f"{', '.join(profile.recommended_hot_tier)}{budget_note}"
+            )
+        if profile.cold_tier:
+            console.print(
+                f"[bold]Cold tier[/bold] (swap required): "
+                f"{', '.join(profile.cold_tier)}"
+            )
