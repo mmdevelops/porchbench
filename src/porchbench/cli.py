@@ -677,20 +677,27 @@ def evaluate(
 
     merged_paths = (positional_paths or []) + (result_paths or [])
 
-    # Interactive selection when args omitted
-    if not merged_paths:
-        from porchbench.interactive import select_results
-        merged_paths = select_results()
-    result_paths = merged_paths
-
     # ---- one-time setup (shared across all results) ----
-
+    # Resolve judge BEFORE the results picker so users see which model will
+    # score their selection upfront (and can Ctrl+C to override before
+    # picking 30 result files). Also makes the order conceptually clean:
+    # set up the judge first, then choose what to judge.
     probe_backend = OllamaBackend(host=host) if backend == "ollama" else None
     evaluator_model = resolve_eval_model_or_exit(
         backend, evaluator_model, probe_backend, interactive=True,
     )
     if backend == "ollama":
         check_models_or_exit(probe_backend, [evaluator_model], "ollama")
+    console.print(f"Evaluator: [cyan]{backend}/{evaluator_model}[/cyan]")
+    console.print(
+        "  [dim](override with --evaluator <name> or set PORCHBENCH_EVAL_MODEL)[/dim]"
+    )
+
+    # Interactive selection when args omitted
+    if not merged_paths:
+        from porchbench.interactive import select_results
+        merged_paths = select_results()
+    result_paths = merged_paths
 
     rubrics_by_category = None
     if rubric_dir:
@@ -718,7 +725,6 @@ def evaluate(
         raise typer.Exit(code=1)
 
     is_batch = len(result_paths) > 1
-    console.print(f"Evaluator: {backend_label}")
     if is_batch:
         console.print(f"Results to score: [bold]{len(result_paths)}[/bold]\n")
 
