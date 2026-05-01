@@ -1913,6 +1913,17 @@ def main() -> None:
     users see a Python traceback. Exit 130 is the shell convention for
     SIGINT-style termination.
     """
+    # Windows captured-output (pipes, file redirects, CI logs) defaults
+    # sys.stdout/stderr to cp1252, which can't encode the Unicode
+    # box-drawing, em-dash, and sparkline characters Rich emits — leaderboard
+    # mid-table renders crashed with UnicodeEncodeError on `█` (U+2588).
+    # Reconfigure to UTF-8 with replacement fallback so captured runs render
+    # the same as interactive terminal runs. Guarded by hasattr so pytest
+    # capfd / capsys replacement streams are left alone.
+    if sys.platform == "win32":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         app()
     except KeyboardInterrupt:
