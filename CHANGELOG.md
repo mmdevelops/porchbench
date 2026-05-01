@@ -25,7 +25,7 @@ Initial public release.
 - Statistical tooling: bootstrap confidence intervals, paired per-question deltas (Wilcoxon signed-rank for n >= 6, paired t for smaller samples), Cohen's dz effect sizes, and contamination-aware aggregation. Paired-t p-values are gated to df >= 30 (below that, `p_value` and `significant` are `null` in the scorecard JSON and the CI plus effect size carry the inference — see METHODOLOGY.md for rationale).
 - `.env` + `PORCHBENCH_*` environment variable configuration; CLI flags always win.
 - `porchbench compare --seed` (env `PORCHBENCH_SEED`) exposes the bootstrap RNG seed (default `42`). Output is byte-identical across runs for a fixed seed; override to probe sensitivity of CI bounds and the Cohen's dz effect size.
-- 487-test suite across backend, runner, evaluator, routing, sandbox, validators, schemas, statistics, and asset resolution.
+- 502-test suite across backend, runner, evaluator, routing, sandbox, validators, schemas, statistics, and asset resolution.
 - Benchmark suites and rubrics ship bundled with the package under `src/porchbench/data/`. Reference them by name (`-s coding-basics`, `--rubric default`) from any directory — no repo checkout required. Drop a YAML in `./suites/` or `./rubrics/` to override with a project-local copy.
 - `RunMetadata.porchbench_version` records the installed package version on every new run for reproducibility.
 - Stable top-level library API: `from porchbench import RunResult, Scorecard, Suite, Rubric, RoutingAnalysis, SystemProfile` re-exports the Pydantic schemas for every serialized artifact the CLI produces. Intended entry point for programmatic consumers of result and scorecard JSON.
@@ -40,6 +40,7 @@ Initial public release.
 - Removed the static "First prompt can take several minutes…" cold-start hint from `overnight` output. The 60-second heartbeat already emits concrete `(Xm Ys elapsed)` lines during real cold compiles, which is more useful than a generic warning.
 - Composite validator construction now reads `type` non-destructively from suite specs. The previous `dict.pop` mutated shared suite state and broke iteration 2+ during routing-discovery (`KeyError: 'type'` after the first strategy).
 - `harness.ToolUseMetrics → ToolUseMetricsData` conversion centralized in a single `build_tool_use_metrics_data` helper used by both runner.py and routing.py. Adding a new metric to the tool-use path now needs one update site rather than two — the duplication had silently zeroed `tool_calls_via_text` on every routing-discovery JSON until caught by the agent-harness team during integration testing.
+- Windows captured-output (pipes, file redirects, CI logs) now reconfigures `sys.stdout`/`sys.stderr` to UTF-8 with `errors="replace"` at CLI entry. Previously the leaderboard's score-distribution sparkline (U+2588 `█`) crashed mid-render under cp1252; captured runs now render the same as interactive terminal runs.
 
 ### Known limitations
 - `profile` is Ollama-only; OpenAI-compatible backends report stub values.
