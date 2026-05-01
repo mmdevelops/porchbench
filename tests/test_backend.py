@@ -259,6 +259,47 @@ class TestProtocolCompliance:
         assert isinstance(backend, InferenceBackend)
 
 
+class TestAsyncClientLoopBinding:
+    """The cached AsyncClient must be invalidated when the running event loop changes.
+
+    Pins the per-loop cache: httpx connections bind to the loop that opened
+    them, so reusing a single AsyncClient across asyncio.run() boundaries
+    dies with 'Event loop is closed'. The CLI does this naturally — preflight,
+    run_suite, and post-phase eval are each their own asyncio.run() — so a
+    naive single cached client would break real CLI flows even though all
+    unit tests passed.
+    """
+
+    def test_client_is_replaced_across_asyncio_run_boundaries(self):
+        import asyncio
+
+        backend = OllamaBackend()
+
+        async def grab_client_id():
+            return id(backend.client)
+
+        first = asyncio.run(grab_client_id())
+        second = asyncio.run(grab_client_id())
+        third = asyncio.run(grab_client_id())
+
+        # Each new event loop gets its own AsyncClient instance.
+        assert first != second
+        assert second != third
+
+    def test_client_is_reused_within_a_single_loop(self):
+        import asyncio
+
+        backend = OllamaBackend()
+
+        async def grab_two():
+            a = id(backend.client)
+            b = id(backend.client)
+            return a, b
+
+        a, b = asyncio.run(grab_two())
+        assert a == b
+
+
 # ---------------------------------------------------------------------------
 # OpenAI-compat backend
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ OllamaBackend absorbs the logic previously in client.py.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -83,19 +84,28 @@ class OllamaBackend:
 
     def __init__(self, host: str | None = None):
         self.host = host
-        # Lazy-initialised AsyncClient so the connection pool is reused
-        # across calls. Earlier each chat()/show()/list() built a fresh
-        # AsyncClient, leaking sockets to TIME_WAIT and re-doing TLS/HTTP
-        # setup on every prompt. The pool is process-local and has no
-        # explicit close — fine for a CLI; library callers that build
-        # then drop OllamaBackend instances can call self._client.aclose()
-        # if they need deterministic cleanup.
+        # Lazy, per-event-loop AsyncClient cache. Earlier each
+        # chat()/show()/list() built a fresh AsyncClient, leaking sockets
+        # to TIME_WAIT and re-doing setup on every prompt. A naive single
+        # cached client doesn't work either: the CLI calls asyncio.run()
+        # multiple times with the same backend (preflight, then run_suite,
+        # then evaluation) and httpx connections bind to the loop that
+        # opened them — reusing one across asyncio.run() boundaries dies
+        # with "Event loop is closed". Caching keyed by the running loop
+        # captures the perf win within a single asyncio.run() and falls
+        # back to a fresh client for the next one.
         self._client: AsyncClient | None = None
+        self._client_loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def client(self) -> AsyncClient:
-        if self._client is None:
+        try:
+            current_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        if self._client is None or self._client_loop is not current_loop:
             self._client = AsyncClient(host=self.host)
+            self._client_loop = current_loop
         return self._client
 
     # --- Protocol methods ---
