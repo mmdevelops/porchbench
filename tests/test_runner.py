@@ -51,6 +51,7 @@ def _make_harness_result(**overrides) -> HarnessResult:
             total_tool_calls=1,
             tool_call_breakdown={"read_file": 1},
             conversation_turns=2,
+            tool_calls_via_text=2,
         ),
         stopped_reason="done",
     )
@@ -89,6 +90,7 @@ class TestToolUseDispatch:
         assert result.tool_use_metrics is not None
         assert result.tool_use_metrics.total_tool_calls == 1
         assert result.tool_use_metrics.tool_call_breakdown == {"read_file": 1}
+        assert result.tool_use_metrics.tool_calls_via_text == 2
 
     @pytest.mark.asyncio
     async def test_records_elapsed_ns_into_total_duration(self):
@@ -326,6 +328,70 @@ class TestIncrementalDiscovery:
 
         completed = find_completed_prompt_ids("Test Suite", "model:7b", tmp_path)
         assert completed == {"p1", "p2", "p3"}
+
+
+class TestRunSuiteResumeNoOp:
+    """When --resume filters out every prompt, run_suite must NOT write a
+    new empty result JSON — that pollutes results/ on every no-op resume,
+    including overnight reruns where most <suite, model> pairs are
+    already done. Observed 2026-05-01 during UAT."""
+
+    @pytest.mark.asyncio
+    async def test_no_file_written_when_all_prompts_already_completed(self, tmp_path):
+        from porchbench.runner import run_suite
+        from porchbench.schemas import (
+            Message as Msg,
+            Prompt as P,
+            Suite,
+            SuiteDefaults,
+            SuiteMetadata,
+        )
+
+        suite = Suite(
+            suite=SuiteMetadata(name="Test Suite", version="1.0"),
+            defaults=SuiteDefaults(options=ModelOptions()),
+            prompts=[
+                P(id="p1", category="coding", difficulty="easy",
+                  messages=[Msg(role="user", content="x")]),
+                P(id="p2", category="coding", difficulty="easy",
+                  messages=[Msg(role="user", content="y")]),
+            ],
+        )
+        suite_ref = SuiteReference(
+            name="Test Suite", version="1.0", file="t.yaml", sha256="abc",
+        )
+
+        # Pre-populate results dir with a completed run for both prompts.
+        _write_run_result(tmp_path, "Test Suite", "model:7b", ["p1", "p2"])
+
+        files_before = set(tmp_path.glob("*.json"))
+
+        backend = AsyncMock()
+        backend.get_model_info = AsyncMock(return_value=ModelInfo(name="model:7b"))
+        backend.get_server_health = AsyncMock(return_value=(True, "Ollama vTEST"))
+
+        result = await run_suite(
+            suite=suite,
+            suite_ref=suite_ref,
+            model="model:7b",
+            backend=backend,
+            output_dir=tmp_path,
+            resume=True,
+        )
+
+        # The chat() path must not have been called — nothing to run.
+        backend.chat.assert_not_called()
+
+        # And no new result JSON should appear in the output dir.
+        files_after = set(tmp_path.glob("*.json"))
+        assert files_after == files_before, (
+            f"unexpected new file written: {files_after - files_before}"
+        )
+
+        # The returned RunResult is still well-formed but empty.
+        assert result.summary.total_prompts == 0
+        assert result.summary.completed == 0
+        assert result.results == []
 
 
 class TestResultPathFor:

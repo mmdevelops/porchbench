@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
@@ -97,8 +98,19 @@ def select_evaluator_model(backend: InferenceBackend) -> str:
     return chosen
 
 
-def select_suite(suite_dir: Path | None = None) -> Path:
-    """Prompt user to pick a suite YAML file from the suite directory."""
+def select_suite(
+    suite_dir: Path | None = None,
+    filter_predicate: Callable[[Path], bool] | None = None,
+    filter_description: str = "suite",
+) -> Path:
+    """Prompt user to pick a suite YAML file from the suite directory.
+
+    `filter_predicate`, when provided, narrows the picker to suites for which
+    it returns True. `filter_description` names the filtered class for the
+    "no suites matched" error (e.g. "suite with strategies"). Used by
+    commands like `routes discover` whose semantics require a suite property
+    (e.g. a non-empty `strategies:` block).
+    """
     from porchbench.assets import resolve_suite_dir
 
     suite_dir = resolve_suite_dir(suite_dir)
@@ -107,6 +119,16 @@ def select_suite(suite_dir: Path | None = None) -> Path:
     except FileNotFoundError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
+
+    if filter_predicate is not None:
+        before = len(paths)
+        paths = [p for p in paths if filter_predicate(p)]
+        if not paths:
+            console.print(
+                f"[red]No {filter_description} found in {suite_dir}/ "
+                f"(scanned {before} suite{'s' if before != 1 else ''}).[/red]"
+            )
+            raise typer.Exit(code=1)
 
     labels = [p.name for p in paths]
 
@@ -224,8 +246,19 @@ def select_result(result_dir: Path = Path("results")) -> Path:
     return entries[chosen_idx][1]
 
 
-def select_results(result_dir: Path = Path("results")) -> list[Path]:
-    """Prompt user to pick one or more run-result files."""
+def select_results(
+    result_dir: Path = Path("results"),
+    filter_predicate: Callable[[Path], bool] | None = None,
+    filter_description: str = "result",
+) -> list[Path]:
+    """Prompt user to pick one or more run-result files.
+
+    `filter_predicate`, when provided, narrows the picker to files for which
+    it returns True. `filter_description` names the filtered class for the
+    "no files matched" error (e.g. "routing-discovery result"). Used by
+    commands like `routes analyze` that only operate on a subset of run
+    JSONs and want to avoid the user picking an incompatible file.
+    """
     if not result_dir.is_dir():
         console.print(f"[red]Results directory not found: {result_dir}[/red]")
         raise typer.Exit(code=1)
@@ -234,6 +267,16 @@ def select_results(result_dir: Path = Path("results")) -> list[Path]:
     if not entries:
         console.print(f"[red]No result files found in {result_dir}/[/red]")
         raise typer.Exit(code=1)
+
+    if filter_predicate is not None:
+        before = len(entries)
+        entries = [(label, path) for label, path in entries if filter_predicate(path)]
+        if not entries:
+            console.print(
+                f"[red]No {filter_description} files found in {result_dir}/ "
+                f"(scanned {before} result file{'s' if before != 1 else ''}).[/red]"
+            )
+            raise typer.Exit(code=1)
 
     labels = [label for label, _ in entries]
     console.print("[bold]Select result(s)[/bold] (space to toggle, enter to confirm):")

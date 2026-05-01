@@ -118,6 +118,8 @@ porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
 
 Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs. Add `--evaluate` to chain LLM-as-judge scoring as a single post-phase after all inference completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). Running eval as a post-phase keeps the judge model loaded once for the whole batch instead of swapping between target and judge on every run. With `--evaluate` you wake up to scorecards, not just raw results.
 
+Add `--resume` to skip `<suite, model, repeat>` triples whose result JSON is already in `results/`. Only completed runs are restored — a session interrupted mid-run loses its in-progress prompts because results write at the end of each run. Use it after a crash, an OOM, or an explicit Ctrl-C to pick up where the queue left off without re-paying for everything that already finished.
+
 ## Benchmark suites
 
 Suites ship bundled with the package and are referenced by name:
@@ -163,6 +165,7 @@ src/porchbench/        Python package
   compare.py           Side-by-side comparison rendering
   leaderboard.py       Cross-scorecard ranking
   overnight.py         Unattended multi-suite orchestration
+  doctor.py            Environment diagnostics — `porchbench doctor`
   metrics.py           Throughput and latency metrics
   statistics.py        Bootstrap CIs, paired comparisons, effect sizes
   schemas.py           Pydantic models for all I/O

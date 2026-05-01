@@ -35,8 +35,8 @@ from porchbench.assets import (
 )
 from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from porchbench.errors import UserError, load_json_model
-from porchbench.runner import result_path_for, run_suite
-from porchbench.schemas import RunResult, Scorecard
+from porchbench.runner import find_completed_prompt_ids, result_path_for, run_suite
+from porchbench.schemas import RunResult, Scorecard, Strategy
 from porchbench.suite import load_suite, make_suite_reference
 
 app = typer.Typer(
@@ -84,6 +84,69 @@ def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
                 "  3. Pull a model: [bold]ollama pull <model>[/bold]"
             )
         raise typer.Exit(code=1)
+
+
+def _suite_has_strategies(path: Path) -> bool:
+    """Cheap YAML peek: does the suite define a non-empty `strategies:` block?
+
+    `routes discover` against a suite without strategies is degenerate —
+    `run_discovery` synthesizes a single `universal` baseline, which is just
+    a slower `porchbench run` with a different filename pattern. Filtering
+    the suite picker to strategy-bearing suites prevents that footgun
+    without disabling the picker for power users (who can still pass
+    `--suite` explicitly).
+    """
+    try:
+        import yaml as _yaml
+        data = _yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, _yaml.YAMLError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    strategies = data.get("strategies")
+    return bool(strategies)
+
+
+def _is_routing_discovery_result(path: Path) -> bool:
+    """Cheap content check: does this result file carry strategy tags?
+
+    Filename alone is ambiguous — a suite literally named "routing-discovery"
+    run via regular `porchbench run` produces filename-matching files that
+    have no per-prompt `strategy` tag. We pre-filter on the conventional
+    filename substring (free) and content-check survivors via raw
+    `json.loads` on the first prompt result (~milliseconds per file).
+    """
+    if "_routing-discovery_" not in path.name:
+        return False
+    try:
+        import json as _json
+        data = _json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    results = data.get("results") or []
+    return bool(results) and results[0].get("strategy") is not None
+
+
+def _build_strategy_table(strategies: dict[str, Strategy]) -> Table:
+    """Pre-run summary of routes-discover strategy prompts.
+
+    Surfaces what each strategy *does* (its system message) before the user
+    waits for inference. Empty system messages — the suite-default baseline —
+    render as a labelled placeholder rather than a blank cell. Long messages
+    truncate at 80 chars to keep the table from wrapping in a typical
+    terminal.
+    """
+    table = Table(title="Strategies", title_style="bold", show_lines=False)
+    table.add_column("Name", style="bold")
+    table.add_column("System message")
+    for name, strat in strategies.items():
+        msg = strat.system_message.strip()
+        if not msg:
+            msg = "[dim](suite default — no system-message override)[/dim]"
+        elif len(msg) > 80:
+            msg = msg[:77] + "..."
+        table.add_row(name, msg)
+    return table
 
 
 def parse_set_overrides(items: list[str] | None) -> dict[str, object]:
@@ -476,7 +539,45 @@ def run(
             repeat_label = f" (repeat {repeat_i}/{repeats})" if repeats > 1 else ""
             console.rule(f"[bold]{model}[/bold]{repeat_label}")
 
-            prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
+            # Resolve the actual prompt list before opening the Progress bar.
+            # Doing this here (rather than inside run_suite) keeps the resume
+            # message and the bar from interleaving — Rich's live redraw was
+            # repainting "0/28" both before and after the filter message —
+            # and lets us short-circuit the no-op case cleanly without
+            # writing an empty result JSON.
+            prompts_to_run = list(suite.prompts)
+            if prompt_ids:
+                id_set = set(prompt_ids)
+                prompts_to_run = [p for p in prompts_to_run if p.id in id_set]
+                missing = id_set - {p.id for p in prompts_to_run}
+                if missing:
+                    console.print(
+                        f"[yellow]Warning: prompt IDs not found in suite: {missing}[/yellow]"
+                    )
+
+            if resume:
+                already_done = find_completed_prompt_ids(
+                    suite_ref.name, model, Path(output_dir),
+                )
+                before = len(prompts_to_run)
+                prompts_to_run = [p for p in prompts_to_run if p.id not in already_done]
+                skipped = before - len(prompts_to_run)
+                if skipped:
+                    console.print(
+                        f"[dim]Resuming: skipping {skipped} already-completed "
+                        f"prompts[/dim]"
+                    )
+
+            if not prompts_to_run:
+                console.print(
+                    f"[dim]Nothing to run for {model} — all prompts already "
+                    f"completed.[/dim]"
+                )
+                console.print()
+                continue
+
+            prompt_count = len(prompts_to_run)
+            run_prompt_ids = [p.id for p in prompts_to_run]
 
             with Progress(
                 SpinnerColumn(),
@@ -530,13 +631,13 @@ def run(
                         suite_ref=suite_ref,
                         model=model,
                         backend=backend,
-                        prompt_ids=prompt_ids,
+                        prompt_ids=run_prompt_ids,
                         output_dir=output_dir,
                         on_prompt_complete=on_complete,
                         suite_dir=suite_path.parent,
                         repeat_index=repeat_i if repeats > 1 else None,
                         total_repeats=repeats if repeats > 1 else None,
-                        resume=resume,
+                        resume=False,
                         profile_vram=profile_vram,
                     )
                 )
@@ -978,7 +1079,14 @@ def discover_routes(
     from porchbench.routing import count_discovery_runs, run_discovery
 
     if suite_path is None:
-        suite_path = select_suite()
+        # Filter to suites that actually define strategies — a no-strategies
+        # suite makes `run_discovery` synthesize a single universal baseline,
+        # which is degenerate. Power users can still pass `--suite path/to/x`
+        # explicitly to bypass.
+        suite_path = select_suite(
+            filter_predicate=_suite_has_strategies,
+            filter_description="suite with strategies (required for routes discover)",
+        )
     if models is None:
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
@@ -1001,14 +1109,22 @@ def discover_routes(
 
     console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
     console.print(f"Prompts: {len(suite.prompts)}")
-    console.print(f"Strategies: {len(suite.strategies) or 1}")
+    if suite.strategies:
+        console.print(f"Strategies: {len(suite.strategies)}")
+    else:
+        console.print("Strategies: 1 ([dim]universal — synthetic baseline[/dim])")
     console.print(f"Models: {', '.join(models)}")
     console.print(f"Total runs: [bold]{total}[/bold]")
     console.print()
 
+    if suite.strategies:
+        console.print(_build_strategy_table(suite.strategies))
+        console.print()
+
     backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
     check_server_or_exit(backend, backend_name)
     check_models_or_exit(backend, models, backend_name)
+    check_tool_support_or_exit(backend, models, suite, backend_name)
 
     results = asyncio.run(
         run_discovery(
@@ -1021,11 +1137,20 @@ def discover_routes(
     for run in results:
         correct_count = sum(1 for r in run.results if r.correct is True)
         total_checked = sum(1 for r in run.results if r.correct is not None)
-        console.print(
+        line = (
             f"\n[bold]{run.run.model.name}[/bold]: "
             f"{correct_count}/{total_checked} correct, "
             f"{run.summary.avg_tokens_per_second or 0:.1f} avg tok/s"
         )
+        # Tool-use cells carry sandbox validator outcomes — surface the
+        # pass-rate so users see, at a glance, how many ran-to-completion
+        # cells actually produced spec-compliant output. Skipped silently
+        # for text-only suites where validation_passed is always None.
+        validated = [r for r in run.results if r.validation_passed is not None]
+        if validated:
+            passed = sum(1 for r in validated if r.validation_passed)
+            line += f", {passed}/{len(validated)} validated"
+        console.print(line)
 
 
 @routes_app.command("analyze")
@@ -1042,34 +1167,100 @@ def analyze_routes_cmd(
         bool,
         typer.Option("--summary", help="Print summary only, don't write full analysis."),
     ] = False,
+    default_strategy: Annotated[
+        str | None,
+        typer.Option(
+            "--default-strategy",
+            help=(
+                "Baseline strategy to compare other strategies against. "
+                "Defaults to 'universal' if present, else the first strategy alphabetically."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Analyze discovery results to find optimal routing strategies."""
     from porchbench.routing import analyze_routes
 
-    # Interactive selection when args omitted
+    # Interactive selection when args omitted. Prefix with a usage hint so
+    # users don't pick one file, hit the "needs at least 2 distinct models"
+    # refusal, and have to start the picker over. Filter the picker to
+    # files that actually carry strategy tags — filename check alone
+    # produces false positives when a suite is literally named
+    # "routing-discovery" and got run via regular `porchbench run`.
     if result_paths is None:
         from porchbench.interactive import select_results
-        result_paths = select_results()
+        console.print(
+            "[bold]routes analyze[/bold] is cross-model — "
+            "pick [bold]≥2 routing-discovery results from different models[/bold] "
+            "(same suite, run via [cyan]porchbench routes discover[/cyan])."
+        )
+        result_paths = select_results(
+            filter_predicate=_is_routing_discovery_result,
+            filter_description="routing-discovery result",
+        )
 
-    runs = []
+    runs: list[RunResult] = []
+    paths_by_run_id: dict[str, Path] = {}
     for p in result_paths:
         try:
-            runs.append(load_json_model(p, RunResult, "run result"))
+            run = load_json_model(p, RunResult, "run result")
         except UserError as exc:
             console.print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
+        runs.append(run)
+        paths_by_run_id[run.run.id] = p
 
-    non_routing = [r for r in runs if not any(pr.strategy for pr in r.prompt_results)]
+    non_routing = [r for r in runs if not any(pr.strategy for pr in r.results)]
     if non_routing:
-        names = ", ".join(r.metadata.run_id for r in non_routing)
+        # Name the offending file + model — the run_id alone is opaque and
+        # forces users to grep their results/ to figure out which file to
+        # remove. Likely cause is `porchbench run -s <suite>` where the
+        # suite is named "routing-discovery"; suggest the fix inline.
+        offenders = "\n  ".join(
+            f"{paths_by_run_id[r.run.id].name} ({r.run.model.name})"
+            for r in non_routing
+        )
         console.print(
             f"[red]routes analyze requires results produced by `porchbench routes discover` "
-            f"(prompts must carry a strategy tag). The following result files have no "
-            f"routing strategies and cannot be analyzed: {names}[/red]"
+            f"(prompts must carry a strategy tag). These files have no strategy data:\n  "
+            f"{offenders}\n"
+            f"If you intended to run discovery, use `porchbench routes discover -s <suite>` "
+            f"(not `porchbench run`).[/red]"
         )
         raise typer.Exit(code=1)
 
-    analysis = analyze_routes(runs)
+    # Routing analysis is fundamentally cross-model: "for prompt P, is model A
+    # the right pick over model B?" With a single model every routing metric
+    # is degenerate (no inverse scaling, no routing-helps count, no
+    # comparison cells), so the report misleads more than it helps. Refuse
+    # explicitly and point at how to add another model.
+    distinct_models = {r.run.model.name for r in runs}
+    if len(distinct_models) < 2:
+        only = next(iter(distinct_models)) if distinct_models else "<none>"
+        console.print(
+            f"[red]routes analyze needs at least 2 distinct models to compare; "
+            f"got 1 ({only}). Re-run `porchbench routes discover` with "
+            f"`-m <model> -m <other-model>` and pass both result files to "
+            f"`routes analyze`.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    # Resolve baseline strategy. Without an explicit flag we prefer "universal"
+    # (the conventional empty-system-message baseline used by the bundled
+    # tool-use suite) and fall back to the first strategy alphabetically.
+    # Validate against what's actually in the runs so a typo or removed
+    # strategy fails loudly instead of silently zeroing every comparison.
+    available_strategies = sorted({pr.strategy for r in runs for pr in r.results if pr.strategy})
+    if default_strategy is None:
+        default_strategy = "universal" if "universal" in available_strategies else available_strategies[0]
+    elif default_strategy not in available_strategies:
+        console.print(
+            f"[red]--default-strategy '{default_strategy}' not present in result data. "
+            f"Available strategies: {', '.join(available_strategies)}.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    analysis = analyze_routes(runs, default_strategy=default_strategy)
 
     # Print headline
     h = analysis.headline
@@ -1099,7 +1290,19 @@ def analyze_routes_cmd(
 
     # Print verdict
     v = analysis.verdict
-    console.print(f"\n[bold]Verdict[/bold]: {'Route' if v.routing_recommended else 'Use largest model'}")
+    # The default model is the same across every BestRoute that has a
+    # vs_default comparison — pluck it from the first one so the verdict
+    # names which model "use the default" actually means.
+    default_model = next(
+        (br.vs_default.default_model for br in analysis.best_route_per_problem if br.vs_default),
+        None,
+    )
+    fallback_label = (
+        f"Use default model ({default_model})" if default_model else "Use default model"
+    )
+    console.print(
+        f"\n[bold]Verdict[/bold]: {'Route' if v.routing_recommended else fallback_label}"
+    )
     if v.estimated_quality_improvement_pp is not None:
         console.print(f"  Est. quality improvement: {v.estimated_quality_improvement_pp:+.1f}pp")
     if v.estimated_token_savings_pct is not None:
@@ -1438,6 +1641,13 @@ def overnight(
         console.print("\n[red]Inference server not reachable. Aborting.[/red]")
         raise typer.Exit(code=1)
 
+    # Verify every target model exists on the server before doing anything
+    # expensive. Without this, a typo or comma-as-separator mistake (e.g.
+    # `-m a:7b,b:3b` instead of `-m a:7b -m b:3b`) silently produces
+    # `<N> error: invalid model name (status code: 400)` for every prompt
+    # under --yes, wasting hours on guaranteed-to-fail inference.
+    check_models_or_exit(backend, models, backend_name)
+
     from porchbench.overnight import check_gpu_status, check_vram_cofit
 
     with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
@@ -1501,20 +1711,9 @@ def overnight(
     console.rule("[bold]Running benchmarks[/bold]")
     start = _time.monotonic()
 
-    seen_models: set[str] = set()
-
     def on_start(task, model, repeat):
         repeat_str = f" repeat {repeat}/{task.repeats}" if repeat else ""
         console.rule(f"[bold]{task.suite.suite.name}[/bold] / {model}{repeat_str}")
-        # Cold-start hint the first time we touch a model — ROCm/AMD in particular
-        # spends minutes compiling compute-graph kernels on the first prompt of a
-        # freshly-loaded model, and the CLI otherwise looks hung during that window.
-        if model not in seen_models and model not in ("(all models)",):
-            seen_models.add(model)
-            console.print(
-                "  [dim]First prompt can take several minutes while the model loads "
-                "and kernels compile (common on ROCm/AMD).[/dim]"
-            )
 
     def on_done(result):
         if result.success:

@@ -12,6 +12,8 @@ into another's responsibility.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,6 +26,66 @@ from porchbench.sandbox.base import (
 from porchbench.schemas import ModelOptions, PromptMetrics, compute_derived_metrics
 
 
+_TOOL_CALL_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```\s*$")
+_JSON_OPENER_RE = re.compile(r"[\{\[]")
+
+
+def _has_tool_call_shape(obj: Any) -> bool:
+    """Tool-call shape predicate: ``{"name": str, "arguments": dict}``."""
+    return (
+        isinstance(obj, dict)
+        and isinstance(obj.get("name"), str)
+        and isinstance(obj.get("arguments"), dict)
+    )
+
+
+def looks_like_tool_call_json(content: str) -> bool:
+    """True when assistant text content looks like an Ollama tool call emitted as text.
+
+    Detects the protocol-adherence regression where a model knows it should call
+    a tool but emits the call as JSON in ``content`` instead of routing through
+    Ollama's structured ``tool_calls`` field. Recognised shapes:
+
+    - bare object: ``{"name": ..., "arguments": ...}``
+    - bare array: ``[{...}, {...}]``
+    - concatenated objects: ``{...}\\n{...}`` (common qwen2.5-coder emission)
+    - any of the above wrapped in code fences or surrounding prose
+
+    Scans with ``JSONDecoder.raw_decode`` so concatenated and prose-embedded
+    objects are peeled one-at-a-time rather than failing whole-string parse.
+    Empty list ``[]`` deliberately does NOT register — relies on ``any([])``
+    being False (NOT ``all``), pinned by tests.
+
+    Used by the harness to populate ToolUseMetrics.tool_calls_via_text so users
+    picking models can distinguish "Ollama tool-call regression" from "model
+    too weak to drive tools."
+    """
+    if not content or not content.strip():
+        return False
+
+    stripped = _TOOL_CALL_FENCE_RE.sub("", content.strip()).strip()
+    if not stripped:
+        return False
+
+    decoder = json.JSONDecoder()
+    pos = 0
+    while pos < len(stripped):
+        opener = _JSON_OPENER_RE.search(stripped, pos)
+        if opener is None:
+            return False
+        start = opener.start()
+        try:
+            obj, end_offset = decoder.raw_decode(stripped[start:])
+        except (json.JSONDecodeError, ValueError):
+            pos = start + 1
+            continue
+        items = obj if isinstance(obj, list) else [obj]
+        if any(_has_tool_call_shape(item) for item in items):
+            return True
+        pos = start + end_offset
+    return False
+
+
 @dataclass
 class ToolUseMetrics:
     """Counts and breakdown of tool usage during a harness run."""
@@ -33,6 +95,7 @@ class ToolUseMetrics:
     errors_encountered: int = 0
     self_corrections: int = 0
     conversation_turns: int = 0
+    tool_calls_via_text: int = 0
 
 
 @dataclass
@@ -232,6 +295,8 @@ class Harness:
             tool_calls = result.tool_calls or []
 
             if not tool_calls:
+                if looks_like_tool_call_json(result.content):
+                    metrics.tool_calls_via_text += 1
                 # Model responded with text, no tool calls -> done
                 transcript.append({
                     "role": "assistant",

@@ -220,6 +220,7 @@ class ToolUseMetricsData(BaseModel):
     errors_encountered: int = 0
     self_corrections: int = 0
     conversation_turns: int = 0
+    tool_calls_via_text: int = 0
 
 
 class PromptResult(BaseModel):

@@ -497,9 +497,10 @@ prompts:
         content: >
           Build a data pipeline:
           1. Read sales.json
-          2. Calculate total_revenue (quantity * unit_price) for each record
+          2. Calculate revenue (quantity * unit_price) for each record
           3. Group by region and calculate total revenue per region
-          4. Save the region totals to region_revenue.csv sorted by revenue descending
+          4. Save the region totals to region_revenue.csv with columns
+             `region` and `revenue`, sorted by revenue descending
           5. Save the top region name to winner.txt
     expected_outcome:
       validator: "composite"

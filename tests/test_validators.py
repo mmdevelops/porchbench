@@ -147,6 +147,28 @@ class TestCodeOutputValidator:
         passed, _ = await v.validate(sandbox)
         assert passed is False
 
+    @pytest.mark.asyncio
+    async def test_failing_reason_surfaces_exception_summary(self, sandbox):
+        """Reason should be the final ExceptionType: message line, not the
+        Traceback header. Without this, the per-prompt val-fail badge shows
+        ``Validation failed: Traceback (most recent call last):`` which
+        tells users nothing — observed in routing-discovery runs 2026-05-01.
+        """
+        await sandbox.write_files([FileContent(path="result.txt", content="wrong")])
+        test_code = (
+            "content = open('result.txt').read().strip()\n"
+            "assert content == '42', f'Expected 42, got {content}'\n"
+        )
+        v = CodeOutputValidator(test_code)
+        passed, reason = await v.validate(sandbox)
+        assert passed is False
+        assert "Traceback" not in reason
+        assert "AssertionError" in reason
+        assert "Expected 42, got wrong" in reason
+        # And the reason fits on one line so splitlines()[0] in the badge
+        # formatter renders the whole summary, not a partial line.
+        assert "\n" not in reason
+
 
 class TestCompositeValidator:
     @pytest.mark.asyncio

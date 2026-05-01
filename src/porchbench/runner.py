@@ -140,7 +140,7 @@ async def run_prompt(
     return response_data, metrics
 
 
-def _merge_tool_use_metrics(harness_result, elapsed_ns: int | None) -> PromptMetrics:
+def merge_tool_use_metrics(harness_result, elapsed_ns: int | None) -> PromptMetrics:
     """Build per-prompt PromptMetrics for a tool-use prompt.
 
     Combines summed Ollama metrics from the harness's per-turn chat() calls
@@ -152,6 +152,25 @@ def _merge_tool_use_metrics(harness_result, elapsed_ns: int | None) -> PromptMet
     """
     agg = getattr(harness_result, "aggregated_metrics", None) or PromptMetrics()
     return agg.model_copy(update={"total_duration": elapsed_ns})
+
+
+def build_tool_use_metrics_data(harness_metrics) -> ToolUseMetricsData:
+    """Project the harness's ToolUseMetrics dataclass onto its schema mirror.
+
+    Single source of truth for the harness→schema conversion. Adding a new
+    metric only needs one update site rather than two (runner.py and
+    routing.py, which independently construct PromptResults for the
+    tool-use path). The earlier two-site duplication caused
+    ``tool_calls_via_text`` to silently zero on routing-discovery runs.
+    """
+    return ToolUseMetricsData(
+        total_tool_calls=harness_metrics.total_tool_calls,
+        tool_call_breakdown=harness_metrics.tool_call_breakdown,
+        errors_encountered=harness_metrics.errors_encountered,
+        self_corrections=harness_metrics.self_corrections,
+        conversation_turns=harness_metrics.conversation_turns,
+        tool_calls_via_text=harness_metrics.tool_calls_via_text,
+    )
 
 
 async def _run_tool_use_prompt(
@@ -196,17 +215,11 @@ async def _run_tool_use_prompt(
             message=ResponseMessage(content=final_content),
             done_reason=harness_result.stopped_reason,
         ),
-        metrics=_merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
+        metrics=merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
         validation_passed=result["validation_passed"],
         validation_reason=result["validation_reason"],
         stopped_reason=harness_result.stopped_reason,
-        tool_use_metrics=ToolUseMetricsData(
-            total_tool_calls=harness_result.tool_use_metrics.total_tool_calls,
-            tool_call_breakdown=harness_result.tool_use_metrics.tool_call_breakdown,
-            errors_encountered=harness_result.tool_use_metrics.errors_encountered,
-            self_corrections=harness_result.tool_use_metrics.self_corrections,
-            conversation_turns=harness_result.tool_use_metrics.conversation_turns,
-        ),
+        tool_use_metrics=build_tool_use_metrics_data(harness_result.tool_use_metrics),
     )
 
 
@@ -371,7 +384,13 @@ async def run_suite(
     # *after* its progress context exits — printing here interleaves with
     # the live rich Progress bar in `porchbench run`. Callers that want the
     # path can compute it via `result_path_for(run_result, output_dir)`.
-    _write_result(run_result, output_dir)
+    #
+    # Skip the write when no prompts actually ran — happens when --resume
+    # filters everything out. An empty result JSON would otherwise pollute
+    # results/ on every no-op resume, including overnight reruns where
+    # most <suite, model> pairs are already done.
+    if results:
+        _write_result(run_result, output_dir)
 
     return run_result
 

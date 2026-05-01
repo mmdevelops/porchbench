@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from io import StringIO
 
 from rich.console import Console
@@ -29,15 +30,19 @@ def _make_run(
     *,
     prompt_results: list[PromptResult],
     total_duration_s: float = 1.0,
+    timestamp: datetime | None = None,
 ) -> RunResult:
-    return RunResult(
-        run=RunMetadata(
-            id=run_id,
-            suite=SuiteReference(
-                name="T", version="1.0", file="x", sha256="y", rubric=None,
-            ),
-            model=ModelInfo(name=model),
+    metadata_kwargs: dict = dict(
+        id=run_id,
+        suite=SuiteReference(
+            name="T", version="1.0", file="x", sha256="y", rubric=None,
         ),
+        model=ModelInfo(name=model),
+    )
+    if timestamp is not None:
+        metadata_kwargs["timestamp"] = timestamp
+    return RunResult(
+        run=RunMetadata(**metadata_kwargs),
         results=prompt_results,
         summary=RunSummary(
             total_prompts=len(prompt_results),
@@ -312,6 +317,85 @@ def test_compare_warns_when_some_results_lack_scorecards(tmp_path):
     # Friendly note names the un-scored model and points to evaluate
     assert "m2-not-scored" in res.output
     assert "porchbench evaluate" in res.output
+
+
+# ---------------------------------------------------------------------------
+# disambiguate_model_names: same-model selections get a column-suffix
+# ---------------------------------------------------------------------------
+
+
+def _pr_minimal() -> PromptResult:
+    return _make_pr("p1", eval_count=10, total_duration=1_000_000_000,
+                    tokens_per_second=10.0)
+
+
+def test_disambiguate_unique_names_pass_through():
+    """Distinct model names need no suffix — pure pass-through."""
+    from porchbench.compare import disambiguate_model_names
+
+    runs = [
+        _make_run("a", "qwen3:8b", prompt_results=[_pr_minimal()]),
+        _make_run("b", "gemma4:e2b", prompt_results=[_pr_minimal()]),
+    ]
+    assert disambiguate_model_names(runs) == ["qwen3:8b", "gemma4:e2b"]
+
+
+def test_disambiguate_appends_hhmm_when_names_collide():
+    """Two same-model runs at different minutes get `·HH:MM` suffixes."""
+    from porchbench.compare import disambiguate_model_names
+
+    runs = [
+        _make_run("a", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 14, 32, 0, tzinfo=UTC)),
+        _make_run("b", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 15, 10, 0, tzinfo=UTC)),
+    ]
+    labels = disambiguate_model_names(runs)
+    assert labels == ["gemma4:e2b·14:32", "gemma4:e2b·15:10"]
+
+
+def test_disambiguate_falls_back_to_run_id_on_minute_collision():
+    """When two same-model runs share the same minute, suffix uses run_id[:4]."""
+    from porchbench.compare import disambiguate_model_names
+
+    same_minute = datetime(2026, 4, 29, 14, 32, 0, tzinfo=UTC)
+    runs = [
+        _make_run("aaaa1111-1111-1111-1111-111111111111", "gemma4:e2b",
+                  prompt_results=[_pr_minimal()], timestamp=same_minute),
+        _make_run("bbbb2222-2222-2222-2222-222222222222", "gemma4:e2b",
+                  prompt_results=[_pr_minimal()], timestamp=same_minute),
+    ]
+    labels = disambiguate_model_names(runs)
+    assert labels == ["gemma4:e2b·aaaa", "gemma4:e2b·bbbb"]
+
+
+def test_disambiguate_only_suffixes_duplicates_in_mixed_list():
+    """Unique names in a mixed list stay clean; only the duplicate group is suffixed."""
+    from porchbench.compare import disambiguate_model_names
+
+    runs = [
+        _make_run("a", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 14, 32, 0, tzinfo=UTC)),
+        _make_run("b", "qwen3:8b", prompt_results=[_pr_minimal()]),
+        _make_run("c", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 15, 10, 0, tzinfo=UTC)),
+    ]
+    labels = disambiguate_model_names(runs)
+    assert labels == ["gemma4:e2b·14:32", "qwen3:8b", "gemma4:e2b·15:10"]
+
+
+def test_compare_table_renders_disambiguated_headers_for_same_model_picks():
+    """End-to-end: print_comparison_table uses the disambiguator so the user can
+    actually distinguish columns for two same-model runs."""
+    runs = [
+        _make_run("a", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 14, 32, 0, tzinfo=UTC)),
+        _make_run("b", "gemma4:e2b", prompt_results=[_pr_minimal()],
+                  timestamp=datetime(2026, 4, 29, 15, 10, 0, tzinfo=UTC)),
+    ]
+    out = _capture(runs)
+    assert "14:32" in out
+    assert "15:10" in out
 
 
 def test_mixed_runs_show_dash_for_prompts_without_validator():

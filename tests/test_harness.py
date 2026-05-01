@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 from porchbench.backend import ChatResult, ToolCall
-from porchbench.harness.harness import Harness
+from porchbench.harness.harness import Harness, looks_like_tool_call_json
 from porchbench.schemas import ModelOptions, PromptMetrics
 
 
@@ -295,3 +295,110 @@ async def test_harness_records_error_for_unknown_tool():
     assert result.tool_use_metrics.errors_encountered == 1
     tool_msg = next(m for m in result.transcript if m["role"] == "tool")
     assert "unknown tool" in tool_msg["content"]
+
+
+# ---------------------------------------------------------------------------
+# Tool-call protocol adherence: text-emitted tool calls
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("content", [
+    '{"name": "read_file", "arguments": {"path": "data.txt"}}',
+    '```json\n{"name": "read_file", "arguments": {"path": "x"}}\n```',
+    '```\n{"name": "read_file", "arguments": {"path": "x"}}\n```',
+    'Sure, I will use:\n{"name": "read_file", "arguments": {"path": "x"}}',
+    '[{"name": "read_file", "arguments": {"path": "a"}}, {"name": "x", "arguments": {}}]',
+    # Concatenated objects — common qwen2.5-coder emission, observed in
+    # real routing-discovery runs (2026-04). Whole-string json.loads fails
+    # on this shape; raw_decode peels one object at a time.
+    '{"name": "read_file", "arguments": {"path": "data.txt"}}\n'
+    '{"name": "execute_code", "arguments": {"code": "print(1)", "language": "python"}}',
+    # Concatenated where only the second object is a tool call
+    '{"foo": "bar"} {"name": "x", "arguments": {}}',
+    # Pretty-printed multiline (also seen in real runs)
+    '{\n  "name": "read_file",\n  "arguments": {\n    "path": "data.txt"\n  }\n}',
+])
+def test_looks_like_tool_call_json_recognises_tool_call_shapes(content: str):
+    assert looks_like_tool_call_json(content) is True
+
+
+@pytest.mark.parametrize("content", [
+    "",
+    "   ",
+    "Just a normal answer.",
+    '{"foo": "bar"}',
+    '{"name": "read_file"}',
+    '{"arguments": {}}',
+    '{"name": 42, "arguments": {}}',
+    '{"name": "x", "arguments": "not a dict"}',
+    "not json at all { broken",
+    # Empty-list guard: a bare [] must NOT register as a tool call. Relies on
+    # any([]) being False. Pinned because all([]) is vacuously True — easy
+    # accidental regression if the quantifier ever changes. agent-harness
+    # team flagged this as a trap they hit on their side (2026-04).
+    "[]",
+    '```json\n[]\n```',
+    '[{"foo": "bar"}, {"baz": 1}]',  # list of non-tool-call dicts
+])
+def test_looks_like_tool_call_json_rejects_non_tool_call_content(content: str):
+    assert looks_like_tool_call_json(content) is False
+
+
+@pytest.mark.asyncio
+async def test_harness_counts_text_emitted_tool_calls():
+    """Model emits tool-call JSON as content (no structured tool_calls).
+
+    The harness counts it for protocol-adherence diagnostics without
+    double-counting against total_tool_calls — that field stays reserved
+    for genuine structured calls.
+    """
+    backend = ScriptedBackend([
+        _chat_result(
+            content='{"name": "read_file", "arguments": {"path": "x"}}',
+            tool_calls=None,
+        ),
+    ])
+    harness = Harness(
+        model="fake-model",
+        sandbox=StubSandbox(),
+        backend=backend,
+        tools=[],
+    )
+
+    result = await harness.run(messages=[{"role": "user", "content": "go"}])
+
+    assert result.stopped_reason == "done"
+    assert result.tool_use_metrics.tool_calls_via_text == 1
+    assert result.tool_use_metrics.total_tool_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_harness_does_not_count_text_for_real_tool_calls():
+    """Turns with structured tool_calls don't increment tool_calls_via_text.
+
+    Even if the assistant ALSO emits tool-call-shaped prose alongside a
+    proper structured call, the counter is reserved for the no-structured-
+    calls branch. This keeps the metric semantically distinct.
+    """
+    async def fake_tool(path: str = "") -> str:
+        return "ok"
+
+    backend = ScriptedBackend([
+        _chat_result(
+            content='{"name": "read_file", "arguments": {"path": "x"}}',
+            tool_calls=[ToolCall(name="fake_tool", arguments={"path": "x"})],
+        ),
+        _chat_result(content="Done."),
+    ])
+    harness = Harness(
+        model="fake-model",
+        sandbox=StubSandbox(),
+        backend=backend,
+        dispatch={"fake_tool": fake_tool},
+        tools=[{"type": "function", "function": {"name": "fake_tool"}}],
+    )
+
+    result = await harness.run(messages=[{"role": "user", "content": "go"}])
+
+    assert result.tool_use_metrics.tool_calls_via_text == 0
+    assert result.tool_use_metrics.total_tool_calls == 1

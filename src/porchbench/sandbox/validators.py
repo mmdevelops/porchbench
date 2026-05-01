@@ -195,7 +195,23 @@ class CodeOutputValidator:
         )
         if result.exit_code == 0:
             return True, f"Validation passed: {result.stdout.strip()[:100]}"
-        return False, f"Validation failed: {result.stderr.strip()[:200]}"
+        summary = _final_stderr_line(result.stderr)
+        return False, f"Validation failed: {summary[:200]}"
+
+
+def _final_stderr_line(stderr: str) -> str:
+    """Pick the most informative single line out of a stderr blob.
+
+    Python tracebacks place the actual exception (`ExceptionType: message`)
+    on the final non-empty line; the leading lines are file/line context
+    that's useful in the JSON for debugging but uninformative in the
+    per-prompt val-fail badge. Returning the last non-empty line keeps
+    both call sites readable: the badge gets a clean one-line summary
+    and the stored ``validation_reason`` remains a single line that
+    survives `splitlines()[0]` trimming downstream.
+    """
+    lines = [line for line in stderr.strip().splitlines() if line.strip()]
+    return lines[-1] if lines else stderr.strip()
 
 
 class CompositeValidator:

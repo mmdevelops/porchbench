@@ -19,6 +19,36 @@ from porchbench.statistics import PairedTestResult, paired_comparison
 console = Console()
 
 
+def disambiguate_model_names(runs: list[RunResult]) -> list[str]:
+    """Return per-run column labels with a suffix added when names collide.
+
+    Same-model selections (e.g. two `gemma4:e2b` runs differing only in timestamp
+    or `--set` overrides) produce identical column headers in the comparison
+    tables. The Options row helps when the runs differ in resolved options, but
+    can't tell apart two runs of the same model with the same options. Append
+    `·HH:MM` from the run timestamp; if that still collides within a duplicate
+    group, fall back to `·{run_id[:4]}`.
+    """
+    names = [r.run.model.name for r in runs]
+    counts: dict[str, int] = {}
+    for n in names:
+        counts[n] = counts.get(n, 0) + 1
+
+    labels = list(names)
+    for name, count in counts.items():
+        if count < 2:
+            continue
+        group_indices = [i for i, n in enumerate(names) if n == name]
+        ts_suffixes = [runs[i].run.timestamp.strftime("%H:%M") for i in group_indices]
+        if len(set(ts_suffixes)) == count:
+            for idx, suffix in zip(group_indices, ts_suffixes):
+                labels[idx] = f"{name}·{suffix}"
+        else:
+            for idx in group_indices:
+                labels[idx] = f"{name}·{runs[idx].run.id[:4]}"
+    return labels
+
+
 def _format_options(opts: ModelOptions) -> str:
     """Compact display of resolved-option values that differ from class defaults.
 
@@ -89,7 +119,7 @@ def print_comparison_table(
     if not runs:
         return
 
-    model_names = [r.run.model.name for r in runs]
+    model_names = disambiguate_model_names(runs)
     aligned = align_results(runs)
 
     # Build score lookups if scorecards provided

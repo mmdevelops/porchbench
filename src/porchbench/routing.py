@@ -22,7 +22,6 @@ from porchbench.schemas import (
     DefaultComparison,
     Message,
     ModelOptions,
-    PromptMetrics,
     PromptResult,
     RequestData,
     ResponseData,
@@ -37,7 +36,6 @@ from porchbench.schemas import (
     RunSummary,
     Suite,
     SuiteReference,
-    ToolUseMetricsData,
     compute_derived_metrics,
 )
 from porchbench.suite import resolve_messages, resolve_options
@@ -66,6 +64,7 @@ async def _run_tool_use_discovery_cell(
     backend: InferenceBackend,
 ) -> PromptResult:
     """Run a single tool-use prompt for routing discovery and package as PromptResult."""
+    from porchbench.runner import build_tool_use_metrics_data, merge_tool_use_metrics
     from porchbench.tool_runner import run_tool_use_prompt
 
     result = await run_tool_use_prompt(
@@ -97,20 +96,14 @@ async def _run_tool_use_discovery_cell(
             message=ResponseMessage(content=final_content),
             done_reason=harness_result.stopped_reason,
         ),
-        metrics=PromptMetrics(),
+        metrics=merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
         strategy=strategy_name,
         correct=result["validation_passed"],
         expected_answer=prompt.expected_answer,
         validation_passed=result["validation_passed"],
         validation_reason=result["validation_reason"],
         stopped_reason=harness_result.stopped_reason,
-        tool_use_metrics=ToolUseMetricsData(
-            total_tool_calls=harness_result.tool_use_metrics.total_tool_calls,
-            tool_call_breakdown=harness_result.tool_use_metrics.tool_call_breakdown,
-            errors_encountered=harness_result.tool_use_metrics.errors_encountered,
-            self_corrections=harness_result.tool_use_metrics.self_corrections,
-            conversation_turns=harness_result.tool_use_metrics.conversation_turns,
-        ),
+        tool_use_metrics=build_tool_use_metrics_data(harness_result.tool_use_metrics),
     )
 
 
@@ -128,6 +121,11 @@ async def run_discovery(
     Produces one RunResult per model, with each PromptResult tagged
     with its strategy name and correctness check.
     """
+    # Lazy import — porchbench.cli imports porchbench.routing, so a top-level
+    # import would cycle. Hoisted out of the per-cell loop to keep the inner
+    # path tight.
+    from porchbench.cli import _format_validation_badge
+
     results_per_model: list[RunResult] = []
 
     strategies = suite.strategies if suite.strategies else {"universal": None}
@@ -150,6 +148,9 @@ async def run_discovery(
         failed = 0
         run_start = time.monotonic()
 
+        cells_per_model = len(suite.prompts) * max(len(strategies), 1)
+        cell_idx = 0
+
         for prompt in suite.prompts:
             options = resolve_options(suite.defaults.options, prompt)
 
@@ -157,6 +158,8 @@ async def run_discovery(
                 sys_msg = strategy.system_message if strategy else None
                 messages = resolve_messages(prompt, system_message=sys_msg)
 
+                cell_idx += 1
+                progress = f"[{cell_idx}/{cells_per_model}]"
                 label = f"{prompt.id}/{strategy_name}"
                 try:
                     if prompt.mode == "tool-use":
@@ -207,14 +210,15 @@ async def run_discovery(
                     status = "[green]ok[/green]" if correct else (
                         "[yellow]?[/yellow]" if correct is None else "[red]FAIL[/red]"
                     )
-                    console.print(f"  {label}: {status}")
+                    val_badge = _format_validation_badge(pr)
+                    console.print(f"  {progress} {label}: {status}{val_badge}")
 
                     if on_cell_complete:
                         on_cell_complete(label, True)
 
                 except Exception as exc:
                     failed += 1
-                    console.print(f"  [red]{label}: error — {exc}[/red]")
+                    console.print(f"  [red]{progress} {label}: error — {exc}[/red]")
 
                     prompt_results.append(PromptResult(
                         prompt_id=prompt.id,

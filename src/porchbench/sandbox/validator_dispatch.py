@@ -82,8 +82,13 @@ def _build_single(validator_type: str, args: dict) -> Validator:
     if validator_type == "composite":
         validators = []
         for v_spec in args.get("validators", []):
-            v_type = v_spec.pop("type")
-            validators.append(_build_single(v_type, v_spec))
+            # Read non-destructively — these dicts are owned by the loaded Suite
+            # and re-used across calls (e.g. routing discovery rebuilds the same
+            # validators once per strategy). Popping `type` mutated suite state
+            # and broke iterations 2+ with KeyError: 'type'.
+            v_type = v_spec["type"]
+            sub_args = {k: v for k, v in v_spec.items() if k != "type"}
+            validators.append(_build_single(v_type, sub_args))
         return CompositeValidator(validators)
 
     raise ValueError(f"Unknown validator type: {validator_type}")
