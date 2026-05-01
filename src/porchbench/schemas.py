@@ -347,6 +347,48 @@ class Scorecard(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Evaluation extraction schemas (compact projection of RunResult for scoring)
+# ---------------------------------------------------------------------------
+
+
+class EvalPromptSummary(BaseModel):
+    """Compact representation of a prompt+response for evaluation.
+
+    Strips metrics, options, and raw Ollama fields to reduce context
+    consumption when reading responses during interactive evaluation.
+    """
+
+    prompt_id: str
+    category: str
+    difficulty: str
+    done_reason: str | None = None
+    contamination_risk: str | None = None
+    prompt_text: str  # flattened from request.messages
+    response_text: str  # from response.message.content
+    expected_answer: str | None = None
+
+
+class EvalRunHeader(BaseModel):
+    """Run-level metadata extracted alongside prompt summaries."""
+
+    run_id: str
+    model_name: str
+    suite_name: str
+    suite_file: str
+    total_prompts: int
+    truncated_count: int
+    categories: dict[str, int]
+    difficulties: dict[str, int]
+
+
+class EvalData(BaseModel):
+    """Complete pre-extracted evaluation data: header + compact prompts."""
+
+    header: EvalRunHeader
+    prompts: list[EvalPromptSummary]
+
+
+# ---------------------------------------------------------------------------
 # Routing discovery schemas (DESIGN-ROUTING.md)
 # ---------------------------------------------------------------------------
 

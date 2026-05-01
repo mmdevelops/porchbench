@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Protocol
 
 import yaml
-from pydantic import BaseModel
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -41,6 +40,9 @@ from rich.progress import (
 from porchbench.schemas import (
     AggregateScores,
     CriterionScore,
+    EvalData,
+    EvalPromptSummary,
+    EvalRunHeader,
     EvaluationMetadata,
     ModelOptions,
     PromptResult,
@@ -75,15 +77,19 @@ class OllamaEvalBackend:
     """Evaluator backend using a local Ollama model."""
 
     def __init__(self, model: str, host: str | None = None):
-        self.model = model
-        self.host = host
-
-    async def generate(self, prompt: str) -> str:
         from porchbench.backend import OllamaBackend
 
-        backend = OllamaBackend(host=self.host)
+        self.model = model
+        self.host = host
+        # One backend (and one AsyncClient connection pool) for the
+        # lifetime of this evaluator. A 100-prompt eval used to spin up
+        # 100 backends and 100 pools, paying TLS/setup per call and
+        # leaking sockets to TIME_WAIT.
+        self._backend = OllamaBackend(host=host)
+
+    async def generate(self, prompt: str) -> str:
         options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=8192)
-        result = await backend.chat(
+        result = await self._backend.chat(
             messages=[{"role": "user", "content": prompt}],
             model=self.model,
             options=options,
@@ -772,43 +778,6 @@ async def batch_evaluate_results(
 # scores prompts one at a time and streams results to disk, rather than the
 # automated evaluate_run() pipeline above.
 # ---------------------------------------------------------------------------
-
-
-class EvalPromptSummary(BaseModel):
-    """Compact representation of a prompt+response for evaluation.
-
-    Strips metrics, options, and raw Ollama fields to reduce context
-    consumption when reading responses during interactive evaluation.
-    """
-
-    prompt_id: str
-    category: str
-    difficulty: str
-    done_reason: str | None = None
-    contamination_risk: str | None = None
-    prompt_text: str  # flattened from request.messages
-    response_text: str  # from response.message.content
-    expected_answer: str | None = None
-
-
-class EvalRunHeader(BaseModel):
-    """Run-level metadata extracted alongside prompt summaries."""
-
-    run_id: str
-    model_name: str
-    suite_name: str
-    suite_file: str
-    total_prompts: int
-    truncated_count: int
-    categories: dict[str, int]
-    difficulties: dict[str, int]
-
-
-class EvalData(BaseModel):
-    """Complete pre-extracted evaluation data: header + compact prompts."""
-
-    header: EvalRunHeader
-    prompts: list[EvalPromptSummary]
 
 
 def extract_eval_data(result_path: str | Path) -> EvalData:

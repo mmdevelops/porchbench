@@ -10,6 +10,7 @@ OllamaBackend absorbs the logic previously in client.py.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
@@ -23,6 +24,8 @@ from porchbench.schemas import (
     ModelOptions,
     PromptMetrics,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Provider-neutral types
@@ -80,6 +83,20 @@ class OllamaBackend:
 
     def __init__(self, host: str | None = None):
         self.host = host
+        # Lazy-initialised AsyncClient so the connection pool is reused
+        # across calls. Earlier each chat()/show()/list() built a fresh
+        # AsyncClient, leaking sockets to TIME_WAIT and re-doing TLS/HTTP
+        # setup on every prompt. The pool is process-local and has no
+        # explicit close — fine for a CLI; library callers that build
+        # then drop OllamaBackend instances can call self._client.aclose()
+        # if they need deterministic cleanup.
+        self._client: AsyncClient | None = None
+
+    @property
+    def client(self) -> AsyncClient:
+        if self._client is None:
+            self._client = AsyncClient(host=self.host)
+        return self._client
 
     # --- Protocol methods ---
 
@@ -91,7 +108,7 @@ class OllamaBackend:
         tools: list[dict] | None = None,
     ) -> ChatResult:
         """Send a chat request to Ollama and return a provider-neutral result."""
-        client = AsyncClient(host=self.host)
+        client = self.client
         opts_dict = options.model_dump()
 
         # `think` is a top-level Ollama request field, not an options sub-field.
@@ -113,7 +130,7 @@ class OllamaBackend:
 
     async def get_model_info(self, model: str) -> ModelInfo:
         """Fetch model metadata via Ollama API."""
-        client = AsyncClient(host=self.host)
+        client = self.client
         info = await client.show(model)
         details = info.get("details", {}) or {}
 
@@ -153,7 +170,7 @@ class OllamaBackend:
 
     async def list_running_models(self) -> list[dict]:
         """List currently loaded models and their VRAM usage via ollama.ps()."""
-        client = AsyncClient(host=self.host)
+        client = self.client
         ps_response = await client.ps()
         models = ps_response.get("models", []) or []
         return [
@@ -168,7 +185,7 @@ class OllamaBackend:
 
     async def list_available_models(self) -> list[str]:
         """Return names of all models pulled locally."""
-        client = AsyncClient(host=self.host)
+        client = self.client
         listing = await client.list()
         return sorted(
             {getattr(m, "model", "") or "" for m in listing.models} - {""}
@@ -179,7 +196,14 @@ class OllamaBackend:
     async def _get_model_digest(
         self, model: str, client: AsyncClient
     ) -> str | None:
-        """Look up a model's digest from the local model list."""
+        """Look up a model's digest from the local model list.
+
+        Returns None on lookup failure rather than raising — the digest is
+        a reproducibility nicety, not a hard requirement, and a missing
+        digest shouldn't block a benchmark run. The failure is logged at
+        WARNING so users investigating an unexpectedly-empty digest in a
+        run result can find the cause without having to bisect.
+        """
         try:
             listing = await client.list()
             for m in listing.models:
@@ -190,8 +214,11 @@ class OllamaBackend:
                     or model.startswith(m_name)
                 ):
                     return getattr(m, "digest", None)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "Failed to fetch model digest for %r (run reproducibility may be reduced): %s",
+                model, exc,
+            )
         return None
 
     def _to_chat_result(self, response: ChatResponse) -> ChatResult:
@@ -303,8 +330,15 @@ class OpenAICompatBackend:
                 return ModelInfo(name=model)
         except LookupError:
             raise
-        except Exception:
-            # Server doesn't support model lookups — return stub
+        except Exception as exc:
+            # Server doesn't support model lookups — return stub. Log so
+            # a silently-stubbed ModelInfo (which loses model digest /
+            # parameter size for the run record) is recoverable when
+            # debugging reproducibility.
+            logger.warning(
+                "OpenAI-compat /v1/models/%s lookup failed (returning stub): %s",
+                model, exc,
+            )
             return ModelInfo(name=model)
 
     async def get_server_health(self) -> tuple[bool, str]:

@@ -15,7 +15,7 @@ from porchbench.backend import InferenceBackend
 from porchbench.harness import Harness, HarnessResult
 from porchbench.sandbox import SandboxConfig, SubprocessSandbox
 from porchbench.sandbox.base import FileContent
-from porchbench.sandbox.validator_dispatch import _ResponseContainsValidator, build_validator
+from porchbench.sandbox.validator_dispatch import build_validator
 from porchbench.schemas import (
     Message,
     ModelOptions,
@@ -109,12 +109,26 @@ async def _load_fixtures(
         await sandbox.write_files(files)
 
 
+def _last_assistant_text(harness_result: HarnessResult) -> str:
+    """Pull the final assistant message content out of a harness transcript."""
+    for msg in reversed(harness_result.transcript):
+        if msg.get("role") == "assistant" and msg.get("content"):
+            return msg["content"]
+    return ""
+
+
 async def _validate_outcome(
     prompt: Prompt,
     sandbox: SubprocessSandbox,
     harness_result: HarnessResult,
 ) -> tuple[bool | None, str]:
-    """Run the expected_outcome validator against the sandbox state."""
+    """Run the expected_outcome validator against the sandbox state.
+
+    Validators consume both ``sandbox`` and the final assistant text;
+    sandbox-only validators ignore the text and response-only validators
+    ignore the sandbox. This uniform dispatch removes the need to
+    isinstance-check for response-style validators here.
+    """
     if not prompt.expected_outcome:
         return None, "No expected outcome defined"
 
@@ -127,12 +141,4 @@ async def _validate_outcome(
     if validator is None:
         return None, "No validator configured"
 
-    if isinstance(validator, _ResponseContainsValidator):
-        last_assistant = ""
-        for msg in reversed(harness_result.transcript):
-            if msg.get("role") == "assistant" and msg.get("content"):
-                last_assistant = msg["content"]
-                break
-        return validator.check_response(last_assistant)
-
-    return await validator.validate(sandbox)
+    return await validator.validate(sandbox, _last_assistant_text(harness_result))

@@ -4,6 +4,7 @@ import pytest
 
 from porchbench.sandbox import SandboxConfig, SubprocessSandbox
 from porchbench.sandbox.base import ExecutionRequest, FileContent
+from porchbench.sandbox.subprocess_backend import SandboxPathError
 
 
 @pytest.fixture
@@ -99,3 +100,76 @@ class TestSubprocessSandbox:
         assert workdir.exists()
         await sb.destroy()
         assert not workdir.exists()
+
+
+class TestSandboxPathContainment:
+    """Containment checks: caller-supplied paths must not escape the workdir.
+
+    Pins the security contract that the Phase 1 sandbox enforces filesystem
+    isolation at the API boundary even though the underlying process has
+    full host access. Without these guards a model-driven write_file call
+    with ``"../../etc/passwd"`` would clobber arbitrary host paths.
+    """
+
+    @pytest.mark.asyncio
+    async def test_write_files_rejects_parent_traversal(self, sandbox):
+        with pytest.raises(SandboxPathError):
+            await sandbox.write_files([
+                FileContent(path="../escape.txt", content="x")
+            ])
+
+    @pytest.mark.asyncio
+    async def test_write_files_rejects_deep_traversal(self, sandbox):
+        with pytest.raises(SandboxPathError):
+            await sandbox.write_files([
+                FileContent(path="../../etc/passwd", content="x")
+            ])
+
+    @pytest.mark.asyncio
+    async def test_write_files_rejects_absolute_path(self, sandbox, tmp_path):
+        target = tmp_path / "outside.txt"
+        with pytest.raises(SandboxPathError):
+            await sandbox.write_files([
+                FileContent(path=str(target), content="x")
+            ])
+        assert not target.exists()
+
+    @pytest.mark.asyncio
+    async def test_read_file_rejects_parent_traversal(self, sandbox):
+        with pytest.raises(SandboxPathError):
+            await sandbox.read_file("../somefile.txt")
+
+    @pytest.mark.asyncio
+    async def test_read_file_rejects_absolute_path(self, sandbox, tmp_path):
+        target = tmp_path / "outside.txt"
+        target.write_text("secret", encoding="utf-8")
+        with pytest.raises(SandboxPathError):
+            await sandbox.read_file(str(target))
+
+    @pytest.mark.asyncio
+    async def test_execute_rejects_filename_with_separators(self, sandbox):
+        # Filenames with path separators are rejected outright — a
+        # legitimate code filename has none.
+        r = await sandbox.execute(
+            ExecutionRequest(code='print("x")', filename="../escape.py")
+        )
+        assert r.exit_code == 1
+        assert "Invalid execution filename" in r.stderr
+
+    @pytest.mark.asyncio
+    async def test_execute_rejects_absolute_filename(self, sandbox, tmp_path):
+        target = tmp_path / "evil.py"
+        r = await sandbox.execute(
+            ExecutionRequest(code='print("x")', filename=str(target))
+        )
+        assert r.exit_code == 1
+        assert "Invalid execution filename" in r.stderr
+        assert not target.exists()
+
+    @pytest.mark.asyncio
+    async def test_inner_traversal_within_workdir_allowed(self, sandbox):
+        # 'a/../b.txt' resolves to 'b.txt' under the workdir — accepted.
+        await sandbox.write_files([
+            FileContent(path="a/../b.txt", content="ok")
+        ])
+        assert (await sandbox.read_file("b.txt")) == "ok"

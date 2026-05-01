@@ -1,9 +1,17 @@
 """Outcome validators for tool-use benchmarks.
 
-Each validator checks whether the sandbox state after a harness run
-satisfies the task's success criteria. Validators return (passed, reason)
-rather than exact content matching, making them robust to formatting
-differences in model output.
+Each validator checks whether the sandbox state and/or the model's final
+text response satisfy the task's success criteria. Validators return
+(passed, reason) rather than exact content matching, making them robust
+to formatting differences in model output.
+
+The Validator protocol's ``validate`` method takes both ``sandbox`` and
+``response_text``. Sandbox-only validators ignore the response text;
+response-only validators (``ResponseContainsValidator``) ignore the
+sandbox. Composites forward both to every sub-validator. This avoids the
+silent-pass trap that the earlier ``_ResponseContainsValidator.validate``
+had — there is no longer any path that returns ``(True, "deferred")``
+without actually inspecting what it claims to check.
 """
 
 from __future__ import annotations
@@ -19,8 +27,14 @@ from porchbench.sandbox.base import Sandbox
 class Validator(Protocol):
     """Protocol for outcome validators. Each task provides its own."""
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         """Check whether the task outcome is correct.
+
+        ``sandbox`` is the post-run sandbox state (file checks).
+        ``response_text`` is the final assistant message (response checks).
+        Implementations use whichever they need.
 
         Returns:
             (True, "reason") on success
@@ -36,7 +50,9 @@ class FileExistsValidator:
         self.path = path
         self.min_size = min_size
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         try:
             content = await sandbox.read_file(self.path)
             if len(content) < self.min_size:
@@ -54,7 +70,9 @@ class ContentContainsValidator:
         self.required = required_substrings
         self.case_sensitive = case_sensitive
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         try:
             content = await sandbox.read_file(self.path)
         except FileNotFoundError:
@@ -72,6 +90,28 @@ class ContentContainsValidator:
         return True, f"{self.path} contains all required substrings"
 
 
+class ResponseContainsValidator:
+    """Validates that the model's final text response contains required substrings.
+
+    Unlike sandbox file validators, this inspects the conversation
+    transcript — used for tasks where the answer is in the model's reply,
+    not in a file. ``sandbox`` is accepted for protocol uniformity and
+    ignored.
+    """
+
+    def __init__(self, required: list[str]):
+        self.required = required
+
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
+        text_lower = response_text.lower()
+        missing = [s for s in self.required if s.lower() not in text_lower]
+        if missing:
+            return False, f"Response missing: {missing}"
+        return True, "Response contains all required substrings"
+
+
 class CsvSortValidator:
     """Validates that a CSV file is sorted by a specific column."""
 
@@ -87,7 +127,9 @@ class CsvSortValidator:
         self.ascending = ascending
         self.numeric = numeric
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         try:
             content = await sandbox.read_file(self.path)
         except FileNotFoundError:
@@ -131,7 +173,9 @@ class CsvRowCountValidator:
         self.expected_rows = expected_rows
         self.min_rows = min_rows
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         try:
             content = await sandbox.read_file(self.path)
         except FileNotFoundError:
@@ -157,7 +201,9 @@ class JsonValidValidator:
         self.path = path
         self.required_keys = required_keys or []
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         try:
             content = await sandbox.read_file(self.path)
         except FileNotFoundError:
@@ -187,7 +233,9 @@ class CodeOutputValidator:
     def __init__(self, test_code: str):
         self.test_code = test_code
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         from porchbench.sandbox.base import ExecutionRequest
 
         result = await sandbox.execute(
@@ -220,11 +268,13 @@ class CompositeValidator:
     def __init__(self, validators: list[Validator]):
         self.validators = validators
 
-    async def validate(self, sandbox: Sandbox) -> tuple[bool, str]:
+    async def validate(
+        self, sandbox: Sandbox, response_text: str = ""
+    ) -> tuple[bool, str]:
         results = []
         all_passed = True
         for v in self.validators:
-            passed, reason = await v.validate(sandbox)
+            passed, reason = await v.validate(sandbox, response_text)
             results.append(reason)
             if not passed:
                 all_passed = False

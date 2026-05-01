@@ -11,12 +11,14 @@ from __future__ import annotations
 import re
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 from rich.console import Console
 
 from porchbench.assets import porchbench_version
 from porchbench.backend import InferenceBackend
+from porchbench.display import format_validation_badge
 from porchbench.schemas import (
     BestRoute,
     DefaultComparison,
@@ -64,7 +66,7 @@ async def _run_tool_use_discovery_cell(
     backend: InferenceBackend,
 ) -> PromptResult:
     """Run a single tool-use prompt for routing discovery and package as PromptResult."""
-    from porchbench.runner import build_tool_use_metrics_data, merge_tool_use_metrics
+    from porchbench.runner import harness_result_to_prompt_result
     from porchbench.tool_runner import run_tool_use_prompt
 
     result = await run_tool_use_prompt(
@@ -75,35 +77,8 @@ async def _run_tool_use_discovery_cell(
         suite_dir=suite_dir,
         backend=backend,
     )
-
-    harness_result = result["harness_result"]
-
-    final_content = ""
-    for msg in reversed(harness_result.transcript):
-        if msg.get("role") == "assistant" and msg.get("content"):
-            final_content = msg["content"]
-            break
-
-    return PromptResult(
-        prompt_id=prompt.id,
-        category=prompt.category,
-        difficulty=prompt.difficulty,
-        tags=prompt.tags,
-        contamination_risk=prompt.contamination_risk,
-        options_used=options,
-        request=RequestData(messages=messages),
-        response=ResponseData(
-            message=ResponseMessage(content=final_content),
-            done_reason=harness_result.stopped_reason,
-        ),
-        metrics=merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
-        strategy=strategy_name,
-        correct=result["validation_passed"],
-        expected_answer=prompt.expected_answer,
-        validation_passed=result["validation_passed"],
-        validation_reason=result["validation_reason"],
-        stopped_reason=harness_result.stopped_reason,
-        tool_use_metrics=build_tool_use_metrics_data(harness_result.tool_use_metrics),
+    return harness_result_to_prompt_result(
+        prompt, options, messages, result, strategy=strategy_name,
     )
 
 
@@ -113,7 +88,7 @@ async def run_discovery(
     models: list[str],
     backend: InferenceBackend,
     output_dir: str | Path = "results",
-    on_cell_complete: callable | None = None,
+    on_cell_complete: Callable[[str, bool], None] | None = None,
     suite_dir: Path | None = None,
 ) -> list[RunResult]:
     """Run routing discovery: every prompt × strategy × model.
@@ -121,11 +96,6 @@ async def run_discovery(
     Produces one RunResult per model, with each PromptResult tagged
     with its strategy name and correctness check.
     """
-    # Lazy import — porchbench.cli imports porchbench.routing, so a top-level
-    # import would cycle. Hoisted out of the per-cell loop to keep the inner
-    # path tight.
-    from porchbench.cli import _format_validation_badge
-
     results_per_model: list[RunResult] = []
 
     strategies = suite.strategies if suite.strategies else {"universal": None}
@@ -210,7 +180,7 @@ async def run_discovery(
                     status = "[green]ok[/green]" if correct else (
                         "[yellow]?[/yellow]" if correct is None else "[red]FAIL[/red]"
                     )
-                    val_badge = _format_validation_badge(pr)
+                    val_badge = format_validation_badge(pr)
                     console.print(f"  {progress} {label}: {status}{val_badge}")
 
                     if on_cell_complete:

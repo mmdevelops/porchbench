@@ -34,9 +34,10 @@ from porchbench.assets import (
     resolve_suite_dir,
 )
 from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
+from porchbench.display import format_validation_badge
 from porchbench.errors import UserError, load_json_model
 from porchbench.runner import find_completed_prompt_ids, result_path_for, run_suite
-from porchbench.schemas import RunResult, Scorecard, Strategy
+from porchbench.schemas import PromptResult, RunResult, Scorecard, Strategy
 from porchbench.suite import load_suite, make_suite_reference
 
 app = typer.Typer(
@@ -589,11 +590,11 @@ def run(
             ) as progress:
                 task = progress.add_task(f"Running {model}", total=prompt_count)
 
-                def on_complete(prompt_id: str, success: bool, duration_s: float, prompt_num: int, total: int, result=None) -> None:
+                def on_complete(prompt_id: str, success: bool, duration_s: float, prompt_num: int, total: int, result: PromptResult | None = None) -> None:
                     status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
                     dur = result.metrics.total_duration if result else None
                     dur_str = f"{dur / 1e9:.1f}s" if dur else ""
-                    val_badge = _format_validation_badge(result)
+                    val_badge = format_validation_badge(result)
 
                     if verbose and result:
                         tps = result.metrics.tokens_per_second
@@ -666,35 +667,7 @@ def run(
         )
 
 
-def _format_validation_badge(result) -> str:
-    """Format the per-prompt validator outcome as a compact inline badge.
-
-    Returns the empty string when the prompt has no validator (e.g. text-mode
-    prompts) so non-tool-use suites are unaffected. For tool-use prompts the
-    result is already in `result.validation_passed` from the per-prompt
-    sandbox check that ran during inference — surfacing it inline lets users
-    see pass/fail as it happens instead of only in the final summary.
-    """
-    if result is None:
-        return ""
-    passed = getattr(result, "validation_passed", None)
-    if passed is None:
-        return ""
-    if passed:
-        return " [bold green]\\[pass][/bold green]"
-    reason = getattr(result, "validation_reason", "") or ""
-    suffix = ""
-    if reason:
-        first_line = reason.splitlines()[0]
-        # 120 chars keeps composite-validator chains like 'X exists (N bytes);
-        # X missing required <field>' readable; ellipsis flags truncation so
-        # users know to check the result JSON for the full reason.
-        short_reason = first_line if len(first_line) <= 120 else first_line[:117] + "..."
-        suffix = f": {short_reason}"
-    return f" [bold yellow]\\[val-fail][/bold yellow]{suffix}"
-
-
-def _print_summary(result) -> None:
+def _print_summary(result: RunResult) -> None:
     """Print a compact summary table for a completed run."""
     s = result.summary
     table = Table(title="Summary", show_header=False, title_style="bold")
@@ -1729,7 +1702,7 @@ def overnight(
         else:
             dur_str = f"{duration_s:.1f}s"
         counter = f"{prompt_num}/{total}"
-        val_badge = _format_validation_badge(result)
+        val_badge = format_validation_badge(result)
         if success:
             console.print(rf"  [green]\[ok][/green]{val_badge}    {counter}  {prompt_id}  ({dur_str})")
         else:

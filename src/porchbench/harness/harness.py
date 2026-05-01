@@ -117,6 +117,13 @@ class HarnessResult:
     aggregated_metrics: PromptMetrics | None = None  # summed across chat() turns
 
 
+def _sum_optional(a: int | None, b: int | None) -> int | None:
+    """Sum two optional ints, preserving None-when-both-None semantics."""
+    if a is None and b is None:
+        return None
+    return (a or 0) + (b or 0)
+
+
 def _accumulate_metrics(acc: PromptMetrics, turn: PromptMetrics) -> PromptMetrics:
     """Sum raw Ollama timing fields across one harness turn into the accumulator.
 
@@ -127,21 +134,11 @@ def _accumulate_metrics(acc: PromptMetrics, turn: PromptMetrics) -> PromptMetric
     high-water mark, not a flow rate.
     """
     return PromptMetrics(
-        prompt_eval_count=(acc.prompt_eval_count or 0) + (turn.prompt_eval_count or 0)
-        if (acc.prompt_eval_count is not None or turn.prompt_eval_count is not None)
-        else None,
-        prompt_eval_duration=(acc.prompt_eval_duration or 0) + (turn.prompt_eval_duration or 0)
-        if (acc.prompt_eval_duration is not None or turn.prompt_eval_duration is not None)
-        else None,
-        eval_count=(acc.eval_count or 0) + (turn.eval_count or 0)
-        if (acc.eval_count is not None or turn.eval_count is not None)
-        else None,
-        eval_duration=(acc.eval_duration or 0) + (turn.eval_duration or 0)
-        if (acc.eval_duration is not None or turn.eval_duration is not None)
-        else None,
-        load_duration=(acc.load_duration or 0) + (turn.load_duration or 0)
-        if (acc.load_duration is not None or turn.load_duration is not None)
-        else None,
+        prompt_eval_count=_sum_optional(acc.prompt_eval_count, turn.prompt_eval_count),
+        prompt_eval_duration=_sum_optional(acc.prompt_eval_duration, turn.prompt_eval_duration),
+        eval_count=_sum_optional(acc.eval_count, turn.eval_count),
+        eval_duration=_sum_optional(acc.eval_duration, turn.eval_duration),
+        load_duration=_sum_optional(acc.load_duration, turn.load_duration),
         peak_vram_bytes=max(
             acc.peak_vram_bytes or 0, turn.peak_vram_bytes or 0,
         ) or None,
@@ -164,14 +161,21 @@ def build_default_dispatch(sandbox: Sandbox) -> dict[str, Callable]:
         return output or "(no output)"
 
     async def read_file(path: str = "") -> str:
+        from porchbench.sandbox.subprocess_backend import SandboxPathError
         try:
             return await sandbox.read_file(path)
         except FileNotFoundError:
             return f"Error: file not found: {path}"
+        except SandboxPathError as exc:
+            return f"Error: {exc}"
 
     async def write_file(path: str = "", content: str = "") -> str:
         from porchbench.sandbox.base import FileContent
-        await sandbox.write_files([FileContent(path=path, content=content)])
+        from porchbench.sandbox.subprocess_backend import SandboxPathError
+        try:
+            await sandbox.write_files([FileContent(path=path, content=content)])
+        except SandboxPathError as exc:
+            return f"Error: {exc}"
         return f"File written: {path}"
 
     return {

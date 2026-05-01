@@ -169,41 +169,43 @@ def _detect_gpu_dxdiag() -> tuple[str, float | None]:
     """Parse dxdiag output for GPU name and dedicated memory.
 
     dxdiag reports correct VRAM even for GPUs >4GB, unlike WMI.
-    Runs dxdiag /t to dump diagnostics to a temp file.
+    Runs dxdiag /t to dump diagnostics to a per-call temp file.
     """
-    import os
     import re
     import tempfile
     import time
 
-    tmp_path = os.path.join(tempfile.gettempdir(), "porchbench_dxdiag.txt")
-
-    # Clean up stale file
-    if os.path.exists(tmp_path):
-        os.remove(tmp_path)
-
-    subprocess.run(
-        ["cmd", "/c", f"dxdiag /t {tmp_path}"],
-        capture_output=True, timeout=15,
-    )
-
-    # dxdiag writes asynchronously; wait for the file
-    for _ in range(10):
-        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
-            break
-        time.sleep(0.5)
-
-    if not os.path.exists(tmp_path):
-        return "", None
+    # Per-invocation temp filename (avoids the predictable
+    # ``tempfile.gettempdir()/porchbench_dxdiag.txt`` shared by every
+    # process — race-prone when two profiler runs overlap on the same
+    # workstation, and observable by other users on multi-user hosts).
+    fd, tmp_path_str = tempfile.mkstemp(prefix="porchbench_dxdiag_", suffix=".txt")
+    import os as _os
+    _os.close(fd)
+    tmp_path = Path(tmp_path_str)
+    # dxdiag /t needs the destination file to be absent, otherwise it
+    # appends to the existing file. mkstemp creates an empty file, so
+    # remove it before invoking dxdiag.
+    tmp_path.unlink(missing_ok=True)
 
     try:
-        with open(tmp_path, encoding="utf-8", errors="ignore") as f:
-            text = f.read()
+        subprocess.run(
+            ["cmd", "/c", f"dxdiag /t {tmp_path}"],
+            capture_output=True, timeout=15,
+        )
+
+        # dxdiag writes asynchronously; wait for the file
+        for _ in range(10):
+            if tmp_path.exists() and tmp_path.stat().st_size > 0:
+                break
+            time.sleep(0.5)
+
+        if not tmp_path.exists():
+            return "", None
+
+        text = tmp_path.read_text(encoding="utf-8", errors="ignore")
     finally:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+        tmp_path.unlink(missing_ok=True)
 
     # Parse display device sections. dxdiag lists multiple display devices;
     # we want the discrete GPU (largest dedicated memory).

@@ -14,6 +14,7 @@ from porchbench.sandbox.validators import (
     CsvSortValidator,
     FileExistsValidator,
     JsonValidValidator,
+    ResponseContainsValidator,
     Validator,
 )
 
@@ -53,7 +54,7 @@ def _build_single(validator_type: str, args: dict) -> Validator:
                 case_sensitive=args.get("case_sensitive", False),
             )
         subs = args.get("response_contains", [])
-        return _ResponseContainsValidator(required=subs)
+        return ResponseContainsValidator(required=subs)
 
     if validator_type == "csv_sort":
         return CsvSortValidator(
@@ -92,24 +93,3 @@ def _build_single(validator_type: str, args: dict) -> Validator:
         return CompositeValidator(validators)
 
     raise ValueError(f"Unknown validator type: {validator_type}")
-
-
-class _ResponseContainsValidator:
-    """Checks that the model's final text response contains required substrings.
-
-    This isn't a sandbox file check -- it validates the conversation transcript.
-    Used for tasks where the answer is in the model's reply, not in a file.
-    """
-
-    def __init__(self, required: list[str]):
-        self.required = required
-
-    async def validate(self, sandbox) -> tuple[bool, str]:
-        return True, "Response validation deferred to transcript check"
-
-    def check_response(self, response_text: str) -> tuple[bool, str]:
-        text_lower = response_text.lower()
-        missing = [s for s in self.required if s.lower() not in text_lower]
-        if missing:
-            return False, f"Response missing: {missing}"
-        return True, "Response contains all required substrings"

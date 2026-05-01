@@ -173,29 +173,28 @@ def build_tool_use_metrics_data(harness_metrics) -> ToolUseMetricsData:
     )
 
 
-async def _run_tool_use_prompt(
+def harness_result_to_prompt_result(
     prompt,
-    model: str,
     options: ModelOptions,
     messages: list[Message],
-    suite_dir: Path | None,
-    backend: InferenceBackend,
+    run_result: dict,
+    strategy: str | None = None,
 ) -> PromptResult:
-    """Dispatch a tool-use prompt through the sandbox harness and package the result."""
-    from porchbench.tool_runner import run_tool_use_prompt
+    """Package the dict returned by ``tool_runner.run_tool_use_prompt`` as a PromptResult.
 
-    result = await run_tool_use_prompt(
-        prompt=prompt,
-        model=model,
-        options=options,
-        messages=messages,
-        suite_dir=suite_dir,
-        backend=backend,
-    )
+    Single-suite runs and routing-discovery cells use the same harness output
+    shape; consolidating the conversion here means new metric fields land in
+    one place rather than two. The earlier two-site duplication caused
+    ``tool_calls_via_text`` to silently zero on routing runs until
+    ``build_tool_use_metrics_data`` was extracted; the transcript-extraction
+    half of the duplication had not yet been similarly consolidated.
 
-    harness_result = result["harness_result"]
+    ``strategy`` is set on routing-discovery cells to tag the result with the
+    strategy name *and* to populate ``correct`` from ``validation_passed`` so
+    routing analysis sees the per-cell pass/fail signal.
+    """
+    harness_result = run_result["harness_result"]
 
-    # Extract the final assistant message from transcript as the response
     final_content = ""
     for msg in reversed(harness_result.transcript):
         if msg.get("role") == "assistant" and msg.get("content"):
@@ -215,12 +214,36 @@ async def _run_tool_use_prompt(
             message=ResponseMessage(content=final_content),
             done_reason=harness_result.stopped_reason,
         ),
-        metrics=merge_tool_use_metrics(harness_result, result.get("elapsed_ns")),
-        validation_passed=result["validation_passed"],
-        validation_reason=result["validation_reason"],
+        metrics=merge_tool_use_metrics(harness_result, run_result.get("elapsed_ns")),
+        strategy=strategy,
+        correct=run_result["validation_passed"] if strategy is not None else None,
+        validation_passed=run_result["validation_passed"],
+        validation_reason=run_result["validation_reason"],
         stopped_reason=harness_result.stopped_reason,
         tool_use_metrics=build_tool_use_metrics_data(harness_result.tool_use_metrics),
     )
+
+
+async def _run_tool_use_prompt(
+    prompt,
+    model: str,
+    options: ModelOptions,
+    messages: list[Message],
+    suite_dir: Path | None,
+    backend: InferenceBackend,
+) -> PromptResult:
+    """Dispatch a tool-use prompt through the sandbox harness and package the result."""
+    from porchbench.tool_runner import run_tool_use_prompt
+
+    result = await run_tool_use_prompt(
+        prompt=prompt,
+        model=model,
+        options=options,
+        messages=messages,
+        suite_dir=suite_dir,
+        backend=backend,
+    )
+    return harness_result_to_prompt_result(prompt, options, messages, result)
 
 
 async def run_suite(

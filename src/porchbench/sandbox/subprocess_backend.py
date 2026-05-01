@@ -6,8 +6,11 @@ Provides timeout enforcement and file I/O. This is the Phase 1 backend
 code on a local machine.
 
 Security model: process-level isolation + tempdir. No network isolation,
-no memory limits, no filesystem isolation beyond the tempdir. Acceptable
-for benchmarking (we control the suites); not for untrusted agent deployment.
+no memory limits. Filesystem isolation is enforced at the API boundary —
+``write_files`` / ``read_file`` / ``execute`` reject any path that
+resolves outside the per-session workdir, including paths containing
+``..`` segments or absolute paths. Acceptable for benchmarking (we
+control the suites); not for untrusted agent deployment.
 """
 
 from __future__ import annotations
@@ -33,6 +36,35 @@ LANGUAGE_COMMANDS: dict[str, list[str]] = {
     "bash": ["bash"],
     "node": ["node"],
 }
+
+
+class SandboxPathError(ValueError):
+    """Raised when a caller-supplied path would escape the sandbox workdir."""
+
+
+def _resolve_within(workdir: Path, raw_path: str) -> Path:
+    """Resolve ``raw_path`` under ``workdir`` and reject escapes.
+
+    Empty paths, absolute paths, and paths whose resolved location lies
+    outside ``workdir`` raise ``SandboxPathError``. ``..`` segments that
+    happen to remain inside the workdir (e.g. ``a/../b``) are accepted
+    after normalisation.
+    """
+    if not raw_path:
+        raise SandboxPathError("empty sandbox path")
+
+    candidate = Path(raw_path)
+    if candidate.is_absolute():
+        raise SandboxPathError(f"absolute paths are not allowed: {raw_path!r}")
+
+    workdir_resolved = workdir.resolve()
+    target = (workdir_resolved / candidate).resolve()
+
+    if not target.is_relative_to(workdir_resolved):
+        raise SandboxPathError(
+            f"path escapes sandbox workdir: {raw_path!r}"
+        )
+    return target
 
 
 class SubprocessSandbox(Sandbox):
@@ -70,10 +102,27 @@ class SubprocessSandbox(Sandbox):
                 exit_code=1,
             )
 
-        # Write code to a temp file in the workdir
+        # Determine code filename. A bare basename is required — directory
+        # components in `request.filename` are a sandbox-escape vector since
+        # the resulting path is then handed to subprocess.run.
         ext = {"python": ".py", "bash": ".sh", "node": ".js"}.get(lang, ".txt")
         filename = request.filename or f"_exec{ext}"
-        code_path = workdir / filename
+        if "/" in filename or "\\" in filename or filename in ("", ".", ".."):
+            return ExecutionResult(
+                stdout="",
+                stderr=f"Invalid execution filename: {filename!r}",
+                exit_code=1,
+            )
+
+        try:
+            code_path = _resolve_within(workdir, filename)
+        except SandboxPathError as exc:
+            return ExecutionResult(
+                stdout="",
+                stderr=f"Invalid execution filename: {exc}",
+                exit_code=1,
+            )
+
         code_path.write_text(request.code, encoding="utf-8")
 
         # Build environment
@@ -111,12 +160,12 @@ class SubprocessSandbox(Sandbox):
     async def write_files(self, files: list[FileContent]) -> None:
         workdir = self.workdir
         for f in files:
-            target = workdir / f.path
+            target = _resolve_within(workdir, f.path)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(f.content, encoding="utf-8")
 
     async def read_file(self, path: str) -> str:
-        target = self.workdir / path
+        target = _resolve_within(self.workdir, path)
         if not target.exists():
             raise FileNotFoundError(f"File not found in sandbox: {path}")
         return target.read_text(encoding="utf-8")

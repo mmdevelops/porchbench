@@ -12,6 +12,7 @@ from porchbench.sandbox.validators import (
     CsvSortValidator,
     FileExistsValidator,
     JsonValidValidator,
+    ResponseContainsValidator,
 )
 
 
@@ -220,3 +221,59 @@ class TestCompositeValidator:
         assert passed is False
         assert "too small" in reason
         assert "Missing required substring" in reason or "missing" in reason.lower()
+
+
+class TestResponseContainsValidator:
+    """Pins the protocol-level fix for the silent-pass trap.
+
+    Earlier ``_ResponseContainsValidator.validate(sandbox)`` always returned
+    ``(True, "deferred...")`` regardless of response content, so a Composite
+    that wrapped one alongside file checks reported the response check as
+    passed even when it should have failed. The new ``Validator.validate``
+    signature accepts ``response_text`` so dispatch is uniform and the
+    response check actually inspects the text it claims to inspect.
+    """
+
+    @pytest.mark.asyncio
+    async def test_response_contains_pass(self, sandbox):
+        v = ResponseContainsValidator(required=["paris"])
+        passed, _ = await v.validate(sandbox, response_text="The answer is Paris.")
+        assert passed is True
+
+    @pytest.mark.asyncio
+    async def test_response_contains_fail(self, sandbox):
+        v = ResponseContainsValidator(required=["paris"])
+        passed, reason = await v.validate(sandbox, response_text="No idea.")
+        assert passed is False
+        assert "paris" in reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_response_contains_case_insensitive(self, sandbox):
+        v = ResponseContainsValidator(required=["PARIS"])
+        passed, _ = await v.validate(sandbox, response_text="paris")
+        assert passed is True
+
+    @pytest.mark.asyncio
+    async def test_composite_does_not_silently_pass_response_check(self, sandbox):
+        """Regression for the W1 silent-pass trap: a composite wrapping a
+        ResponseContainsValidator alongside file checks must fail when the
+        response is missing the required substring, even if file checks pass.
+        """
+        await sandbox.write_files([FileContent(path="out.txt", content="ok")])
+        v = CompositeValidator([
+            FileExistsValidator("out.txt"),
+            ResponseContainsValidator(required=["paris"]),
+        ])
+        passed, reason = await v.validate(sandbox, response_text="no answer")
+        assert passed is False
+        assert "paris" in reason.lower() or "missing" in reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_composite_passes_when_both_satisfied(self, sandbox):
+        await sandbox.write_files([FileContent(path="out.txt", content="ok")])
+        v = CompositeValidator([
+            FileExistsValidator("out.txt"),
+            ResponseContainsValidator(required=["paris"]),
+        ])
+        passed, _ = await v.validate(sandbox, response_text="Paris is the answer.")
+        assert passed is True

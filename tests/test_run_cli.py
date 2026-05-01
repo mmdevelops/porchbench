@@ -319,51 +319,51 @@ class TestFormatValidationBadge:
         )
 
     def test_no_result_returns_empty(self):
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
-        assert _format_validation_badge(None) == ""
+        assert format_validation_badge(None) == ""
 
     def test_no_validator_returns_empty(self):
         """Text-mode prompts have validation_passed=None — no badge."""
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
         result = self._result_with_validation(passed=None)
-        assert _format_validation_badge(result) == ""
+        assert format_validation_badge(result) == ""
 
     def test_pass_badge(self):
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
         result = self._result_with_validation(passed=True)
-        badge = _format_validation_badge(result)
+        badge = format_validation_badge(result)
         assert "pass" in badge
         assert "green" in badge
 
     def test_fail_badge_includes_short_reason(self):
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
         result = self._result_with_validation(
             passed=False, reason="file not created at expected path",
         )
-        badge = _format_validation_badge(result)
+        badge = format_validation_badge(result)
         assert "val-fail" in badge
         assert "file not created" in badge
 
     def test_fail_badge_truncates_long_reason_with_ellipsis(self):
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
         long_reason = "A" * 200
         result = self._result_with_validation(passed=False, reason=long_reason)
-        badge = _format_validation_badge(result)
+        badge = format_validation_badge(result)
         # Reason chunk caps at 120 chars (117 + "...") to flag truncation
         assert "A" * 117 + "..." in badge
         assert "A" * 121 not in badge
 
     def test_fail_badge_keeps_short_reason_intact(self):
-        from porchbench.cli import _format_validation_badge
+        from porchbench.display import format_validation_badge
 
         short = "dairy.csv not found"
         result = self._result_with_validation(passed=False, reason=short)
-        badge = _format_validation_badge(result)
+        badge = format_validation_badge(result)
         assert short in badge
         assert "..." not in badge
 
