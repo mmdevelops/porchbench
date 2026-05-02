@@ -73,6 +73,10 @@ class InferenceBackend(Protocol):
 
     async def list_available_models(self) -> list[str]: ...
 
+    async def list_available_models_with_capabilities(
+        self,
+    ) -> list[tuple[str, list[str]]]: ...
+
 
 # ---------------------------------------------------------------------------
 # Ollama backend
@@ -200,6 +204,32 @@ class OllamaBackend:
         return sorted(
             {getattr(m, "model", "") or "" for m in listing.models} - {""}
         )
+
+    async def list_available_models_with_capabilities(
+        self,
+    ) -> list[tuple[str, list[str]]]:
+        """Return (model, capabilities) for every locally-pulled model.
+
+        Capabilities are pulled from `client.show(model).capabilities` —
+        the same source as `check_tool_support_or_exit`. Show calls run
+        concurrently via `asyncio.gather`; per-model failures degrade to
+        an empty capability list rather than failing the whole listing
+        (a rare model with a corrupt manifest shouldn't blank the picker).
+        """
+        client = self.client
+        names = await self.list_available_models()
+
+        async def _caps_for(model: str) -> list[str]:
+            try:
+                info = await client.show(model)
+                if hasattr(info, "model_dump"):
+                    info = info.model_dump()
+                return info.get("capabilities") or []
+            except Exception:
+                return []
+
+        caps_lists = await asyncio.gather(*[_caps_for(n) for n in names])
+        return list(zip(names, caps_lists, strict=True))
 
     # --- Internal helpers ---
 
@@ -381,6 +411,20 @@ class OpenAICompatBackend:
                 return sorted(m.get("id", "") for m in data if m.get("id"))
         except Exception:
             return []
+
+    async def list_available_models_with_capabilities(
+        self,
+    ) -> list[tuple[str, list[str]]]:
+        """Return (model, []) pairs — OpenAI-compat has no portable capability probe.
+
+        The /v1/models response shape is server-specific (LM Studio,
+        vLLM, llama.cpp, etc. each pick their own fields), so we'd need
+        per-server adapters to surface capability hints. Returning empty
+        capability lists lets the picker render unbadged labels while
+        keeping the same call-shape as the Ollama backend.
+        """
+        names = await self.list_available_models()
+        return [(name, []) for name in names]
 
     # --- Internal helpers ---
 

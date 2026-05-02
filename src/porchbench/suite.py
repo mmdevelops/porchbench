@@ -81,6 +81,21 @@ def discover_suites(suite_dir: Path) -> list[Path]:
     return paths
 
 
+def required_capabilities_for_suite(suite: Suite) -> list[str]:
+    """Capabilities a model must advertise to run every prompt in the suite.
+
+    Returns ["tools"] when any prompt is tool-use mode, else []. Used by
+    the model picker (badge / sort missing-cap models) and the preflight
+    capability gate so the "what does this suite need?" check has one
+    source of truth. Future capability axes (vision, thinking) extend
+    this list when prompt schemas grow to express them.
+    """
+    needs: list[str] = []
+    if any(getattr(p, "mode", "text") == "tool-use" for p in suite.prompts):
+        needs.append("tools")
+    return needs
+
+
 def resolve_options(suite_defaults: ModelOptions, prompt: Prompt) -> ModelOptions:
     """Merge per-prompt option overrides over suite defaults.
 

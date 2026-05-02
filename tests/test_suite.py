@@ -11,6 +11,7 @@ from porchbench.suite import (
     compute_suite_hash,
     load_suite,
     make_suite_reference,
+    required_capabilities_for_suite,
     resolve_messages,
     resolve_options,
 )
@@ -157,6 +158,39 @@ class TestResolveMessages:
         assert len(msgs) == 4
         assert msgs[0].role == "system"
         assert msgs[3].role == "user"
+
+
+# ---------------------------------------------------------------------------
+# Required-capability derivation
+# ---------------------------------------------------------------------------
+
+
+class TestRequiredCapabilitiesForSuite:
+    def test_text_only_suite_needs_nothing(self):
+        suite = _make_suite()
+        assert required_capabilities_for_suite(suite) == []
+
+    def test_tool_use_suite_needs_tools(self):
+        prompt = Prompt(
+            id="t1", category="coding", difficulty="easy",
+            mode="tool-use",
+            messages=[Message(role="user", content="Read the file.")],
+        )
+        suite = _make_suite(prompts=[prompt])
+        assert required_capabilities_for_suite(suite) == ["tools"]
+
+    def test_mixed_suite_needs_tools(self):
+        text_prompt = Prompt(
+            id="p1", category="coding", difficulty="easy",
+            messages=[Message(role="user", content="Hi")],
+        )
+        tool_prompt = Prompt(
+            id="t1", category="coding", difficulty="easy",
+            mode="tool-use",
+            messages=[Message(role="user", content="Read the file.")],
+        )
+        suite = _make_suite(prompts=[text_prompt, tool_prompt])
+        assert required_capabilities_for_suite(suite) == ["tools"]
 
 
 # ---------------------------------------------------------------------------

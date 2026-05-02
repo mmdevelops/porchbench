@@ -308,17 +308,22 @@ def check_tool_support_or_exit(
 ) -> None:
     """Hard-fail if the suite needs tool-calling and any chosen model lacks it.
 
-    Without this, models like medgemma or pure-vision variants get queued
-    against `tool-use` and waste minutes producing a 0/19 score because they
-    can't issue tool calls at all. Capability is read from Ollama's
-    `client.show(model).capabilities` array — only checked for ollama; other
-    backends silently skip (we don't have a portable capability probe).
+    Defense-in-depth for the CLI-args path (no picker involved). The
+    interactive picker already badges/sorts missing-cap models, but a
+    user passing `-m medgemma:4b -s tool-use` from the command line
+    bypasses the picker — without this, that run would queue and waste
+    minutes producing a 0/19 score. Capability is read from Ollama's
+    `client.show(model).capabilities` array — only checked for ollama;
+    other backends silently skip (no portable capability probe).
     """
+    from porchbench.suite import required_capabilities_for_suite
+
     if backend_name != "ollama":
         return
     if not isinstance(backend, OllamaBackend):
         return
-    if not any(getattr(p, "mode", "text") == "tool-use" for p in suite.prompts):
+    needs = required_capabilities_for_suite(suite)
+    if "tools" not in needs:
         return
 
     from ollama import AsyncClient
@@ -430,17 +435,42 @@ def run(
     ] = None,
 ) -> None:
     """Run a benchmark suite against one or more models."""
+    from porchbench.suite import required_capabilities_for_suite
+
     interactive = models is None or suite_path is None
 
-    # Interactive selection when args omitted (model first, then suite)
+    # Suite-first ordering: knowing the suite lets the model picker badge
+    # missing-capability models (e.g. tag a non-tools model as
+    # `· missing: tools` for a tool-use suite) at selection time, instead
+    # of failing later in the preflight after the user already configured
+    # repeats / verbose / etc.
+    if suite_path is None:
+        from porchbench.interactive import select_suite
+        suite_path = select_suite()
+
+    # Resolve bare names and relative paths against cwd/packaged defaults
+    try:
+        suite_path = find_suite(suite_path)
+    except FileNotFoundError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1)
+
+    # Load and validate suite (early — gates the model picker on caps)
+    try:
+        suite = load_suite(suite_path)
+    except Exception as exc:
+        console.print(f"[red]Failed to load suite: {exc}[/red]")
+        raise typer.Exit(code=1)
+
     if models is None:
         from porchbench.interactive import select_models
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
-        models = select_models(backend)
-    if suite_path is None:
-        from porchbench.interactive import select_suite
-        suite_path = select_suite()
+        models = select_models(
+            backend,
+            required_capabilities=required_capabilities_for_suite(suite),
+        )
+
     if interactive:
         from porchbench.interactive import select_run_options
         opts = select_run_options(
@@ -451,20 +481,6 @@ def run(
         verbose = opts["verbose"]
         resume = opts["resume"]
         profile_vram = opts["profile_vram"]
-
-    # Resolve bare names and relative paths against cwd/packaged defaults
-    try:
-        suite_path = find_suite(suite_path)
-    except FileNotFoundError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
-
-    # Load and validate suite
-    try:
-        suite = load_suite(suite_path)
-    except Exception as exc:
-        console.print(f"[red]Failed to load suite: {exc}[/red]")
-        raise typer.Exit(code=1)
 
     overrides = parse_set_overrides(set_overrides)
     if overrides:
@@ -1050,6 +1066,7 @@ def discover_routes(
     """Run all prompt x strategy x model combinations to map capabilities."""
     from porchbench.interactive import select_models, select_suite
     from porchbench.routing import count_discovery_runs, run_discovery
+    from porchbench.suite import required_capabilities_for_suite
 
     if suite_path is None:
         # Filter to suites that actually define strategies — a no-strategies
@@ -1060,10 +1077,6 @@ def discover_routes(
             filter_predicate=_suite_has_strategies,
             filter_description="suite with strategies (required for routes discover)",
         )
-    if models is None:
-        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-        check_server_or_exit(backend, backend_name)
-        models = select_models(backend)
 
     try:
         suite_path = find_suite(suite_path)
@@ -1071,11 +1084,21 @@ def discover_routes(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
+    # Load suite before the model picker so required-cap badges can render
+    # against the actual suite contents (mirrors `run` ordering).
     try:
         suite = load_suite(suite_path)
     except Exception as exc:
         console.print(f"[red]Failed to load suite: {exc}[/red]")
         raise typer.Exit(code=1)
+
+    if models is None:
+        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+        check_server_or_exit(backend, backend_name)
+        models = select_models(
+            backend,
+            required_capabilities=required_capabilities_for_suite(suite),
+        )
 
     suite_ref = make_suite_reference(suite_path, suite)
     total = count_discovery_runs(suite, models)
@@ -1549,21 +1572,40 @@ def overnight(
         print_summary,
     )
 
+    from porchbench.suite import required_capabilities_for_suite
+
     interactive = models is None or suite_paths is None
 
-    # Interactive selection when args omitted
-    if models is None:
-        from porchbench.interactive import select_models
-        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-        check_server_or_exit(backend, backend_name)
-        models = select_models(backend)
-
-    # 1. Discover or use provided suites
+    # Suite-first ordering: derive the union of required capabilities
+    # across all selected suites so the model picker can mark missing-cap
+    # models. Mirrors `run` and `routes discover` flow.
     if suite_paths:
         paths = [find_suite(p) for p in suite_paths]
     else:
         from porchbench.interactive import select_suites
         paths = select_suites(resolve_suite_dir(suite_dir))
+
+    if models is None:
+        from porchbench.interactive import select_models
+
+        # Pre-load each suite to compute the union of required capabilities.
+        # `build_plan` re-loads them later (negligible cost vs. restructuring
+        # build_plan to accept already-loaded suites). Per-suite load
+        # failures are swallowed here — build_plan surfaces them with its
+        # own error path so we don't double-warn.
+        required_caps_set: set[str] = set()
+        for p in paths:
+            try:
+                required_caps_set.update(
+                    required_capabilities_for_suite(load_suite(p))
+                )
+            except Exception:
+                continue
+        required_caps = sorted(required_caps_set)
+
+        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
+        check_server_or_exit(backend, backend_name)
+        models = select_models(backend, required_capabilities=required_caps)
 
     # Interactive options screen
     if interactive:

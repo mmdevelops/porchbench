@@ -37,8 +37,47 @@ def _prompt_models_manually() -> list[str]:
     return models
 
 
-def select_models(backend: InferenceBackend) -> list[str]:
+def _format_model_label(
+    name: str,
+    caps: list[str],
+    required: list[str] | None,
+) -> tuple[str, bool]:
+    """Render a picker label for one model and report whether it qualifies.
+
+    Returns (label, qualifies). `qualifies` is True when the model has
+    every required capability (or when no requirement was given). Labels:
+
+      no caps known            : "model:tag"
+      caps, no requirement     : "model:tag  [tools, vision]"
+      caps, requirement met    : "model:tag  [tools, vision]"
+      caps, requirement missing: "model:tag  [vision]  · missing: tools"
+
+    The `· missing: <caps>` marker is plain text rather than ANSI red
+    because beaupy renders option strings verbatim without rich markup;
+    a textual marker survives the picker without garbling.
+    """
+    badge = f"  [{', '.join(caps)}]" if caps else ""
+    if not required:
+        return f"{name}{badge}", True
+    cap_set = set(caps)
+    missing = [c for c in required if c not in cap_set]
+    if missing:
+        return f"{name}{badge}  · missing: {', '.join(missing)}", False
+    return f"{name}{badge}", True
+
+
+def select_models(
+    backend: InferenceBackend,
+    required_capabilities: list[str] | None = None,
+) -> list[str]:
     """Prompt user to pick one or more models from the backend's available list.
+
+    When `required_capabilities` is set (e.g. ["tools"] for a tool-use suite),
+    models lacking any required capability are sorted to the bottom of the
+    picker and tagged `· missing: <caps>` so the user sees the mismatch at
+    selection time rather than after configuring options. The
+    `check_tool_support_or_exit` preflight still hard-fails if a missing-cap
+    model is selected anyway — defense-in-depth for direct CLI-args use.
 
     Falls back to manual text entry when the server can't be queried for a
     model list (e.g. some openai-compat servers). When the server is reachable
@@ -46,29 +85,50 @@ def select_models(backend: InferenceBackend) -> list[str]:
     user to type a name they don't have pulled.
     """
     try:
-        models = asyncio.run(backend.list_available_models())
+        catalog = asyncio.run(backend.list_available_models_with_capabilities())
     except Exception:
         return _prompt_models_manually()
 
-    if not models:
+    if not catalog:
         console.print(
             "[red]No models available on the server.[/red]\n"
             "Run [bold]ollama pull <model>[/bold] (e.g. qwen3:8b) and retry."
         )
         raise typer.Exit(code=1)
 
-    console.print("[bold]Select model(s)[/bold] (space to toggle, enter to confirm):")
-    selected = select_multiple(
-        options=models,
+    decorated = [
+        (name, *_format_model_label(name, caps, required_capabilities))
+        for name, caps in catalog
+    ]
+    # Qualifying models first (preserve alpha order from the backend),
+    # missing-cap models pushed to the bottom — keeps the relevant
+    # subset directly under the cursor on first open.
+    decorated.sort(key=lambda row: (not row[2], row[0]))
+    labels = [row[1] for row in decorated]
+    names = [row[0] for row in decorated]
+
+    if required_capabilities:
+        console.print(
+            f"[bold]Select model(s)[/bold] (space to toggle, enter to confirm) "
+            f"[dim]· suite needs: {', '.join(required_capabilities)}[/dim]:"
+        )
+    else:
+        console.print("[bold]Select model(s)[/bold] (space to toggle, enter to confirm):")
+    # return_indices avoids parsing model names back out of decorated
+    # labels — the same fragility that bit `_discover_result_files`
+    # before it switched to indices.
+    selected_idx = select_multiple(
+        options=labels,
         minimal_count=1,
-        pagination=len(models) > 15,
+        pagination=len(labels) > 15,
         page_size=15,
+        return_indices=True,
     )
-    if not selected:
+    if not selected_idx:
         console.print("[red]No models selected.[/red]")
         raise typer.Exit(code=1)
 
-    return selected
+    return [names[i] for i in selected_idx]
 
 
 def select_evaluator_model(backend: InferenceBackend) -> str:

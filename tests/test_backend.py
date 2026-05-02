@@ -178,6 +178,80 @@ class TestGetServerHealth:
 
 
 # ---------------------------------------------------------------------------
+# Capability-aware listing — feeds the picker badge + required-cap mode
+# ---------------------------------------------------------------------------
+
+
+class TestListAvailableModelsWithCapabilities:
+    @pytest.mark.asyncio
+    async def test_ollama_pairs_each_model_with_its_capabilities(self):
+        backend = OllamaBackend()
+
+        # show() returns dict-like info with a `capabilities` key per model.
+        async def fake_show(model: str):
+            return {
+                "qwen3:8b": {"capabilities": ["tools", "vision", "thinking"]},
+                "medgemma:4b": {"capabilities": ["vision"]},
+                "naked:1b": {"capabilities": []},
+            }[model]
+
+        mock_client = SimpleNamespace()
+        mock_client.show = fake_show
+
+        with patch.object(
+            OllamaBackend, "client", new_callable=lambda: mock_client,
+        ), patch.object(
+            backend, "list_available_models", new_callable=AsyncMock,
+            return_value=["qwen3:8b", "medgemma:4b", "naked:1b"],
+        ):
+            result = await backend.list_available_models_with_capabilities()
+
+        assert result == [
+            ("qwen3:8b", ["tools", "vision", "thinking"]),
+            ("medgemma:4b", ["vision"]),
+            ("naked:1b", []),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_ollama_show_failure_degrades_to_empty_caps(self):
+        # A corrupt model manifest shouldn't blank the whole picker — that
+        # one model just shows up unbadged.
+        backend = OllamaBackend()
+
+        async def fake_show(model: str):
+            if model == "broken:1b":
+                raise RuntimeError("manifest read failed")
+            return {"capabilities": ["tools"]}
+
+        mock_client = SimpleNamespace()
+        mock_client.show = fake_show
+
+        with patch.object(
+            OllamaBackend, "client", new_callable=lambda: mock_client,
+        ), patch.object(
+            backend, "list_available_models", new_callable=AsyncMock,
+            return_value=["qwen3:8b", "broken:1b"],
+        ):
+            result = await backend.list_available_models_with_capabilities()
+
+        assert result == [("qwen3:8b", ["tools"]), ("broken:1b", [])]
+
+    @pytest.mark.asyncio
+    async def test_openai_compat_returns_models_with_empty_caps(self):
+        # No portable capability probe — surfaces names with empty cap lists
+        # so the picker still works (badges just won't render).
+        backend = OpenAICompatBackend(base_url="http://localhost:1234")
+
+        with patch.object(
+            backend, "list_available_models", new_callable=AsyncMock,
+            return_value=["gpt-3.5-turbo", "llama-3.1-8b"],
+        ):
+            result = await backend.list_available_models_with_capabilities()
+
+        assert result == [("gpt-3.5-turbo", []), ("llama-3.1-8b", [])]
+
+
+# ---------------------------------------------------------------------------
 # `think` passthrough — reasoning-mode toggle for qwen3/deepseek-r1
 # ---------------------------------------------------------------------------
 
