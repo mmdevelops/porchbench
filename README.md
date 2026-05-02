@@ -86,11 +86,11 @@ Pass `--strict` to require the same evaluator model, not just the same rubric.
 
 Does adapting your prompt strategy to model size actually help?
 
-A **strategy** is a system-message wrapper defined in the suite YAML (e.g. `cot` prepends "Think step by step", `direct` prepends "Respond with only the final answer"). The `routing-discovery` suite ships with five: `universal`, `brevity`, `direct`, `cot`, `structured`. The `--strategies` flag on `overnight` runs every prompt through every strategy so `analyze-routes` can find cases where a smaller model paired with the right strategy beats a larger model's default.
+A **strategy** is a system-message wrapper defined in the suite YAML (e.g. `cot` prepends "Think step by step", `direct` prepends "Respond with only the final answer"). The `routing-discovery` suite ships with five: `universal`, `brevity`, `direct`, `cot`, `structured`. The `--strategies` flag on `run` runs every prompt through every strategy so `analyze-routes` can find cases where a smaller model paired with the right strategy beats a larger model's default.
 
 ```bash
 # Run every prompt x strategy combination against the selected models
-porchbench overnight --strategies \
+porchbench run --strategies \
   --suite routing-discovery \
   --model qwen2.5:3b --model qwen2.5:7b
 
@@ -100,7 +100,7 @@ porchbench analyze-routes \
   --result results/<discovery-result-2>.json
 ```
 
-> **Migrating from v0.0.x routes commands?** `routes discover` was consolidated into `overnight --strategies` (same matrix expansion, now under the unified unattended-run command). `routes analyze` was promoted to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
+> **Migrating from v0.0.x routes commands?** `routes discover` was consolidated into `run --strategies` (same matrix expansion, now on the unified benchmark command). `routes analyze` was promoted to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
 
 ### Profile your hardware
 
