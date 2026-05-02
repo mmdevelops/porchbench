@@ -15,9 +15,9 @@ control the suites); not for untrusted agent deployment.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -129,21 +129,45 @@ class SubprocessSandbox(Sandbox):
         env = os.environ.copy()
         env.update(config.env)
 
+        # Async subprocess + asyncio.wait_for for timeout enforcement.
+        # The synchronous `subprocess.run(timeout=...)` path wedges on
+        # Windows: after TerminateProcess fires for the timed-out child,
+        # the parent is still blocked in pipe-drain code that waits on
+        # the now-dead OS handles, occasionally hanging indefinitely.
+        # asyncio's transport-based pipe handling cancels cleanly.
         try:
-            result = subprocess.run(
-                [*cmd_prefix, str(code_path)],
-                capture_output=True,
-                text=True,
-                timeout=config.timeout_s,
+            proc = await asyncio.create_subprocess_exec(
+                *cmd_prefix, str(code_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(workdir),
                 env=env,
             )
+        except Exception as exc:
             return ExecutionResult(
-                stdout=result.stdout,
-                stderr=result.stderr,
-                exit_code=result.returncode,
+                stdout="",
+                stderr=str(exc),
+                exit_code=-1,
             )
-        except subprocess.TimeoutExpired:
+
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=config.timeout_s,
+            )
+            return ExecutionResult(
+                stdout=stdout_bytes.decode("utf-8", errors="replace"),
+                stderr=stderr_bytes.decode("utf-8", errors="replace"),
+                exit_code=proc.returncode if proc.returncode is not None else -1,
+            )
+        except asyncio.TimeoutError:
+            # Kill the child + drain (or short-window-wait if drain itself
+            # hangs after the kill — rare but seen on Windows when the
+            # child has spawned grandchildren that hold the pipe handles).
+            proc.kill()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2)
+            except asyncio.TimeoutError:
+                pass
             return ExecutionResult(
                 stdout="",
                 stderr=f"Execution timed out after {config.timeout_s}s",
@@ -151,6 +175,10 @@ class SubprocessSandbox(Sandbox):
                 timed_out=True,
             )
         except Exception as exc:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
             return ExecutionResult(
                 stdout="",
                 stderr=str(exc),
