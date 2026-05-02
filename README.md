@@ -86,19 +86,21 @@ Pass `--strict` to require the same evaluator model, not just the same rubric.
 
 Does adapting your prompt strategy to model size actually help?
 
-A **strategy** is a system-message wrapper defined in the suite YAML (e.g. `cot` prepends "Think step by step", `direct` prepends "Respond with only the final answer"). The `routing-discovery` suite ships with five: `universal`, `brevity`, `direct`, `cot`, `structured`. Discovery runs every prompt through every strategy so `analyze` can find cases where a smaller model paired with the right strategy beats a larger model's default.
+A **strategy** is a system-message wrapper defined in the suite YAML (e.g. `cot` prepends "Think step by step", `direct` prepends "Respond with only the final answer"). The `routing-discovery` suite ships with five: `universal`, `brevity`, `direct`, `cot`, `structured`. The `--strategies` flag on `overnight` runs every prompt through every strategy so `analyze-routes` can find cases where a smaller model paired with the right strategy beats a larger model's default.
 
 ```bash
 # Run every prompt x strategy combination against the selected models
-porchbench routes discover \
+porchbench overnight --strategies \
   --suite routing-discovery \
   --model qwen2.5:3b --model qwen2.5:7b
 
 # Analyze the results
-porchbench routes analyze \
+porchbench analyze-routes \
   --result results/<discovery-result-1>.json \
   --result results/<discovery-result-2>.json
 ```
+
+> **Migrating from v0.0.x routes commands?** `routes discover` was consolidated into `overnight --strategies` (same matrix expansion, now under the unified unattended-run command). `routes analyze` was promoted to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
 
 ### Profile your hardware
 
@@ -110,7 +112,7 @@ Measures model load/unload times, VRAM footprint, and co-residency capacity — 
 
 ### Run everything overnight
 
-Queue up a full benchmark run before bed or work. porchbench auto-discovers suites, detects which ones need routing discovery vs standard runs, checks your GPU is working, and handles errors without stopping.
+Queue up a full benchmark run before bed or work. porchbench auto-discovers suites, runs them as straight benchmarks by default (one row per prompt), checks your GPU is working, and handles errors without stopping. Add `--strategies` to expand strategies-bearing suites into the prompt × strategy × model matrix instead of running them as a baseline.
 
 ```bash
 porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
@@ -131,7 +133,7 @@ Suites ship bundled with the package and are referenced by name:
 | `routing-discovery` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
 | `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state. Ships 4 tool-planning strategies (universal, cot, direct, structured) |
 
-**Which suites support `routes discover`?** Only suites that define a `strategies:` block in their YAML — currently `routing-discovery` and `tool-use`. The strategy set is chosen per-suite because different domains have different strategy × scale interactions worth measuring: CoT helps reasoning, a "numbered plan" preamble helps tool-use planning, neither would meaningfully differentiate factual recall. `coding-basics` and `cross-domain` intentionally stick to a single default prompt — they answer "how good is this model at X" rather than "which prompt strategy unlocks the smaller model."
+**Which suites benefit from `overnight --strategies`?** Only suites that define a `strategies:` block in their YAML — currently `routing-discovery` and `tool-use`. The strategy set is chosen per-suite because different domains have different strategy × scale interactions worth measuring: CoT helps reasoning, a "numbered plan" preamble helps tool-use planning, neither would meaningfully differentiate factual recall. `coding-basics` and `cross-domain` intentionally stick to a single default prompt — they answer "how good is this model at X" rather than "which prompt strategy unlocks the smaller model." Without `--strategies`, every suite (including the strategies-bearing ones) runs as a straight benchmark.
 
 **Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `porchbench` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
 

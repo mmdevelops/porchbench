@@ -171,9 +171,9 @@ def select_suite(
 
     `filter_predicate`, when provided, narrows the picker to suites for which
     it returns True. `filter_description` names the filtered class for the
-    "no suites matched" error (e.g. "suite with strategies"). Used by
-    commands like `routes discover` whose semantics require a suite property
-    (e.g. a non-empty `strategies:` block).
+    "no suites matched" error (e.g. "suite with strategies"). Available for
+    callers whose semantics require a suite property; the v0.1 commands all
+    accept any suite at picker time.
     """
     from porchbench.assets import resolve_suite_dir
 
@@ -322,8 +322,8 @@ def select_results(
     `filter_predicate`, when provided, narrows the picker to files for which
     it returns True. `filter_description` names the filtered class for the
     "no files matched" error (e.g. "routing-discovery result"). Used by
-    commands like `routes analyze` that only operate on a subset of run
-    JSONs and want to avoid the user picking an incompatible file.
+    `analyze-routes` to gate the picker to result files that actually
+    carry per-prompt strategy tags.
     """
     if not result_dir.is_dir():
         console.print(f"[red]Results directory not found: {result_dir}[/red]")
@@ -413,6 +413,7 @@ _OVERNIGHT_TOGGLES = [
     ("Profile VRAM during inference", "profile_vram"),
     ("Resume (skip completed)", "resume"),
     ("Verbose output", "verbose"),
+    ("Run all strategies (routing matrix; suites with a `strategies:` block only)", "strategies"),
 ]
 
 

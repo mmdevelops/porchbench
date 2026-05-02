@@ -71,6 +71,27 @@ def _portable_suite_id(path: Path) -> str:
         return path.name
 
 
+def suite_has_strategies(path: Path) -> bool:
+    """Cheap YAML peek: does the suite define a non-empty `strategies:` block?
+
+    Used by `overnight --strategies` to detect "you toggled the matrix
+    expansion but the suite has no strategies block to expand against"
+    — single-suite single-error, multi-suite per-suite warning + skip.
+    Reads only as much YAML as needed; tolerant of unparseable files
+    (returns False — caller can still attempt to load the suite later
+    and surface the parse error through the normal load path).
+    """
+    try:
+        import yaml as _yaml
+        data = _yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, _yaml.YAMLError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    strategies = data.get("strategies")
+    return bool(strategies)
+
+
 def discover_suites(suite_dir: Path) -> list[Path]:
     """Find all .yaml suite files in a directory, sorted by name."""
     if not suite_dir.is_dir():

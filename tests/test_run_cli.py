@@ -634,7 +634,7 @@ class TestSelectModelsEmptyServer:
         from porchbench.interactive import select_models
 
         backend = MagicMock()
-        backend.list_available_models = AsyncMock(return_value=[])
+        backend.list_available_models_with_capabilities = AsyncMock(return_value=[])
         with pytest.raises(typer.Exit) as exc_info:
             select_models(backend)
         assert exc_info.value.exit_code == 1
@@ -644,7 +644,9 @@ class TestSelectModelsEmptyServer:
         from porchbench.interactive import select_models
 
         backend = MagicMock()
-        backend.list_available_models = AsyncMock(side_effect=RuntimeError("no listing"))
+        backend.list_available_models_with_capabilities = AsyncMock(
+            side_effect=RuntimeError("no listing"),
+        )
         with patch("porchbench.interactive._prompt_models_manually", return_value=["m"]):
             out = select_models(backend)
         assert out == ["m"]

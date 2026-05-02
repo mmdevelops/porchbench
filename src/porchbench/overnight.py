@@ -1,8 +1,11 @@
 """Overnight orchestration: unattended multi-suite benchmark runs.
 
-Discovers suites, classifies them (standard vs routing discovery),
-builds an execution plan, runs preflight checks, and executes with
-error resilience. Designed for hobbyists queuing benchmarks overnight.
+Builds an execution plan, runs preflight checks, and executes one
+model at a time with error resilience. Default dispatch is baseline
+(one row per prompt, no strategy system message). Opt into the
+strategy matrix (prompt × strategy × model fan-out) per-task via
+`OvernightTask.expand_strategies`, which the CLI surfaces as
+`overnight --strategies` and an options-screen toggle.
 """
 
 from __future__ import annotations
@@ -21,8 +24,8 @@ from porchbench.backend import InferenceBackend, OllamaBackend
 from porchbench.profiler import detect_gpu
 from porchbench.routing import run_discovery
 from porchbench.runner import run_suite
-from porchbench.schemas import RunResult, Suite, SuiteReference
-from porchbench.suite import load_suite, make_suite_reference
+from porchbench.schemas import RunResult, Strategy, Suite, SuiteReference
+from porchbench.suite import load_suite, make_suite_reference, suite_has_strategies
 
 console = Console()
 
@@ -41,7 +44,7 @@ class OvernightTask:
     suite_path: Path
     suite: Suite
     suite_ref: SuiteReference
-    dispatch_type: str  # 'standard' | 'discovery'
+    expand_strategies: bool  # fan out across suite.strategies (matrix); False = baseline
     models: list[str]
     repeats: int
     prompt_count: int
@@ -64,17 +67,6 @@ class OvernightResult:
 
 
 # ---------------------------------------------------------------------------
-# Suite discovery and classification
-# ---------------------------------------------------------------------------
-
-
-
-def classify_suite(suite: Suite) -> str:
-    """Return 'discovery' if suite has strategies, else 'standard'."""
-    return "discovery" if suite.strategies else "standard"
-
-
-# ---------------------------------------------------------------------------
 # Plan building
 # ---------------------------------------------------------------------------
 
@@ -84,8 +76,18 @@ def build_plan(
     models: list[str],
     repeats: int,
     option_overrides: dict[str, object] | None = None,
+    expand_strategies: bool = False,
 ) -> list[OvernightTask]:
-    """Load suites, classify them, and build an ordered task list.
+    """Load suites, build an ordered task list, optionally expanding strategies.
+
+    With `expand_strategies=False` (the default) every task is baseline:
+    one inference call per (prompt, model, repeat). With
+    `expand_strategies=True`, suites that carry a non-empty `strategies:`
+    block fan out into the prompt × strategy × model matrix used for
+    routing analysis. Mixed plans are supported — strategy-bearing suites
+    expand; non-strategy suites silently degrade to baseline (the
+    single-suite "user clearly expected expansion that can't happen"
+    case is caught by the CLI before reaching this function).
 
     `option_overrides`, when provided, is layered onto each suite's
     `defaults.options` before tasks are built — used by the CLI's `--set`
@@ -99,11 +101,13 @@ def build_plan(
         if option_overrides:
             suite = apply_option_overrides(suite, option_overrides)
         suite_ref = make_suite_reference(path, suite)
-        dispatch = classify_suite(suite)
         n_prompts = len(suite.prompts)
         n_strategies = max(len(suite.strategies), 1)
 
-        if dispatch == "discovery":
+        # Per-task expansion decision: requested AND suite supports it.
+        task_expands = expand_strategies and bool(suite.strategies)
+
+        if task_expands:
             run_count = n_prompts * n_strategies * len(models)
             task_repeats = 1
         else:
@@ -114,7 +118,7 @@ def build_plan(
             suite_path=path,
             suite=suite,
             suite_ref=suite_ref,
-            dispatch_type=dispatch,
+            expand_strategies=task_expands,
             models=models,
             repeats=task_repeats,
             prompt_count=n_prompts,
@@ -393,6 +397,28 @@ async def run_preflight(
 # ---------------------------------------------------------------------------
 
 
+def _build_strategy_table(strategies: dict[str, Strategy]) -> Table:
+    """Pre-run summary of strategy prompts that an `--strategies` task will use.
+
+    Surfaces what each strategy *does* (its system message) before the user
+    waits for inference. Empty system messages — the suite-default baseline —
+    render as a labelled placeholder rather than a blank cell. Long messages
+    truncate at 80 chars to keep the table from wrapping in a typical
+    terminal.
+    """
+    table = Table(title="Strategies", title_style="bold", show_lines=False)
+    table.add_column("Name", style="bold")
+    table.add_column("System message")
+    for name, strat in strategies.items():
+        msg = strat.system_message.strip()
+        if not msg:
+            msg = "[dim](suite default — no system-message override)[/dim]"
+        elif len(msg) > 80:
+            msg = msg[:77] + "..."
+        table.add_row(name, msg)
+    return table
+
+
 def print_plan(
     plan: list[OvernightTask],
     models: list[str],
@@ -405,27 +431,43 @@ def print_plan(
     history are flagged in the coverage line rather than estimated against
     a fabricated default.
     """
+    any_expansion = any(t.expand_strategies for t in plan)
+
     table = Table(title="Overnight Plan", title_style="bold")
     table.add_column("Suite", style="bold")
-    table.add_column("Type")
     table.add_column("Prompts", justify="right")
-    table.add_column("Strategies", justify="right")
+    if any_expansion:
+        # Conditional column — surfaces the per-task expansion state
+        # (count for matrix-expanded tasks, "baseline" for the rest)
+        # so a mixed plan reads at a glance which suites fan out.
+        table.add_column("Strategies", justify="right")
     table.add_column("Repeats", justify="right")
     table.add_column("Total runs", justify="right")
 
     for task in plan:
-        repeats_str = str(task.repeats) if task.dispatch_type == "standard" else "n/a"
-        strategies_str = str(task.strategy_count) if task.dispatch_type == "discovery" else "-"
-        table.add_row(
+        repeats_str = str(task.repeats) if not task.expand_strategies else "n/a"
+        row = [
             task.suite.suite.name,
-            task.dispatch_type,
             str(task.prompt_count),
-            strategies_str,
-            repeats_str,
-            str(task.run_count),
-        )
+        ]
+        if any_expansion:
+            row.append(
+                str(task.strategy_count) if task.expand_strategies
+                else "[dim]baseline[/dim]"
+            )
+        row.extend([repeats_str, str(task.run_count)])
+        table.add_row(*row)
 
     console.print(table)
+
+    # When at least one task expands, render the strategies it'll use so
+    # the user sees what their `--strategies` toggle actually means
+    # before confirming the plan.
+    if any_expansion:
+        for task in plan:
+            if task.expand_strategies:
+                console.print(_build_strategy_table(task.suite.strategies))
+
     console.print(f"Models: {', '.join(models)}")
 
     total_runs = sum(t.run_count for t in plan)
@@ -485,8 +527,11 @@ async def execute_plan(
     results: list[OvernightResult] = []
 
     for task in plan:
-        if task.dispatch_type == "discovery":
-            # Discovery: single call with all models
+        if task.expand_strategies:
+            # Strategy-matrix dispatch: single call across all models, fans
+            # out internally to prompt × strategy × model cells. Reached
+            # only when build_plan saw both --strategies AND a non-empty
+            # suite.strategies block.
             if on_task_start:
                 on_task_start(task, "(all models)", None)
 

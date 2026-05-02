@@ -11,7 +11,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from porchbench.cli import _build_strategy_table
+from porchbench.overnight import _build_strategy_table
 from porchbench.schemas import Strategy
 
 
@@ -60,12 +60,13 @@ def test_strategy_table_preserves_dict_order():
 
 
 # ---------------------------------------------------------------------------
-# _suite_has_strategies — picker filter for `routes discover`
+# suite_has_strategies — predicate that drives `overnight --strategies`
+# eligibility checks
 # ---------------------------------------------------------------------------
 
 
 def test_suite_has_strategies_true_for_strategy_block(tmp_path):
-    from porchbench.cli import _suite_has_strategies
+    from porchbench.suite import suite_has_strategies
 
     p = tmp_path / "with_strats.yaml"
     p.write_text(
@@ -77,14 +78,15 @@ def test_suite_has_strategies_true_for_strategy_block(tmp_path):
         "prompts: []\n",
         encoding="utf-8",
     )
-    assert _suite_has_strategies(p) is True
+    assert suite_has_strategies(p) is True
 
 
 def test_suite_has_strategies_false_when_block_missing(tmp_path):
     """A regular eval suite (coding-basics, cross-domain) has no strategies
-    block — routes discover would synthesize a degenerate baseline. Filter
-    must reject these."""
-    from porchbench.cli import _suite_has_strategies
+    block — `overnight --strategies` would have nothing to expand. Predicate
+    must report False so the CLI can hard-fail (single-suite) or warn-and-
+    skip (multi-suite)."""
+    from porchbench.suite import suite_has_strategies
 
     p = tmp_path / "no_strats.yaml"
     p.write_text(
@@ -93,13 +95,13 @@ def test_suite_has_strategies_false_when_block_missing(tmp_path):
         "prompts: []\n",
         encoding="utf-8",
     )
-    assert _suite_has_strategies(p) is False
+    assert suite_has_strategies(p) is False
 
 
 def test_suite_has_strategies_false_when_block_empty(tmp_path):
-    """`strategies: {}` (or null) is the same as no strategies — synthetic
-    universal baseline territory. Reject."""
-    from porchbench.cli import _suite_has_strategies
+    """`strategies: {}` (or null) is the same as no strategies — nothing to
+    expand. Reject."""
+    from porchbench.suite import suite_has_strategies
 
     p = tmp_path / "empty_strats.yaml"
     p.write_text(
@@ -109,12 +111,12 @@ def test_suite_has_strategies_false_when_block_empty(tmp_path):
         "prompts: []\n",
         encoding="utf-8",
     )
-    assert _suite_has_strategies(p) is False
+    assert suite_has_strategies(p) is False
 
 
 def test_suite_has_strategies_false_for_unparseable_yaml(tmp_path):
-    from porchbench.cli import _suite_has_strategies
+    from porchbench.suite import suite_has_strategies
 
     p = tmp_path / "broken.yaml"
     p.write_text("this is: : not valid : yaml :\n", encoding="utf-8")
-    assert _suite_has_strategies(p) is False
+    assert suite_has_strategies(p) is False

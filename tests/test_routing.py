@@ -301,11 +301,11 @@ def _make_tool_use_discovery_prompt():
 
 
 # ---------------------------------------------------------------------------
-# `routes analyze` CLI: attribute access on RunResult
+# `analyze-routes` CLI: attribute access on RunResult
 # ---------------------------------------------------------------------------
 
 
-class TestRoutesAnalyzeCli:
+class TestAnalyzeRoutesCli:
     """Regression for AttributeError on non-routing detection.
 
     The CLI used `r.prompt_results` and `r.metadata.run_id` — neither field
@@ -328,11 +328,11 @@ class TestRoutesAnalyzeCli:
         path.write_text(non_routing_run.model_dump_json(), encoding="utf-8")
 
         runner = CliRunner()
-        res = runner.invoke(app, ["routes", "analyze", "-r", str(path)])
+        res = runner.invoke(app, ["analyze-routes", "-r", str(path)])
 
         # Command exits 1 with the friendly error, not with a Python traceback
         assert res.exit_code == 1
-        assert "routes analyze requires results" in res.output
+        assert "analyze-routes requires results" in res.output
         assert "AttributeError" not in res.output
         # Error names the file and model so the user knows what to remove
         assert "non_routing.json" in res.output
@@ -354,7 +354,7 @@ class TestRoutesAnalyzeCli:
         path.write_text(run.model_dump_json(), encoding="utf-8")
 
         runner = CliRunner()
-        res = runner.invoke(app, ["routes", "analyze", "-r", str(path)])
+        res = runner.invoke(app, ["analyze-routes", "-r", str(path)])
 
         assert res.exit_code == 1
         assert "needs at least 2 distinct models" in res.output
@@ -381,7 +381,7 @@ class TestRoutesAnalyzeCli:
             (iso_results / "2026-04-30T01-00-00_coding-basics_m1.json").write_text(
                 non_routing.model_dump_json(), encoding="utf-8",
             )
-            res = runner.invoke(app, ["routes", "analyze"])
+            res = runner.invoke(app, ["analyze-routes"])
 
         assert res.exit_code == 1
         assert "No routing-discovery result files found" in res.output
@@ -408,7 +408,7 @@ class TestRoutesAnalyzeCli:
             (iso_results / "2026-04-28T16-49-00_routing-discovery_gemma4-e2b.json").write_text(
                 non_routing_named_routing.model_dump_json(), encoding="utf-8",
             )
-            res = runner.invoke(app, ["routes", "analyze"])
+            res = runner.invoke(app, ["analyze-routes"])
 
         # The file was filtered out (content check rejected it), so no
         # routing-discovery results are available — friendly empty message
@@ -430,7 +430,7 @@ class TestRoutesAnalyzeCli:
 
         runner = CliRunner()
         res = runner.invoke(app, [
-            "routes", "analyze",
+            "analyze-routes",
             "-r", str(tmp_path / "a.json"),
             "-r", str(tmp_path / "b.json"),
             "--default-strategy", "made-up",

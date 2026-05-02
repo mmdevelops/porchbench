@@ -1,9 +1,11 @@
 """Routing discovery: strategy expansion, correctness checking, and analysis.
 
 Implements the routing discovery pipeline from DESIGN-ROUTING.md:
-1. Expand prompts across strategies (routes discover)
+1. Expand prompts across strategies (run_discovery, surfaced as
+   `overnight --strategies`)
 2. Check correctness against expected answers
-3. Analyze the result matrix to find routing patterns (routes analyze)
+3. Analyze the result matrix to find routing patterns (analyze_routes,
+   surfaced as the top-level `analyze-routes` command)
 """
 
 from __future__ import annotations

@@ -11,7 +11,6 @@ from porchbench.overnight import (
     OvernightTask,
     _seconds_per_prompt_from_history,
     build_plan,
-    classify_suite,
     estimate_duration,
     estimate_duration_from_history,
     estimate_single_suite_duration_from_history,
@@ -59,23 +58,6 @@ def _make_suite(name: str, n_prompts: int, strategies: dict | None = None) -> Su
     )
 
 
-class TestClassifySuite:
-    def test_standard_suite_no_strategies(self):
-        suite = _make_suite("basic", 10)
-        assert classify_suite(suite) == "standard"
-
-    def test_discovery_suite_with_strategies(self):
-        suite = _make_suite("routing", 10, strategies={
-            "universal": Strategy(),
-            "brevity": Strategy(system_message="Be brief."),
-        })
-        assert classify_suite(suite) == "discovery"
-
-    def test_empty_strategies_is_standard(self):
-        suite = _make_suite("basic", 10, strategies={})
-        assert classify_suite(suite) == "standard"
-
-
 class TestDiscoverSuites:
     def test_finds_yaml_files(self, tmp_path):
         (tmp_path / "a.yaml").write_text("suite: {}")
@@ -104,7 +86,7 @@ class TestDiscoverSuites:
 class TestBuildPlan:
     @patch("porchbench.overnight.load_suite")
     @patch("porchbench.overnight.make_suite_reference")
-    def test_standard_suite_plan(self, mock_ref, mock_load):
+    def test_baseline_suite_plan(self, mock_ref, mock_load):
         suite = _make_suite("coding", 10)
         mock_load.return_value = suite
         mock_ref.return_value = MagicMock()
@@ -113,13 +95,16 @@ class TestBuildPlan:
 
         assert len(plan) == 1
         task = plan[0]
-        assert task.dispatch_type == "standard"
+        assert task.expand_strategies is False
         assert task.repeats == 3
         assert task.run_count == 10 * 2 * 3  # prompts * models * repeats
 
     @patch("porchbench.overnight.load_suite")
     @patch("porchbench.overnight.make_suite_reference")
-    def test_discovery_suite_plan(self, mock_ref, mock_load):
+    def test_strategies_suite_baseline_when_flag_off(self, mock_ref, mock_load):
+        # Suite has strategies, but caller didn't pass expand_strategies=True.
+        # Baseline by default — strategies stay dormant. Mirrors the v0.1
+        # default-to-safe stance: expansion is opt-in.
         suite = _make_suite("routing", 20, strategies={
             "universal": Strategy(),
             "brevity": Strategy(system_message="Brief."),
@@ -130,31 +115,59 @@ class TestBuildPlan:
 
         plan = build_plan([Path("suites/routing-discovery.yaml")], ["model-a"], repeats=3)
 
-        assert len(plan) == 1
+        assert plan[0].expand_strategies is False
+        assert plan[0].run_count == 20 * 1 * 3  # baseline shape, not the matrix
+
+    @patch("porchbench.overnight.load_suite")
+    @patch("porchbench.overnight.make_suite_reference")
+    def test_strategies_suite_matrix_when_flag_on(self, mock_ref, mock_load):
+        suite = _make_suite("routing", 20, strategies={
+            "universal": Strategy(),
+            "brevity": Strategy(system_message="Brief."),
+            "cot": Strategy(system_message="Think step by step."),
+        })
+        mock_load.return_value = suite
+        mock_ref.return_value = MagicMock()
+
+        plan = build_plan(
+            [Path("suites/routing-discovery.yaml")], ["model-a"], repeats=3,
+            expand_strategies=True,
+        )
+
         task = plan[0]
-        assert task.dispatch_type == "discovery"
-        assert task.repeats == 1  # discovery ignores repeats
+        assert task.expand_strategies is True
+        assert task.repeats == 1  # matrix expansion replaces repeats
         assert task.strategy_count == 3
         assert task.run_count == 20 * 3 * 1  # prompts * strategies * models
 
     @patch("porchbench.overnight.load_suite")
     @patch("porchbench.overnight.make_suite_reference")
-    def test_mixed_plan(self, mock_ref, mock_load):
-        standard = _make_suite("coding", 10)
-        discovery = _make_suite("routing", 5, strategies={"a": Strategy(), "b": Strategy()})
+    def test_mixed_plan_with_flag_on_only_strategies_suite_expands(
+        self, mock_ref, mock_load,
+    ):
+        # When --strategies is set but a suite has no strategies block,
+        # that suite quietly falls back to baseline; the strategies suite
+        # still expands. Matches the multi-suite "warn + skip" semantics.
+        baseline_suite = _make_suite("coding", 10)
+        strategies_suite = _make_suite("routing", 5, strategies={
+            "a": Strategy(), "b": Strategy(),
+        })
 
-        mock_load.side_effect = [standard, discovery]
+        mock_load.side_effect = [baseline_suite, strategies_suite]
         mock_ref.return_value = MagicMock()
 
         plan = build_plan(
             [Path("suites/coding-basics.yaml"), Path("suites/routing-discovery.yaml")],
             ["m1", "m2"],
             repeats=2,
+            expand_strategies=True,
         )
 
         assert len(plan) == 2
-        assert plan[0].dispatch_type == "standard"
-        assert plan[1].dispatch_type == "discovery"
+        assert plan[0].expand_strategies is False  # no strategies block
+        assert plan[0].run_count == 10 * 2 * 2  # baseline: prompts * models * repeats
+        assert plan[1].expand_strategies is True  # has strategies, flag honored
+        assert plan[1].run_count == 5 * 2 * 2  # matrix: prompts * strategies * models
 
 
 class TestEstimateDuration:
@@ -245,7 +258,7 @@ def _make_task(suite_name: str, models: list[str], run_count: int) -> OvernightT
         suite_path=Path(f"{suite_name}.yaml"),
         suite=suite,
         suite_ref=suite_ref,
-        dispatch_type="standard",
+        expand_strategies=False,
         models=models,
         repeats=1,
         prompt_count=run_count // len(models),

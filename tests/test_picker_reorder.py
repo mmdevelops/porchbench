@@ -82,20 +82,22 @@ class TestRunPickerReorder:
 
 
 # ---------------------------------------------------------------------------
-# `porchbench routes discover`
+# ---------------------------------------------------------------------------
+# `porchbench overnight --strategies` strategy-matrix path
+# (replaces the deleted `routes discover` command)
 # ---------------------------------------------------------------------------
 
 
-class TestRoutesDiscoverPickerReorder:
-    def test_tool_use_strategies_suite_passes_tools_requirement(self):
-        # tool-use.yaml carries both `strategies:` and `mode: tool-use` prompts,
-        # so it satisfies the routes-discover suite filter and triggers the
-        # capability requirement at the same time.
+class TestOvernightStrategiesPath:
+    def test_strategies_flag_with_strategies_suite_passes_through(self):
+        # tool-use carries both `strategies:` and `mode: tool-use` prompts,
+        # so --strategies + this suite reaches the model picker (no early
+        # exit) and the picker still gets the tools requirement.
         captured: dict = {}
         with (
             patch(
-                "porchbench.interactive.select_suite",
-                return_value=find_suite("tool-use"),
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("tool-use")],
             ),
             patch(
                 "porchbench.interactive.select_models",
@@ -104,33 +106,32 @@ class TestRoutesDiscoverPickerReorder:
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["routes", "discover"])
+            result = runner.invoke(app, ["overnight", "--strategies"])
 
         assert result.exit_code == 99, result.output
         assert captured["required_capabilities"] == ["tools"]
 
-    def test_text_strategies_suite_passes_empty_requirement(self):
-        captured: dict = {}
+    def test_strategies_flag_with_no_strategies_single_suite_hard_fails(self):
+        # Single-suite + --strategies + suite has no strategies block:
+        # unambiguously wrong intent. CLI hard-fails before reaching the
+        # model picker, with a clear message naming the suite.
         with (
             patch(
-                "porchbench.interactive.select_suite",
-                return_value=find_suite("routing-discovery"),
-            ),
-            patch(
-                "porchbench.interactive.select_models",
-                side_effect=_capture_models_kwargs(captured),
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("coding-basics")],
             ),
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["routes", "discover"])
+            result = runner.invoke(app, ["overnight", "--strategies"])
 
-        assert result.exit_code == 99, result.output
-        assert captured["required_capabilities"] == []
+        assert result.exit_code == 1, result.output
+        assert "no `strategies:` block" in result.output
+        assert "coding-basics.yaml" in result.output
 
 
 # ---------------------------------------------------------------------------
-# `porchbench overnight`
+# `porchbench overnight` (baseline path, no --strategies)
 # ---------------------------------------------------------------------------
 
 

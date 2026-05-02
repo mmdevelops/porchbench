@@ -37,7 +37,7 @@ from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBack
 from porchbench.display import format_validation_badge
 from porchbench.errors import UserError, load_json_model
 from porchbench.runner import find_completed_prompt_ids, result_path_for, run_suite
-from porchbench.schemas import PromptResult, RunResult, Scorecard, Strategy
+from porchbench.schemas import PromptResult, RunResult, Scorecard
 from porchbench.suite import load_suite, make_suite_reference
 
 app = typer.Typer(
@@ -45,12 +45,38 @@ app = typer.Typer(
     help="Deterministic benchmarking of local LLMs.",
     no_args_is_help=True,
 )
-routes_app = typer.Typer(
-    name="routes",
-    help="Find which model handles each prompt type best.",
-    no_args_is_help=True,
-)
 console = Console()
+
+
+# Migration breadcrumb for the removed `routes` subgroup. `routes discover`
+# was consolidated into `overnight --strategies`; `routes analyze` was
+# promoted to top-level `analyze-routes`. The shim costs ~20 LOC and
+# saves users scripting against the old CLI from a bare "no such
+# command" — pre-1.0 stance is no compatibility shim, but a migration
+# message is good citizenship.
+_routes_removed_app = typer.Typer(
+    name="routes",
+    help="Removed in v0.1 — see migration messages below.",
+    hidden=True,
+)
+
+
+@_routes_removed_app.command("discover")
+def _routes_discover_removed() -> None:
+    console.print(
+        "[yellow]`routes discover` was removed in v0.1.[/yellow] "
+        "Use [bold]porchbench overnight --strategies[/bold] for the same matrix expansion."
+    )
+    raise typer.Exit(code=2)
+
+
+@_routes_removed_app.command("analyze")
+def _routes_analyze_removed() -> None:
+    console.print(
+        "[yellow]`routes analyze` was renamed in v0.1.[/yellow] "
+        "Use [bold]porchbench analyze-routes[/bold] (now a top-level command)."
+    )
+    raise typer.Exit(code=2)
 
 
 def construct_backend(
@@ -87,27 +113,6 @@ def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
         raise typer.Exit(code=1)
 
 
-def _suite_has_strategies(path: Path) -> bool:
-    """Cheap YAML peek: does the suite define a non-empty `strategies:` block?
-
-    `routes discover` against a suite without strategies is degenerate —
-    `run_discovery` synthesizes a single `universal` baseline, which is just
-    a slower `porchbench run` with a different filename pattern. Filtering
-    the suite picker to strategy-bearing suites prevents that footgun
-    without disabling the picker for power users (who can still pass
-    `--suite` explicitly).
-    """
-    try:
-        import yaml as _yaml
-        data = _yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, _yaml.YAMLError):
-        return False
-    if not isinstance(data, dict):
-        return False
-    strategies = data.get("strategies")
-    return bool(strategies)
-
-
 def _is_routing_discovery_result(path: Path) -> bool:
     """Cheap content check: does this result file carry strategy tags?
 
@@ -126,28 +131,6 @@ def _is_routing_discovery_result(path: Path) -> bool:
         return False
     results = data.get("results") or []
     return bool(results) and results[0].get("strategy") is not None
-
-
-def _build_strategy_table(strategies: dict[str, Strategy]) -> Table:
-    """Pre-run summary of routes-discover strategy prompts.
-
-    Surfaces what each strategy *does* (its system message) before the user
-    waits for inference. Empty system messages — the suite-default baseline —
-    render as a labelled placeholder rather than a blank cell. Long messages
-    truncate at 80 chars to keep the table from wrapping in a typical
-    terminal.
-    """
-    table = Table(title="Strategies", title_style="bold", show_lines=False)
-    table.add_column("Name", style="bold")
-    table.add_column("System message")
-    for name, strat in strategies.items():
-        msg = strat.system_message.strip()
-        if not msg:
-            msg = "[dim](suite default — no system-message override)[/dim]"
-        elif len(msg) > 80:
-            msg = msg[:77] + "..."
-        table.add_row(name, msg)
-    return table
 
 
 def parse_set_overrides(items: list[str] | None) -> dict[str, object]:
@@ -1032,128 +1015,11 @@ def compare(
     print_comparison_table(runs, scorecards, seed=seed)
 
 
-@routes_app.command("discover")
-def discover_routes(
-    suite_path: Annotated[
-        Path | None,
-        typer.Option("--suite", "-s", help="Suite name (e.g. 'routing-discovery') or path to a YAML file. Interactive picker if omitted."),
-    ] = None,
-    models: Annotated[
-        list[str] | None,
-        typer.Option("--model", "-m", help="Model name(s). Repeat for each. Interactive picker if omitted."),
-    ] = None,
-    backend_name: Annotated[
-        str,
-        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
-    ] = "ollama",
-    host: Annotated[
-        str | None,
-        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
-    ] = None,
-    base_url: Annotated[
-        str | None,
-        typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
-    ] = None,
-    api_key: Annotated[
-        str | None,
-        typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
-    ] = None,
-    output_dir: Annotated[
-        Path,
-        typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
-    ] = Path("results"),
-) -> None:
-    """Run all prompt x strategy x model combinations to map capabilities."""
-    from porchbench.interactive import select_models, select_suite
-    from porchbench.routing import count_discovery_runs, run_discovery
-    from porchbench.suite import required_capabilities_for_suite
-
-    if suite_path is None:
-        # Filter to suites that actually define strategies — a no-strategies
-        # suite makes `run_discovery` synthesize a single universal baseline,
-        # which is degenerate. Power users can still pass `--suite path/to/x`
-        # explicitly to bypass.
-        suite_path = select_suite(
-            filter_predicate=_suite_has_strategies,
-            filter_description="suite with strategies (required for routes discover)",
-        )
-
-    try:
-        suite_path = find_suite(suite_path)
-    except FileNotFoundError as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
-
-    # Load suite before the model picker so required-cap badges can render
-    # against the actual suite contents (mirrors `run` ordering).
-    try:
-        suite = load_suite(suite_path)
-    except Exception as exc:
-        console.print(f"[red]Failed to load suite: {exc}[/red]")
-        raise typer.Exit(code=1)
-
-    if models is None:
-        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-        check_server_or_exit(backend, backend_name)
-        models = select_models(
-            backend,
-            required_capabilities=required_capabilities_for_suite(suite),
-        )
-
-    suite_ref = make_suite_reference(suite_path, suite)
-    total = count_discovery_runs(suite, models)
-
-    console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
-    console.print(f"Prompts: {len(suite.prompts)}")
-    if suite.strategies:
-        console.print(f"Strategies: {len(suite.strategies)}")
-    else:
-        console.print("Strategies: 1 ([dim]universal — synthetic baseline[/dim])")
-    console.print(f"Models: {', '.join(models)}")
-    console.print(f"Total runs: [bold]{total}[/bold]")
-    console.print()
-
-    if suite.strategies:
-        console.print(_build_strategy_table(suite.strategies))
-        console.print()
-
-    backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-    check_server_or_exit(backend, backend_name)
-    check_models_or_exit(backend, models, backend_name)
-    check_tool_support_or_exit(backend, models, suite, backend_name)
-
-    results = asyncio.run(
-        run_discovery(
-            suite, suite_ref, models, backend=backend, output_dir=output_dir,
-            suite_dir=suite_path.parent,
-        )
-    )
-
-    # Print summary per model
-    for run in results:
-        correct_count = sum(1 for r in run.results if r.correct is True)
-        total_checked = sum(1 for r in run.results if r.correct is not None)
-        line = (
-            f"\n[bold]{run.run.model.name}[/bold]: "
-            f"{correct_count}/{total_checked} correct, "
-            f"{run.summary.avg_tokens_per_second or 0:.1f} avg tok/s"
-        )
-        # Tool-use cells carry sandbox validator outcomes — surface the
-        # pass-rate so users see, at a glance, how many ran-to-completion
-        # cells actually produced spec-compliant output. Skipped silently
-        # for text-only suites where validation_passed is always None.
-        validated = [r for r in run.results if r.validation_passed is not None]
-        if validated:
-            passed = sum(1 for r in validated if r.validation_passed)
-            line += f", {passed}/{len(validated)} validated"
-        console.print(line)
-
-
-@routes_app.command("analyze")
+@app.command("analyze-routes")
 def analyze_routes_cmd(
     result_paths: Annotated[
         list[Path] | None,
-        typer.Option("--result", "-r", help="Routing discovery result files. Interactive picker if omitted."),
+        typer.Option("--result", "-r", help="Result files from `overnight --strategies`. Interactive picker if omitted."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -1174,7 +1040,7 @@ def analyze_routes_cmd(
         ),
     ] = None,
 ) -> None:
-    """Analyze discovery results to find optimal routing strategies."""
+    """Analyze `overnight --strategies` results to find optimal routing strategies."""
     from porchbench.routing import analyze_routes
 
     # Interactive selection when args omitted. Prefix with a usage hint so
@@ -1186,9 +1052,9 @@ def analyze_routes_cmd(
     if result_paths is None:
         from porchbench.interactive import select_results
         console.print(
-            "[bold]routes analyze[/bold] is cross-model — "
+            "[bold]analyze-routes[/bold] is cross-model — "
             "pick [bold]≥2 routing-discovery results from different models[/bold] "
-            "(same suite, run via [cyan]porchbench routes discover[/cyan])."
+            "(same suite, run via [cyan]porchbench overnight --strategies[/cyan])."
         )
         result_paths = select_results(
             filter_predicate=_is_routing_discovery_result,
@@ -1217,11 +1083,11 @@ def analyze_routes_cmd(
             for r in non_routing
         )
         console.print(
-            f"[red]routes analyze requires results produced by `porchbench routes discover` "
+            f"[red]analyze-routes requires results produced by `porchbench overnight --strategies` "
             f"(prompts must carry a strategy tag). These files have no strategy data:\n  "
             f"{offenders}\n"
-            f"If you intended to run discovery, use `porchbench routes discover -s <suite>` "
-            f"(not `porchbench run`).[/red]"
+            f"If you intended to run a strategy matrix, use `porchbench overnight --strategies "
+            f"-s <suite>` (not `porchbench run`).[/red]"
         )
         raise typer.Exit(code=1)
 
@@ -1234,10 +1100,10 @@ def analyze_routes_cmd(
     if len(distinct_models) < 2:
         only = next(iter(distinct_models)) if distinct_models else "<none>"
         console.print(
-            f"[red]routes analyze needs at least 2 distinct models to compare; "
-            f"got 1 ({only}). Re-run `porchbench routes discover` with "
+            f"[red]analyze-routes needs at least 2 distinct models to compare; "
+            f"got 1 ({only}). Re-run `porchbench overnight --strategies` with "
             f"`-m <model> -m <other-model>` and pass both result files to "
-            f"`routes analyze`.[/red]"
+            f"`analyze-routes`.[/red]"
         )
         raise typer.Exit(code=1)
 
@@ -1484,7 +1350,7 @@ def overnight(
     ] = None,
     repeats: Annotated[
         int,
-        typer.Option("--repeats", "-n", help="Repeats per standard suite (discovery suites expand by strategy)."),
+        typer.Option("--repeats", "-n", help="Repeats per suite (ignored when --strategies is set; matrix expansion replaces repeats)."),
     ] = 3,
     backend_name: Annotated[
         str,
@@ -1561,6 +1427,17 @@ def overnight(
         list[str] | None,
         typer.Option("--set", help="Override a suite default option as KEY=VALUE (e.g. --set think=false). Repeatable. Values parsed as YAML so booleans/ints/nulls round-trip."),
     ] = None,
+    expand_strategies: Annotated[
+        bool,
+        typer.Option(
+            "--strategies",
+            help=(
+                "Expand each suite across all its strategies (prompt × strategy × model matrix). "
+                "Without this, overnight runs the baseline (one row per prompt). "
+                "Replaces the standalone `routes discover` command."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Queue multiple suites and models for unattended batch benchmarking."""
     import time as _time
@@ -1578,12 +1455,35 @@ def overnight(
 
     # Suite-first ordering: derive the union of required capabilities
     # across all selected suites so the model picker can mark missing-cap
-    # models. Mirrors `run` and `routes discover` flow.
+    # models. Mirrors `run` flow.
     if suite_paths:
         paths = [find_suite(p) for p in suite_paths]
     else:
         from porchbench.interactive import select_suites
         paths = select_suites(resolve_suite_dir(suite_dir))
+
+    # Validate --strategies against the selected suites BEFORE the model
+    # picker fires. Single-suite + flag set + suite has no strategies block
+    # = unambiguously wrong intent; hard-fail now so the user doesn't waste
+    # time picking models for a doomed run. Multi-suite mixed selection is
+    # legitimate (some suites expand, some baseline) — emit a per-suite
+    # warning and continue.
+    from porchbench.suite import suite_has_strategies
+    if expand_strategies:
+        without_strategies = [p for p in paths if not suite_has_strategies(p)]
+        if without_strategies and len(paths) == 1:
+            console.print(
+                f"[red]--strategies requested but {paths[0].name} has no `strategies:` block.[/red]\n"
+                f"  This suite has nothing to expand. Either drop --strategies (run baseline), "
+                f"or pick a strategies-bearing suite (e.g. routing-discovery, tool-use)."
+            )
+            raise typer.Exit(code=1)
+        for p in without_strategies:
+            console.print(
+                f"[yellow]Note:[/yellow] {p.name} has no strategies block — "
+                f"this suite will run baseline; --strategies applies only to "
+                f"strategies-bearing suites in this plan."
+            )
 
     if models is None:
         from porchbench.interactive import select_models
@@ -1618,6 +1518,7 @@ def overnight(
                 "profile_vram": profile_vram,
                 "resume": resume,
                 "verbose": verbose,
+                "strategies": expand_strategies,
             },
         )
         repeats = opts["repeats"]
@@ -1626,6 +1527,21 @@ def overnight(
         profile_vram = opts["profile_vram"]
         resume = opts["resume"]
         verbose = opts["verbose"]
+        # If interactive options changed the toggle, re-validate before the
+        # plan builds — covers users who flip --strategies on in the menu
+        # against a non-strategies suite. Same hard-fail semantics as above.
+        if opts["strategies"] and not expand_strategies:
+            without_strategies = [p for p in paths if not suite_has_strategies(p)]
+            if without_strategies and len(paths) == 1:
+                console.print(
+                    f"[red]--strategies requested via toggle but {paths[0].name} has no `strategies:` block.[/red]"
+                )
+                raise typer.Exit(code=1)
+            for p in without_strategies:
+                console.print(
+                    f"[yellow]Note:[/yellow] {p.name} has no strategies block — baseline only."
+                )
+        expand_strategies = opts["strategies"]
 
     overrides = parse_set_overrides(set_overrides)
     if overrides:
@@ -1633,7 +1549,11 @@ def overnight(
 
     # 2. Build plan
     try:
-        plan = build_plan(paths, models, repeats, option_overrides=overrides)
+        plan = build_plan(
+            paths, models, repeats,
+            option_overrides=overrides,
+            expand_strategies=expand_strategies,
+        )
     except Exception as exc:
         console.print(f"[red]Failed to build plan: {exc}[/red]")
         raise typer.Exit(code=1)
@@ -1909,7 +1829,8 @@ def doctor(
     raise typer.Exit(code=0 if report.ok else 1)
 
 
-app.add_typer(routes_app)
+# Migration shim — see `_routes_removed_app` definition near the top.
+app.add_typer(_routes_removed_app)
 
 
 @app.command()
