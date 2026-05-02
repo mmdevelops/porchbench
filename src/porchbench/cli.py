@@ -469,6 +469,13 @@ def run(
         suite_has_strategies,
     )
 
+    # Typer passes `[]` for unspecified repeatable options whose default is
+    # `None`, NOT `None` itself — normalize so the picker fires correctly.
+    if not suite_paths:
+        suite_paths = None
+    if not models:
+        models = None
+
     interactive = models is None or suite_paths is None
 
     # Suite-first ordering: knowing the suite(s) lets the model picker
