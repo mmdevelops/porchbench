@@ -24,7 +24,7 @@ from porchbench.backend import InferenceBackend, OllamaBackend
 from porchbench.profiler import detect_gpu
 from porchbench.routing import run_discovery
 from porchbench.runner import run_suite
-from porchbench.schemas import RunResult, Strategy, Suite, SuiteReference
+from porchbench.schemas import RunResult, Strategy, Suite, SuiteReference, slugify_suite_name
 from porchbench.suite import load_suite, make_suite_reference, suite_has_strategies
 
 console = Console()
@@ -197,7 +197,7 @@ def estimate_single_suite_duration_from_history(
     prior per-(model, suite) rate are excluded from the time and counted
     separately so the caller can render coverage honestly.
     """
-    suite_slug = suite_name.lower().replace(" ", "-")
+    suite_slug = slugify_suite_name(suite_name)
     per_model_calls = prompt_count * repeats
     total_seconds = 0.0
     calls_with_history = 0
@@ -226,7 +226,7 @@ def estimate_duration_from_history(
     calls_with_history = 0
     calls_total = 0
     for task in plan:
-        suite_slug = task.suite.suite.name.lower().replace(" ", "-")
+        suite_slug = slugify_suite_name(task.suite.suite.name)
         per_model_calls = task.run_count // max(len(task.models), 1)
         for model in task.models:
             calls_total += per_model_calls

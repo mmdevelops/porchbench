@@ -46,7 +46,9 @@ def find_completed_prompt_ids(
     results_dir: Path,
 ) -> set[str]:
     """Scan results dir for prior runs of this suite+model and return completed prompt IDs."""
-    suite_slug = suite_name.lower().replace(" ", "-")
+    from porchbench.schemas import slugify_suite_name
+
+    suite_slug = slugify_suite_name(suite_name)
     model_slug = model.replace(":", "-").replace("/", "-")
     pattern = f"*_{suite_slug}_{model_slug}*.json"
 
@@ -425,7 +427,7 @@ def result_path_for(run_result: RunResult, output_dir: str | Path) -> Path:
     can locate a result file without needing the writer to hand them the path.
     """
     ts = run_result.run.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
-    suite_slug = run_result.run.suite.name.lower().replace(" ", "-")
+    suite_slug = run_result.run.suite.slug
     model_slug = run_result.run.model.name.replace(":", "-").replace("/", "-")
     repeat_suffix = f"_repeat-{run_result.run.repeat_index}" if run_result.run.repeat_index else ""
     filename = f"{ts}_{suite_slug}_{model_slug}{repeat_suffix}.json"

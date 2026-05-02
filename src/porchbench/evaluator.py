@@ -37,6 +37,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
+from porchbench._console import ensure_unicode_stdout
 from porchbench.schemas import (
     AggregateScores,
     CriterionScore,
@@ -164,6 +165,33 @@ class ClaudeCodeEvalBackend:
             )
 
         return stdout.decode("utf-8")
+
+
+_BACKEND_FACTORIES: dict[str, type] = {
+    "ollama": OllamaEvalBackend,
+    "api": AnthropicEvalBackend,
+    "anthropic": AnthropicEvalBackend,
+    "claude-code": ClaudeCodeEvalBackend,
+}
+
+
+def make_backend(name: str, **kwargs) -> EvalBackend:
+    """Construct an evaluator backend by name without importing each class.
+
+    Accepts "ollama", "api" (alias "anthropic"), and "claude-code". Keyword
+    arguments are forwarded to the backend constructor; see each class for
+    its accepted parameters (e.g. `model`, `host`, `api_key`, `timeout_s`).
+
+    Raises ValueError on an unknown name.
+    """
+    try:
+        cls = _BACKEND_FACTORIES[name]
+    except KeyError:
+        valid = ", ".join(sorted(set(_BACKEND_FACTORIES)))
+        raise ValueError(
+            f"Unknown evaluator backend {name!r}. Valid names: {valid}"
+        )
+    return cls(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -313,19 +341,23 @@ def format_calibration_preamble(
 # ---------------------------------------------------------------------------
 
 
-def build_scoring_prompt(
-    prompt_result: PromptResult,
+def _format_scoring_prompt(
+    formatted_user_prompt: str,
+    response_text: str,
     rubric: Rubric,
+    expected_answer: str | None = None,
     calibration_preamble: str = "",
 ) -> str:
-    """Construct the evaluation prompt sent to the judge model."""
+    """String-only core of the scoring prompt template.
+
+    Shared between `build_scoring_prompt` (PromptResult-shaped input from
+    the batch pipeline) and `evaluate_single` (raw strings from external
+    consumers like the agent harness bridge). Keeps the wording and JSON
+    schema in one place.
+    """
     criteria_block = "\n".join(
         f"- **{c.name}** (weight {c.weight}, scale {c.scale}): {c.description}"
         for c in rubric.criteria
-    )
-
-    user_messages = "\n\n".join(
-        f"[{m.role}]: {m.content}" for m in prompt_result.request.messages
     )
 
     criteria_json = ", ".join(
@@ -333,25 +365,24 @@ def build_scoring_prompt(
         for c in rubric.criteria
     )
 
-    # Include correctness hints if available
     reference_block = ""
-    if prompt_result.expected_answer:
+    if expected_answer:
         reference_block = f"""
 ## Reference (Correctness Guide)
 The following describes what a correct response should include. Use this
 to verify factual accuracy and completeness — do not penalize alternative
 valid approaches that meet these criteria.
 
-{prompt_result.expected_answer}
+{expected_answer}
 """
 
     return f"""You are an expert evaluator assessing the quality of an AI model's response.
 {calibration_preamble}
 ## Original Prompt
-{user_messages}
+{formatted_user_prompt}
 
 ## Model Response
-{prompt_result.response.message.content}
+{response_text}
 {reference_block}
 ## Scoring Rubric: {rubric.rubric.name} v{rubric.rubric.version}
 
@@ -370,6 +401,24 @@ Then provide a one-sentence overall summary.
 You MUST respond with valid JSON and nothing else. No markdown fencing, no extra text.
 
 {{"criteria": {{{criteria_json}}}, "summary": "<one sentence overall assessment>"}}"""
+
+
+def build_scoring_prompt(
+    prompt_result: PromptResult,
+    rubric: Rubric,
+    calibration_preamble: str = "",
+) -> str:
+    """Construct the evaluation prompt sent to the judge model."""
+    user_messages = "\n\n".join(
+        f"[{m.role}]: {m.content}" for m in prompt_result.request.messages
+    )
+    return _format_scoring_prompt(
+        formatted_user_prompt=user_messages,
+        response_text=prompt_result.response.message.content,
+        rubric=rubric,
+        expected_answer=prompt_result.expected_answer,
+        calibration_preamble=calibration_preamble,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +450,94 @@ async def score_prompt(
         weighted_score=round(weighted, 2),
         summary=_extract_summary(response_text),
     )
+
+
+async def evaluate_single(
+    prompt_text: str,
+    response_text: str,
+    rubric: Rubric,
+    backend: EvalBackend,
+    *,
+    prompt_id: str = "single",
+    expected_answer: str | None = None,
+    calibration_preamble: str = "",
+) -> PromptScore:
+    """Score one (prompt, response) pair against a rubric.
+
+    Convenience entry point for callers that have a single response in
+    memory and don't want to round-trip through RunResult JSON files —
+    e.g. the agent-harness bridge scoring a single agent turn against a
+    research rubric.
+
+    `prompt_text` is the user prompt as it would appear at `[user]:` in
+    the conversation; `response_text` is the assistant reply being
+    judged. Pass `expected_answer` to surface a correctness reference to
+    the judge for factual prompts.
+
+    Returns a `PromptScore` with per-criterion scores, a weighted
+    aggregate, and a one-sentence summary. Raises whatever the backend
+    raises on transport / API failure.
+    """
+    ensure_unicode_stdout()
+
+    scoring_prompt = _format_scoring_prompt(
+        formatted_user_prompt=f"[user]: {prompt_text}",
+        response_text=response_text,
+        rubric=rubric,
+        expected_answer=expected_answer,
+        calibration_preamble=calibration_preamble,
+    )
+    judge_response = await backend.generate(scoring_prompt)
+    parsed = _parse_scoring_response(judge_response, rubric)
+
+    weight_map = {c.name: c.weight for c in rubric.criteria}
+    weighted = sum(
+        parsed[name].score * weight_map.get(name, 0)
+        for name in parsed
+    )
+
+    return PromptScore(
+        prompt_id=prompt_id,
+        criteria=parsed,
+        weighted_score=round(weighted, 2),
+        summary=_extract_summary(judge_response),
+    )
+
+
+def evaluate_single_sync(
+    prompt_text: str,
+    response_text: str,
+    rubric: Rubric,
+    backend: EvalBackend,
+    *,
+    prompt_id: str = "single",
+    expected_answer: str | None = None,
+    calibration_preamble: str = "",
+) -> PromptScore:
+    """Synchronous wrapper around `evaluate_single`.
+
+    Convenience for scripts and bridge code that aren't async-native.
+    Internally calls `asyncio.run`, which means each call opens and
+    closes a fresh event loop.
+
+    **Backend reuse caveat:** `OllamaEvalBackend` (and any backend
+    holding an `httpx.AsyncClient`) keys its connection pool by the
+    running event loop. Reusing the same backend instance across
+    multiple `evaluate_single_sync` calls is supported because the
+    backend rebuilds its client on loop change, but you'll pay TLS /
+    pool setup on every call. For batch workloads, prefer the async
+    `evaluate_single` from inside one `asyncio.run` so the pool is
+    reused.
+    """
+    return asyncio.run(evaluate_single(
+        prompt_text=prompt_text,
+        response_text=response_text,
+        rubric=rubric,
+        backend=backend,
+        prompt_id=prompt_id,
+        expected_answer=expected_answer,
+        calibration_preamble=calibration_preamble,
+    ))
 
 
 def _parse_scoring_response(
@@ -571,6 +708,8 @@ async def evaluate_run(
     unmatched categories. When calibration_data is provided, few-shot
     calibration examples are prepended to each scoring prompt.
     """
+    ensure_unicode_stdout()
+
     # Include every non-errored response. Truncated responses still have real
     # content worth evaluating; empty responses (e.g. reasoning-mode models
     # that exhaust num_predict inside <think> without emitting an answer) are
@@ -580,6 +719,23 @@ async def evaluate_run(
         r for r in run_result.results
         if r.response.done_reason in ("stop", "length", None)
     ]
+
+    if not scorable:
+        # Tool-use and routing-discovery suites finish with `done_reason` set
+        # to a harness `stopped_reason` ("done", "max_tool_calls", etc.) that
+        # falls outside the inference filter above. Those suites use
+        # deterministic validators (`validation_passed`) and aren't meant for
+        # LLM-judging, so silent 0/0 results are by design — but the
+        # difference matters for callers who can't tell "everything failed"
+        # from "nothing was eligible". Be loud about it.
+        console.print(
+            "[yellow]No prompts eligible for LLM-judge eval — "
+            "this run contains only harness/tool-use results which use "
+            "deterministic validators. Inspect `validation_passed` and "
+            "`tool_use_metrics` on the RunResult instead, or run a "
+            "coding / reasoning / cross-domain suite for LLM-judge "
+            "scoring.[/yellow]"
+        )
 
     # Pre-compute calibration preambles per rubric to avoid reformatting each prompt
     _preamble_cache: dict[str, str] = {}
@@ -594,8 +750,11 @@ async def evaluate_run(
 
     scores: list[PromptScore] = []
 
+    # Use the ASCII "line" spinner (|/-\) instead of the default braille
+    # dots so the Progress header is renderable on cp1252 / non-Unicode
+    # captured streams even before ensure_unicode_stdout takes effect.
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn(spinner_name="line"),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
         MofNCompleteColumn(),
@@ -698,12 +857,36 @@ async def batch_evaluate_results(
     """Score N result files sequentially with one evaluator backend instance.
 
     Shared orchestration used by the `evaluate` CLI batch mode and by
-    `overnight --evaluate`'s post-run phase. Rubric + calibration are cached
+    `run --evaluate`'s post-run phase. Rubric + calibration are cached
     across results so a shared rubric only loads once.
 
-    Returns a list of (run_label, status, overall_score) tuples, one per input
-    path. Status is 'scored', 'skipped', or 'failed'. Errors on one result
-    don't abort the batch — they're reported and the next result proceeds.
+    Returns a list of (run_label, status, overall_score) tuples, one per
+    input path. Status is one of:
+
+    - `"scored"`: at least one prompt was LLM-judged; `overall_score` is set.
+    - `"skipped"`: a prior scorecard already exists and `skip_scored=True`.
+    - `"no_eligible"`: the run had no prompts eligible for LLM-judging — see
+      eligibility rules below. A scorecard is still written (with empty
+      `scores`) so downstream tooling can distinguish this case from a
+      genuine 0.0 score; `overall_score` is None.
+    - `"failed"`: load or evaluation error; the result is logged and the
+      batch continues with the next file.
+
+    Eligibility — which prompts get LLM-judged:
+
+    - **Inference suites** (coding, reasoning, cross-domain): all prompts
+      whose `done_reason` is `"stop"`, `"length"`, or None. Truncated
+      responses are still scored (with a 0 if no answer was emitted) so
+      aggregates stay honest.
+    - **Tool-use and routing-discovery suites**: zero prompts are
+      LLM-judged. These run through the harness, which sets `done_reason`
+      to a `stopped_reason` ("done", "max_tool_calls", "max_turns",
+      "error") that falls outside the inference filter. They use
+      deterministic validators (`PromptResult.validation_passed` and
+      `tool_use_metrics`) instead, and surface as `status="no_eligible"`.
+
+    Errors on one result don't abort the batch — they're reported and the
+    next result proceeds.
     """
     from porchbench.assets import find_rubric
     from porchbench.errors import UserError, load_json_model
@@ -764,11 +947,53 @@ async def batch_evaluate_results(
             summary.append((run_label, "failed", None))
             continue
 
+        # Distinguish "no prompts were eligible for LLM-judge eval" (e.g.
+        # tool-use / routing-discovery results) from a real 0.0 score so
+        # consumers don't misread the second case as 'everything failed'.
+        if not scorecard.scores:
+            console.print(
+                f"  [yellow]no eligible prompts — scorecard written ({written.name})[/yellow]"
+            )
+            summary.append((run_label, "no_eligible", None))
+            continue
+
         overall = scorecard.aggregate.overall_weighted
         console.print(f"  [green]scored — {overall:.2f} → {written.name}[/green]")
         summary.append((run_label, "scored", overall))
 
     return summary
+
+
+def batch_evaluate_results_sync(
+    result_paths: list[Path],
+    eval_backend: "EvalBackend",
+    backend_label: str,
+    output_dir: Path,
+    explicit_rubric_path: Path | None = None,
+    rubrics_by_category: dict[str, "Rubric"] | None = None,
+    skip_scored: bool = False,
+) -> list[tuple[str, str, float | None]]:
+    """Synchronous wrapper around `batch_evaluate_results`.
+
+    Convenience for scripts and bridge code that aren't async-native.
+    Internally calls `asyncio.run`, which opens and closes a fresh event
+    loop. Status values include the new `"no_eligible"` (run had no
+    LLM-judgeable prompts — typically tool-use / routing-discovery
+    results scored by deterministic validators).
+
+    **Backend reuse caveat:** see `evaluate_single_sync`. Each call to
+    this function spins up a fresh event loop; a backend with a cached
+    `httpx.AsyncClient` will rebuild its pool on each call.
+    """
+    return asyncio.run(batch_evaluate_results(
+        result_paths=result_paths,
+        eval_backend=eval_backend,
+        backend_label=backend_label,
+        output_dir=output_dir,
+        explicit_rubric_path=explicit_rubric_path,
+        rubrics_by_category=rubrics_by_category,
+        skip_scored=skip_scored,
+    ))
 
 
 # ---------------------------------------------------------------------------

@@ -114,6 +114,17 @@ class Suite(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def slugify_suite_name(name: str) -> str:
+    """Map a human-readable suite name to its filesystem-safe identifier.
+
+    Used for result-file names and history-lookup keys so callers can match
+    runs across both the YAML form ("Tool Use Discovery") and the on-disk
+    form ("tool-use-discovery"). Single source of truth — keep all consumers
+    routed through this helper or `SuiteReference.slug`.
+    """
+    return name.lower().replace(" ", "-")
+
+
 class SuiteReference(BaseModel):
     """Identifies which suite produced this run, with content hash for reproducibility."""
 
@@ -122,6 +133,16 @@ class SuiteReference(BaseModel):
     file: str
     sha256: str
     rubric: str | None = None  # rubric hint from suite metadata, auto-resolves at eval time
+
+    @property
+    def slug(self) -> str:
+        """Filesystem-safe identifier — `name.lower().replace(" ", "-")`.
+
+        Stable across the YAML display name and on-disk filename
+        conventions; consumers filtering result paths by suite should
+        match against `slug` rather than `name`.
+        """
+        return slugify_suite_name(self.name)
 
 
 class ModelDetails(BaseModel):

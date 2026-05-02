@@ -649,3 +649,213 @@ class TestBuildScorecardFromScores:
         assert sc["aggregate"]["overall_weighted"] == 3.0
         assert sc["aggregate"]["by_category"]["coding"] == 4.0
         assert sc["aggregate"]["by_category"]["reasoning"] == 2.0
+
+
+# ---------------------------------------------------------------------------
+# Public API additions: make_backend, evaluate_single (+ sync), suite slug,
+# no-eligible path through evaluate_run (harness-shaped done_reasons).
+# Driven by feedback from the agent-harness bridge integration.
+# ---------------------------------------------------------------------------
+
+
+class TestMakeBackend:
+    def test_dispatches_ollama(self):
+        from porchbench.evaluator import OllamaEvalBackend, make_backend
+
+        backend = make_backend("ollama", model="llama3:8b")
+        assert isinstance(backend, OllamaEvalBackend)
+        assert backend.model == "llama3:8b"
+
+    def test_dispatches_claude_code(self):
+        from porchbench.evaluator import ClaudeCodeEvalBackend, make_backend
+
+        backend = make_backend("claude-code", model="opus", timeout_s=60)
+        assert isinstance(backend, ClaudeCodeEvalBackend)
+        assert backend.model == "opus"
+        assert backend.timeout_s == 60
+
+    def test_anthropic_alias_for_api(self):
+        from porchbench.evaluator import _BACKEND_FACTORIES
+
+        assert _BACKEND_FACTORIES["api"] is _BACKEND_FACTORIES["anthropic"]
+
+    def test_unknown_name_raises_with_valid_list(self):
+        from porchbench.evaluator import make_backend
+
+        with pytest.raises(ValueError, match="Unknown evaluator backend"):
+            make_backend("openai", model="gpt-4")
+
+
+class TestSuiteSlug:
+    def test_slugify_lowercases_and_hyphenates(self):
+        from porchbench.schemas import slugify_suite_name
+
+        assert slugify_suite_name("Tool Use Discovery") == "tool-use-discovery"
+        assert slugify_suite_name("Coding Basics") == "coding-basics"
+        assert slugify_suite_name("already-lower") == "already-lower"
+
+    def test_suite_reference_slug_property(self):
+        from porchbench.schemas import SuiteReference
+
+        ref = SuiteReference(
+            name="Cross Domain Science",
+            version="1.0",
+            file="x.yaml",
+            sha256="y" * 64,
+        )
+        assert ref.slug == "cross-domain-science"
+
+
+class TestEvaluateSingle:
+    """Public single-response entry point — bridges the agent-harness use case
+    where consumers have one (prompt, response) pair in memory and want a
+    PromptScore back without round-tripping through RunResult JSON."""
+
+    @pytest.mark.asyncio
+    async def test_returns_weighted_score_from_strings(self):
+        from porchbench.evaluator import evaluate_single
+
+        mock_backend = AsyncMock()
+        mock_backend.generate.return_value = json.dumps({
+            "criteria": {
+                "correctness": {"score": 5, "rationale": "ok"},
+                "clarity": {"score": 4, "rationale": "ok"},
+            },
+            "summary": "fine",
+        })
+
+        score = await evaluate_single(
+            prompt_text="What is 2 + 2?",
+            response_text="4",
+            rubric=_make_rubric(),
+            backend=mock_backend,
+        )
+
+        # weighted = 5*0.6 + 4*0.4 = 4.6
+        assert score.weighted_score == pytest.approx(4.6, abs=0.01)
+        assert score.criteria["correctness"].score == 5
+        assert score.prompt_id == "single"
+
+    @pytest.mark.asyncio
+    async def test_passes_prompt_and_response_into_judge_prompt(self):
+        from porchbench.evaluator import evaluate_single
+
+        mock_backend = AsyncMock()
+        mock_backend.generate.return_value = json.dumps({
+            "criteria": {
+                "correctness": {"score": 3, "rationale": ""},
+                "clarity": {"score": 3, "rationale": ""},
+            },
+            "summary": "",
+        })
+
+        await evaluate_single(
+            prompt_text="UNIQUE_PROMPT_MARKER",
+            response_text="UNIQUE_RESPONSE_MARKER",
+            rubric=_make_rubric(),
+            backend=mock_backend,
+            expected_answer="UNIQUE_REFERENCE_MARKER",
+        )
+
+        sent_prompt = mock_backend.generate.call_args[0][0]
+        assert "UNIQUE_PROMPT_MARKER" in sent_prompt
+        assert "UNIQUE_RESPONSE_MARKER" in sent_prompt
+        assert "UNIQUE_REFERENCE_MARKER" in sent_prompt
+        # The user-prompt section is tagged so the judge can distinguish
+        # original prompt from response — match the existing convention.
+        assert "[user]: UNIQUE_PROMPT_MARKER" in sent_prompt
+
+    @pytest.mark.asyncio
+    async def test_custom_prompt_id_propagates(self):
+        from porchbench.evaluator import evaluate_single
+
+        mock_backend = AsyncMock()
+        mock_backend.generate.return_value = json.dumps({
+            "criteria": {
+                "correctness": {"score": 5, "rationale": ""},
+                "clarity": {"score": 5, "rationale": ""},
+            },
+            "summary": "",
+        })
+
+        score = await evaluate_single(
+            prompt_text="q", response_text="a",
+            rubric=_make_rubric(), backend=mock_backend,
+            prompt_id="harness-turn-7",
+        )
+        assert score.prompt_id == "harness-turn-7"
+
+
+class TestEvaluateSingleSync:
+    def test_sync_wrapper_returns_promptscore(self):
+        from porchbench.evaluator import evaluate_single_sync
+
+        # Sync wrapper opens its own asyncio.run; back the backend with a
+        # plain async function rather than AsyncMock so it survives the
+        # fresh loop.
+        async def fake_generate(prompt: str) -> str:
+            return json.dumps({
+                "criteria": {
+                    "correctness": {"score": 4, "rationale": ""},
+                    "clarity": {"score": 4, "rationale": ""},
+                },
+                "summary": "",
+            })
+
+        class _Backend:
+            generate = staticmethod(fake_generate)
+
+        score = evaluate_single_sync(
+            prompt_text="q", response_text="a",
+            rubric=_make_rubric(), backend=_Backend(),
+        )
+        assert score.weighted_score == pytest.approx(4.0, abs=0.01)
+
+
+class TestNoEligibleHarnessRun:
+    """Tool-use / routing-discovery results have done_reason set from the
+    harness stopped_reason ("done", "max_tool_calls", etc.) — those fall
+    outside evaluate_run's inference filter and produce an empty scorecard.
+    Verify the warning path and the "no_eligible" status propagation."""
+
+    @pytest.mark.asyncio
+    async def test_evaluate_run_emits_empty_scorecard_for_harness_results(self, capsys):
+        from porchbench.evaluator import evaluate_run
+        from porchbench.schemas import (
+            ModelInfo, RunMetadata, RunResult, RunSummary, SuiteReference,
+        )
+
+        # All results have harness-style done_reasons; none are eligible.
+        harness_done = _make_prompt_result(
+            prompt_id="t1",
+            response=ResponseData(
+                message=ResponseMessage(content="ran tools"),
+                done_reason="done",
+            ),
+        )
+        harness_max_calls = _make_prompt_result(
+            prompt_id="t2",
+            response=ResponseData(
+                message=ResponseMessage(content="hit cap"),
+                done_reason="max_tool_calls",
+            ),
+        )
+
+        rr = RunResult(
+            run=RunMetadata(
+                suite=SuiteReference(name="Tool Use Discovery", version="1", file="x.yaml", sha256="x" * 64),
+                model=ModelInfo(name="m", size=1, quantization="Q4", family="test", parameter_size="1B", digest="d"),
+            ),
+            results=[harness_done, harness_max_calls],
+            summary=RunSummary(total_prompts=2, completed=2, failed=0, total_duration_s=1.0),
+        )
+
+        mock_backend = AsyncMock()
+        scorecard = await evaluate_run(rr, _make_rubric(), mock_backend, evaluator_label="ollama/test")
+
+        assert scorecard.scores == []
+        assert mock_backend.generate.call_count == 0
+        # Warning surfaces eligibility info — harness results aren't a
+        # silent 0/0 anymore.
+        out = capsys.readouterr().out
+        assert "No prompts eligible" in out

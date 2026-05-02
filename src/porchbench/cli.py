@@ -1720,7 +1720,11 @@ def _run_post_phase_evaluation(
 
     scored = sum(1 for _, s, _ in summary if s == "scored")
     failed = sum(1 for _, s, _ in summary if s == "failed")
-    console.print(f"\n[bold]{scored} scored, {failed} failed[/bold]")
+    no_eligible = sum(1 for _, s, _ in summary if s == "no_eligible")
+    parts = [f"{scored} scored", f"{failed} failed"]
+    if no_eligible:
+        parts.append(f"{no_eligible} no-eligible")
+    console.print(f"\n[bold]{', '.join(parts)}[/bold]")
 
 
 @app.command()
@@ -1806,17 +1810,13 @@ def main() -> None:
     users see a Python traceback. Exit 130 is the shell convention for
     SIGINT-style termination.
     """
-    # Windows captured-output (pipes, file redirects, CI logs) defaults
-    # sys.stdout/stderr to cp1252, which can't encode the Unicode
-    # box-drawing, em-dash, and sparkline characters Rich emits — leaderboard
-    # mid-table renders crashed with UnicodeEncodeError on `█` (U+2588).
-    # Reconfigure to UTF-8 with replacement fallback so captured runs render
-    # the same as interactive terminal runs. Guarded by hasattr so pytest
-    # capfd / capsys replacement streams are left alone.
-    if sys.platform == "win32":
-        for stream in (sys.stdout, sys.stderr):
-            if hasattr(stream, "reconfigure"):
-                stream.reconfigure(encoding="utf-8", errors="replace")
+    # Captured-output streams on Windows default to cp1252; reconfigure
+    # to UTF-8 so Rich's box-drawing / sparkline / em-dash glyphs don't
+    # crash with UnicodeEncodeError. Shared with library entry points
+    # (evaluator.batch_evaluate_results) so importing consumers get the
+    # same protection without going through the CLI.
+    from porchbench._console import ensure_unicode_stdout
+    ensure_unicode_stdout()
     try:
         app()
     except KeyboardInterrupt:
