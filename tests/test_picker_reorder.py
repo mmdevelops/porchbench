@@ -1,4 +1,4 @@
-"""Integration tests for the suite-first picker reorder.
+"""Integration tests for the suite-first picker reorder + unified run command.
 
 The unit tests cover `_format_model_label` and `required_capabilities_for_suite`
 in isolation, but nothing else asserts that the cli actually wires the suite's
@@ -6,12 +6,12 @@ required capabilities into the model picker. A regression where
 `required_capabilities_for_suite(suite)` got swapped for `[]` would pass the
 unit suite but break the user-facing UX silently.
 
-Each test patches `select_suite`/`select_suites` and `select_models` at the
-source module (the cli imports them lazily, so the patched attribute is what
-the lazy `from porchbench.interactive import ...` resolves to). The
-`select_models` stub captures kwargs and raises `typer.Exit(99)` to short-
-circuit the rest of the CLI flow — keeps tests fast and isolated to the
-picker-wiring assertion.
+Each test patches `select_suites` and `select_models` at the source module
+(the cli imports them lazily, so the patched attribute is what the lazy
+`from porchbench.interactive import ...` resolves to). The `select_models`
+stub captures kwargs and raises `typer.Exit(99)` to short-circuit the rest
+of the CLI flow — keeps tests fast and isolated to the picker-wiring
+assertion.
 """
 
 from __future__ import annotations
@@ -37,17 +37,17 @@ def _capture_models_kwargs(captured: dict):
 
 
 # ---------------------------------------------------------------------------
-# `porchbench run`
+# `porchbench run` — single-suite picker required-cap derivation
 # ---------------------------------------------------------------------------
 
 
-class TestRunPickerReorder:
+class TestRunSingleSuitePickerReorder:
     def test_tool_use_suite_passes_tools_requirement(self):
         captured: dict = {}
         with (
             patch(
-                "porchbench.interactive.select_suite",
-                return_value=find_suite("tool-use"),
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("tool-use")],
             ),
             patch(
                 "porchbench.interactive.select_models",
@@ -65,8 +65,8 @@ class TestRunPickerReorder:
         captured: dict = {}
         with (
             patch(
-                "porchbench.interactive.select_suite",
-                return_value=find_suite("coding-basics"),
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("coding-basics")],
             ),
             patch(
                 "porchbench.interactive.select_models",
@@ -82,13 +82,12 @@ class TestRunPickerReorder:
 
 
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# `porchbench overnight --strategies` strategy-matrix path
-# (replaces the deleted `routes discover` command)
+# `porchbench run --strategies` strategy-matrix path
+# (replaces the deleted `routes discover` and `overnight --strategies` paths)
 # ---------------------------------------------------------------------------
 
 
-class TestOvernightStrategiesPath:
+class TestRunStrategiesPath:
     def test_strategies_flag_with_strategies_suite_passes_through(self):
         # tool-use carries both `strategies:` and `mode: tool-use` prompts,
         # so --strategies + this suite reaches the model picker (no early
@@ -106,7 +105,7 @@ class TestOvernightStrategiesPath:
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["overnight", "--strategies"])
+            result = runner.invoke(app, ["run", "--strategies"])
 
         assert result.exit_code == 99, result.output
         assert captured["required_capabilities"] == ["tools"]
@@ -123,19 +122,38 @@ class TestOvernightStrategiesPath:
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["overnight", "--strategies"])
+            result = runner.invoke(app, ["run", "--strategies"])
 
         assert result.exit_code == 1, result.output
         assert "no `strategies:` block" in result.output
         assert "coding-basics.yaml" in result.output
 
+    def test_strategies_plus_prompt_id_filter_rejected(self):
+        # --strategies dispatches through run_discovery which doesn't honor
+        # the per-prompt-id filter. Reject the combination explicitly so
+        # users don't get a silently-ignored -p flag. Tracked for v0.2.
+        with (
+            patch(
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("tool-use")],
+            ),
+            patch("porchbench.cli.construct_backend", return_value=MagicMock()),
+            patch("porchbench.cli.check_server_or_exit"),
+        ):
+            result = runner.invoke(
+                app, ["run", "--strategies", "-p", "t1-read-file"],
+            )
+
+        assert result.exit_code == 1, result.output
+        assert "mutually exclusive" in result.output
+
 
 # ---------------------------------------------------------------------------
-# `porchbench overnight` (baseline path, no --strategies)
+# `porchbench run` multi-suite — required-caps union, mixed-strategies plan
 # ---------------------------------------------------------------------------
 
 
-class TestOvernightPickerReorder:
+class TestRunMultiSuitePickerReorder:
     def test_mixed_suites_union_includes_tools(self):
         # Mix one tool-use suite with one text-only suite — the union should
         # still demand `tools` because at least one suite needs it.
@@ -155,7 +173,7 @@ class TestOvernightPickerReorder:
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["overnight"])
+            result = runner.invoke(app, ["run"])
 
         assert result.exit_code == 99, result.output
         assert captured["required_capabilities"] == ["tools"]
@@ -177,7 +195,21 @@ class TestOvernightPickerReorder:
             patch("porchbench.cli.construct_backend", return_value=MagicMock()),
             patch("porchbench.cli.check_server_or_exit"),
         ):
-            result = runner.invoke(app, ["overnight"])
+            result = runner.invoke(app, ["run"])
 
         assert result.exit_code == 99, result.output
         assert captured["required_capabilities"] == []
+
+
+# ---------------------------------------------------------------------------
+# `porchbench overnight` migration shim
+# ---------------------------------------------------------------------------
+
+
+class TestOvernightMigrationShim:
+    def test_overnight_invocation_prints_breadcrumb_and_exits(self):
+        result = runner.invoke(app, ["overnight"])
+
+        assert result.exit_code == 2, result.output
+        assert "consolidated in v0.1" in result.output
+        assert "porchbench run" in result.output

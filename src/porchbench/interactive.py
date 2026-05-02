@@ -405,14 +405,8 @@ _RUN_TOGGLES = [
     ("Verbose output", "verbose"),
     ("Resume (skip completed)", "resume"),
     ("Profile VRAM during inference", "profile_vram"),
-]
-
-_OVERNIGHT_TOGGLES = [
-    ("Evaluate all runs in a batch after inference", "evaluate"),
     ("Profile system first", "profile"),
-    ("Profile VRAM during inference", "profile_vram"),
-    ("Resume (skip completed)", "resume"),
-    ("Verbose output", "verbose"),
+    ("Evaluate results in a post-phase batch after inference", "evaluate"),
     ("Run all strategies (routing matrix; suites with a `strategies:` block only)", "strategies"),
 ]
 
@@ -463,11 +457,8 @@ def select_run_options(
     return {"repeats": repeats, **toggles}
 
 
-def select_overnight_options(
-    default_repeats: int = 3,
-    defaults: dict[str, bool] | None = None,
-) -> dict:
-    """Interactive options screen for the overnight command."""
-    repeats = _prompt_repeats(default_repeats)
-    toggles = _prompt_toggles(_OVERNIGHT_TOGGLES, defaults=defaults)
-    return {"repeats": repeats, **toggles}
+# `select_overnight_options` was removed when the `overnight` command was
+# consolidated into `run`. `select_run_options` now handles every toggle
+# (verbose, resume, profile_vram, profile, evaluate, strategies) regardless
+# of suite count — pickers fire after suite selection so the user already
+# knows their fan-out by the time toggles render.

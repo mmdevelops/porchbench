@@ -340,9 +340,9 @@ def check_tool_support_or_exit(
 
 @app.command()
 def run(
-    suite_path: Annotated[
-        Path | None,
-        typer.Option("--suite", "-s", help="Suite name (e.g. 'coding-basics') or path to a YAML file. Interactive picker if omitted."),
+    suite_paths: Annotated[
+        list[Path] | None,
+        typer.Option("--suite", "-s", help="Suite name(s) or YAML paths. Repeat for multi-suite. Interactive picker if omitted."),
     ] = None,
     models: Annotated[
         list[str] | None,
@@ -350,7 +350,7 @@ def run(
     ] = None,
     prompt_ids: Annotated[
         list[str] | None,
-        typer.Option("--prompt-id", "-p", help="Run only these prompt IDs."),
+        typer.Option("--prompt-id", "-p", help="Run only these prompt IDs (matched across all selected suites). Mutually exclusive with --strategies."),
     ] = None,
     backend_name: Annotated[
         str,
@@ -378,7 +378,7 @@ def run(
     ] = 1,
     resume: Annotated[
         bool,
-        typer.Option("--resume", help="Skip prompts already completed in prior runs of the same suite+model."),
+        typer.Option("--resume", help="Skip prompts already completed in prior runs of the same suite+model+repeat."),
     ] = False,
     verbose: Annotated[
         bool,
@@ -388,9 +388,13 @@ def run(
         bool,
         typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
     ] = False,
+    do_profile: Annotated[
+        bool,
+        typer.Option("--profile", help="Run system profiling phase before benchmarks (model load times, VRAM footprint, co-residency)."),
+    ] = False,
     do_evaluate: Annotated[
         bool,
-        typer.Option("--evaluate", help="Score all results in a single post-phase batch after inference completes (judge model stays resident)."),
+        typer.Option("--evaluate", help="Score results in a post-phase batch after inference completes (judge model stays resident)."),
     ] = False,
     eval_backend: Annotated[
         str,
@@ -416,254 +420,541 @@ def run(
         list[str] | None,
         typer.Option("--set", help="Override a suite default option as KEY=VALUE (e.g. --set think=false). Repeatable. Values parsed as YAML so booleans/ints/nulls round-trip."),
     ] = None,
+    expand_strategies: Annotated[
+        bool,
+        typer.Option(
+            "--strategies",
+            help=(
+                "Expand each suite across all its strategies (prompt × strategy × model matrix). "
+                "Without this, run does the baseline (one row per prompt). "
+                "Mutually exclusive with -p/--prompt-id in v0.1."
+            ),
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes", "-y",
+            help="Non-interactive mode: skip remaining prompts (e.g. eval-model picker fallback) and hard-fail instead.",
+        ),
+    ] = False,
 ) -> None:
-    """Run a benchmark suite against one or more models."""
-    from porchbench.suite import required_capabilities_for_suite
+    """Run a benchmark suite (or many) against one or more models.
 
-    interactive = models is None or suite_path is None
+    Single-suite, single-model, single-repeat, no-strategies invocations
+    take a fast inline path that preserves the per-prompt verbose progress
+    UX and the `-p` filter. Anything more complex (multi-suite, repeats,
+    multi-model, or `--strategies`) flows through `build_plan` /
+    `execute_plan` for unified orchestration with plan-table preview,
+    optional system profiling, and batched post-phase evaluation.
 
-    # Suite-first ordering: knowing the suite lets the model picker badge
-    # missing-capability models (e.g. tag a non-tools model as
-    # `· missing: tools` for a tool-use suite) at selection time, instead
-    # of failing later in the preflight after the user already configured
-    # repeats / verbose / etc.
-    if suite_path is None:
-        from porchbench.interactive import select_suite
-        suite_path = select_suite()
+    Replaces the standalone `overnight` command — every overnight flag is
+    now available here.
+    """
+    import time as _time
+
+    from porchbench.overnight import (
+        build_plan,
+        check_gpu_status,
+        check_vram_cofit,
+        estimate_single_suite_duration_from_history,
+        execute_plan,
+        format_estimate,
+        print_plan,
+        print_summary,
+    )
+    from porchbench.suite import (
+        apply_option_overrides,
+        required_capabilities_for_suite,
+        suite_has_strategies,
+    )
+
+    interactive = models is None or suite_paths is None
+
+    # Suite-first ordering: knowing the suite(s) lets the model picker
+    # badge missing-capability models at selection time, instead of failing
+    # later after the user already configured repeats / verbose / etc.
+    if suite_paths is None:
+        from porchbench.interactive import select_suites
+        suite_paths = select_suites()
 
     # Resolve bare names and relative paths against cwd/packaged defaults
     try:
-        suite_path = find_suite(suite_path)
+        suite_paths = [find_suite(p) for p in suite_paths]
     except FileNotFoundError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
-    # Load and validate suite (early — gates the model picker on caps)
+    # Strategies-vs-suite validation BEFORE the model picker fires so a
+    # doomed run hard-fails fast. Single-suite + flag set + suite has no
+    # strategies block = unambiguously wrong intent. Multi-suite mixed
+    # selection is legitimate (some suites expand, some baseline) — emit a
+    # per-suite warning and continue.
+    if expand_strategies:
+        without_strategies = [p for p in suite_paths if not suite_has_strategies(p)]
+        if without_strategies and len(suite_paths) == 1:
+            console.print(
+                f"[red]--strategies requested but {suite_paths[0].name} has no `strategies:` block.[/red]\n"
+                f"  This suite has nothing to expand. Either drop --strategies (run baseline), "
+                f"or pick a strategies-bearing suite (e.g. routing-discovery, tool-use)."
+            )
+            raise typer.Exit(code=1)
+        for p in without_strategies:
+            console.print(
+                f"[yellow]Note:[/yellow] {p.name} has no strategies block — "
+                f"this suite will run baseline; --strategies applies only to "
+                f"strategies-bearing suites in this plan."
+            )
+
+    # Mutex: --strategies dispatches through run_discovery which doesn't
+    # honor the per-prompt-id filter. Reject the combination explicitly
+    # rather than silently ignoring -p. Tracked for v0.2 if anyone needs it.
+    if expand_strategies and prompt_ids:
+        console.print(
+            "[red]--strategies and -p/--prompt-id are mutually exclusive in v0.1.[/red]\n"
+            "  Strategy-matrix dispatch doesn't honor the per-prompt filter today. "
+            "Drop one of the two flags."
+        )
+        raise typer.Exit(code=1)
+
+    # Load suites (early — used by both the model picker required-caps
+    # union AND the per-suite tool-support preflight).
     try:
-        suite = load_suite(suite_path)
+        suites = [load_suite(p) for p in suite_paths]
     except Exception as exc:
         console.print(f"[red]Failed to load suite: {exc}[/red]")
         raise typer.Exit(code=1)
 
     if models is None:
         from porchbench.interactive import select_models
+        # Union of required caps across all selected suites: a model that
+        # can't satisfy any one suite gets badged at picker time.
+        required_caps_set: set[str] = set()
+        for s in suites:
+            required_caps_set.update(required_capabilities_for_suite(s))
         backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
         check_server_or_exit(backend, backend_name)
         models = select_models(
             backend,
-            required_capabilities=required_capabilities_for_suite(suite),
+            required_capabilities=sorted(required_caps_set),
         )
 
     if interactive:
         from porchbench.interactive import select_run_options
         opts = select_run_options(
             default_repeats=repeats,
-            defaults={"verbose": verbose, "resume": resume, "profile_vram": profile_vram},
+            defaults={
+                "verbose": verbose,
+                "resume": resume,
+                "profile_vram": profile_vram,
+                "profile": do_profile,
+                "evaluate": do_evaluate,
+                "strategies": expand_strategies,
+            },
         )
         repeats = opts["repeats"]
         verbose = opts["verbose"]
         resume = opts["resume"]
         profile_vram = opts["profile_vram"]
+        do_profile = opts["profile"]
+        do_evaluate = opts["evaluate"]
+        # Re-validate strategies if the toggle flipped on after suite picker
+        if opts["strategies"] and not expand_strategies:
+            without_strategies = [p for p in suite_paths if not suite_has_strategies(p)]
+            if without_strategies and len(suite_paths) == 1:
+                console.print(
+                    f"[red]--strategies enabled via toggle but {suite_paths[0].name} has no `strategies:` block.[/red]"
+                )
+                raise typer.Exit(code=1)
+            for p in without_strategies:
+                console.print(
+                    f"[yellow]Note:[/yellow] {p.name} has no strategies block — baseline only."
+                )
+        expand_strategies = opts["strategies"]
 
     overrides = parse_set_overrides(set_overrides)
     if overrides:
-        from porchbench.suite import apply_option_overrides
         try:
-            suite = apply_option_overrides(suite, overrides)
+            suites = [apply_option_overrides(s, overrides) for s in suites]
         except Exception as exc:
             console.print(f"[red]Invalid --set value: {exc}[/red]")
             raise typer.Exit(code=1)
         console.print(f"Overrides: {overrides}")
 
-    suite_ref = make_suite_reference(suite_path, suite)
+    # Build the plan. Multi-task plans take the build_plan / execute_plan
+    # orchestration path; single-task plans (1 suite × 1 model × 1 repeat,
+    # no strategies, optional -p filter) take a fast inline path that
+    # preserves today's per-prompt verbose UX.
+    try:
+        plan = build_plan(
+            suite_paths, models, repeats,
+            option_overrides=overrides,
+            expand_strategies=expand_strategies,
+        )
+    except Exception as exc:
+        console.print(f"[red]Failed to build plan: {exc}[/red]")
+        raise typer.Exit(code=1)
 
-    console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
-    console.print(f"Prompts: {len(suite.prompts)}")
-    console.print(f"Models: {', '.join(models)}")
-    if repeats > 1:
-        console.print(f"Repeats: {repeats}")
-
-    if prompt_ids:
-        console.print(f"Filter: {', '.join(prompt_ids)}")
-
-    from porchbench.overnight import (
-        estimate_single_suite_duration_from_history,
-        format_estimate,
+    use_inline_path = (
+        len(plan) == 1
+        and plan[0].repeats == 1
+        and len(plan[0].models) == 1
+        and not plan[0].expand_strategies
     )
 
-    prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
-    total_seconds, with_history, total_calls = estimate_single_suite_duration_from_history(
-        models=models,
-        suite_name=suite.suite.name,
-        prompt_count=prompt_count,
-        repeats=repeats,
-        results_dir=output_dir,
-    )
-    if total_calls == 0 or with_history == 0:
-        console.print(
-            f"Estimated duration: [dim]no prior runs of these (model, suite) pairs "
-            f"in {output_dir}/ — first run, no estimate[/dim]"
+    # --- Plan summary / estimate ---
+    if use_inline_path:
+        # Single-suite-1-model-1-repeat: today's compact summary.
+        suite = suites[0]
+        suite_path = suite_paths[0]
+        suite_ref = make_suite_reference(suite_path, suite)
+        console.print(f"Suite: [bold]{suite.suite.name}[/bold] v{suite.suite.version}")
+        console.print(f"Prompts: {len(suite.prompts)}")
+        console.print(f"Models: {', '.join(models)}")
+        if prompt_ids:
+            console.print(f"Filter: {', '.join(prompt_ids)}")
+
+        prompt_count = len(prompt_ids) if prompt_ids else len(suite.prompts)
+        total_seconds, with_history, total_calls = estimate_single_suite_duration_from_history(
+            models=models,
+            suite_name=suite.suite.name,
+            prompt_count=prompt_count,
+            repeats=repeats,
+            results_dir=output_dir,
         )
-    elif with_history == total_calls:
-        console.print(
-            f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
-            "[dim](median of prior runs)[/dim]"
-        )
+        if total_calls == 0 or with_history == 0:
+            console.print(
+                f"Estimated duration: [dim]no prior runs of these (model, suite) pairs "
+                f"in {output_dir}/ — first run, no estimate[/dim]"
+            )
+        elif with_history == total_calls:
+            console.print(
+                f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+                "[dim](median of prior runs)[/dim]"
+            )
+        else:
+            console.print(
+                f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
+                f"[dim]for {with_history}/{total_calls} calls "
+                "(no history for the rest)[/dim]"
+            )
+        console.print()
     else:
-        console.print(
-            f"Estimated duration: [bold]{format_estimate(total_seconds)}[/bold] "
-            f"[dim]for {with_history}/{total_calls} calls "
-            "(no history for the rest)[/dim]"
-        )
+        # Multi-task plan: full plan-table preview (lifted from overnight).
+        print_plan(plan, models, results_dir=output_dir)
 
-    console.print()
-
-    # Build backend and verify connectivity
+    # --- Preflight ---
     backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
 
-    check_server_or_exit(backend, backend_name)
+    console.print("[bold]Preflight checks[/bold]")
+    with console.status("  Checking server connectivity..."):
+        server_ok, server_msg = asyncio.run(backend.get_server_health())
+    status = "[green]PASS[/green]" if server_ok else "[red]FAIL[/red]"
+    console.print(f"  {status} Server: {server_msg}")
+    if not server_ok:
+        console.print("\n[red]Inference server not reachable. Aborting.[/red]")
+        raise typer.Exit(code=1)
+
     check_models_or_exit(backend, models, backend_name)
-    check_tool_support_or_exit(backend, models, suite, backend_name)
+
+    # GPU warmup + VRAM cofit are multi-task-only preflight steps. They
+    # exist to catch CPU-fallback / driver issues + judge-target VRAM
+    # contention before unattended-batch runs commit hours of inference.
+    # For a single-suite single-model single-repeat invocation (today's
+    # `run` shape), they're noise — skip them. This also keeps the inline
+    # path's existing test surface (mocked_run_environment) green without
+    # requiring tests to mock backend.chat() too.
+    if not use_inline_path:
+        with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
+            gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
+        status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
+        console.print(f"  {status} GPU acceleration: {gpu_msg}")
+
+    # Tool-calling capability check per (model, suite). For multi-suite
+    # plans, every task gets checked — a model lacking `tools` against a
+    # tool-use suite gets caught here regardless of which task it's in.
+    for task in plan:
+        check_tool_support_or_exit(backend, task.models, task.suite, backend_name)
 
     if do_evaluate:
         eval_model = resolve_eval_model_or_exit(
-            eval_backend, eval_model, backend, interactive=True,
+            eval_backend, eval_model, backend, interactive=not yes,
         )
         if eval_backend == "ollama":
             check_models_or_exit(backend, [eval_model], "ollama")
+        console.print(
+            f"  [green]PASS[/green] Evaluator: [bold]{eval_backend}/{eval_model}[/bold]"
+        )
 
-    eval_paths: list[Path] = []
+    # VRAM cofit check — multi-task-only (same rationale as the GPU
+    # warmup above; only meaningful for batch runs where the judge model
+    # would compete with target models for VRAM).
+    if not use_inline_path and do_evaluate and eval_backend == "ollama":
+        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, eval_model))
+        if cofit_ok:
+            console.print(f"  [green]PASS[/green] VRAM cofit: {cofit_msg}")
+        else:
+            console.print(f"  [yellow]WARN[/yellow] VRAM cofit: {cofit_msg}")
 
-    for model in models:
-        for repeat_i in range(1, repeats + 1):
-            repeat_label = f" (repeat {repeat_i}/{repeats})" if repeats > 1 else ""
-            console.rule(f"[bold]{model}[/bold]{repeat_label}")
+    console.print()
 
-            # Resolve the actual prompt list before opening the Progress bar.
-            # Doing this here (rather than inside run_suite) keeps the resume
-            # message and the bar from interleaving — Rich's live redraw was
-            # repainting "0/28" both before and after the filter message —
-            # and lets us short-circuit the no-op case cleanly without
-            # writing an empty result JSON.
-            prompts_to_run = list(suite.prompts)
-            if prompt_ids:
-                id_set = set(prompt_ids)
-                prompts_to_run = [p for p in prompts_to_run if p.id in id_set]
-                missing = id_set - {p.id for p in prompts_to_run}
-                if missing:
-                    console.print(
-                        f"[yellow]Warning: prompt IDs not found in suite: {missing}[/yellow]"
-                    )
+    # --- Optional system profiling phase ---
+    if do_profile:
+        if not isinstance(backend, OllamaBackend):
+            console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
+        else:
+            console.rule("[bold]System Profile[/bold]")
+            from porchbench.profiler import print_profile_summary, profile_system, write_profile
 
-            if resume:
-                already_done = find_completed_prompt_ids(
-                    suite_ref.name, model, Path(output_dir),
-                )
-                before = len(prompts_to_run)
-                prompts_to_run = [p for p in prompts_to_run if p.id not in already_done]
-                skipped = before - len(prompts_to_run)
-                if skipped:
-                    console.print(
-                        f"[dim]Resuming: skipping {skipped} already-completed "
-                        f"prompts[/dim]"
-                    )
-
-            if not prompts_to_run:
-                console.print(
-                    f"[dim]Nothing to run for {model} — all prompts already "
-                    f"completed.[/dim]"
-                )
-                console.print()
-                continue
-
-            prompt_count = len(prompts_to_run)
-            run_prompt_ids = [p.id for p in prompts_to_run]
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TimeElapsedColumn(),
-                console=console,
-            ) as progress:
-                task = progress.add_task(f"Running {model}", total=prompt_count)
-
-                def on_complete(prompt_id: str, success: bool, duration_s: float, prompt_num: int, total: int, result: PromptResult | None = None) -> None:
-                    status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
-                    dur = result.metrics.total_duration if result else None
-                    dur_str = f"{dur / 1e9:.1f}s" if dur else ""
-                    val_badge = format_validation_badge(result)
-
-                    if verbose and result:
-                        tps = result.metrics.tokens_per_second
-                        toks = result.metrics.eval_count
-                        done = result.response.done_reason or "?"
-                        vram = result.metrics.peak_vram_bytes
-                        # Only join populated metric parts so tool-use runs
-                        # (no per-token data) don't render as ', n/a, n/a'.
-                        parts = []
-                        if dur_str:
-                            parts.append(dur_str)
-                        if toks:
-                            parts.append(f"{toks} tokens")
-                        if tps:
-                            parts.append(f"{tps:.1f} tok/s")
-                        parts.append(f"done={done}")
-                        if vram:
-                            parts.append(f"{vram / (1024**3):.2f}GB VRAM")
-                        metrics_str = ", ".join(parts)
-                        sep = " " if metrics_str else ""
-                        progress.console.print(
-                            f"  {prompt_id}: {status}{val_badge}{sep}"
-                            f"[dim]{metrics_str}[/dim]"
-                        )
-                        preview = result.response.message.content[:200].replace("\n", " ")
-                        progress.console.print(f"    [dim]{preview}...[/dim]")
-                    else:
-                        time_part = f" [dim]{dur_str}[/dim]" if dur_str else ""
-                        progress.console.print(f"  {prompt_id}: {status}{val_badge}{time_part}")
-                    progress.advance(task)
-
-                result = asyncio.run(
-                    run_suite(
-                        suite=suite,
-                        suite_ref=suite_ref,
-                        model=model,
-                        backend=backend,
-                        prompt_ids=run_prompt_ids,
-                        output_dir=output_dir,
-                        on_prompt_complete=on_complete,
-                        suite_dir=suite_path.parent,
-                        repeat_index=repeat_i if repeats > 1 else None,
-                        total_repeats=repeats if repeats > 1 else None,
-                        resume=False,
-                        profile_vram=profile_vram,
-                    )
-                )
-
-            written_path = result_path_for(result, output_dir)
-            console.print(f"[green]Results written to {written_path}[/green]")
-
-            if do_evaluate:
-                eval_paths.append(written_path)
-
-            # Print summary table
-            _print_summary(result)
+            sys_profile = asyncio.run(profile_system(models, backend=backend))
+            path = write_profile(sys_profile, output_dir)
+            console.print(f"[green]Profile written to {path}[/green]\n")
+            print_profile_summary(sys_profile)
             console.print()
 
-    if do_evaluate and eval_paths:
-        console.rule("[bold]Evaluation[/bold]")
-        _run_post_phase_evaluation(
-            eval_paths=eval_paths,
-            eval_backend_name=eval_backend,
-            eval_model=eval_model,
-            host=host,
-            eval_timeout=eval_timeout,
-            rubric_path=rubric_path,
-            rubric_dir=rubric_dir,
-            results=[],
+    if do_evaluate:
+        console.print(
+            f"[bold]Post-run evaluation[/bold] will run after all inference completes "
+            f"([cyan]{eval_backend}/{eval_model}[/cyan])."
         )
+        console.print()
+
+    # --- Inference ---
+    start = _time.monotonic()
+
+    if use_inline_path:
+        # Fast inline path: preserves today's per-prompt verbose progress
+        # UX and the `-p` prompt-id filter. Single suite × single model ×
+        # single repeat, baseline only.
+        eval_paths: list[Path] = []
+        try:
+            written_path = _run_inline_single_suite(
+                suite=suite,
+                suite_ref=suite_ref,
+                suite_path=suite_path,
+                model=models[0],
+                backend=backend,
+                prompt_ids=prompt_ids,
+                output_dir=output_dir,
+                resume=resume,
+                verbose=verbose,
+                profile_vram=profile_vram,
+            )
+        except KeyboardInterrupt:
+            elapsed = _time.monotonic() - start
+            console.print("\n[yellow]Interrupted by user.[/yellow]")
+            console.print(f"Elapsed: {elapsed:.0f}s")
+            raise typer.Exit(code=130)
+        if written_path is not None:
+            eval_paths.append(written_path)
+
+        if do_evaluate and eval_paths:
+            console.rule("[bold]Evaluation[/bold]")
+            _run_post_phase_evaluation(
+                eval_paths=eval_paths,
+                eval_backend_name=eval_backend,
+                eval_model=eval_model,
+                host=host,
+                eval_timeout=eval_timeout,
+                rubric_path=rubric_path,
+                rubric_dir=rubric_dir,
+                results=[],
+            )
+        return
+
+    # Multi-task plan: delegate to execute_plan with the lifted callbacks
+    # from the old overnight command. Same per-prompt console output as
+    # overnight today; same plan-table preview already rendered above.
+    console.rule("[bold]Running benchmarks[/bold]")
+
+    def on_start(task, model, repeat):
+        repeat_str = f" repeat {repeat}/{task.repeats}" if repeat else ""
+        console.rule(f"[bold]{task.suite.suite.name}[/bold] / {model}{repeat_str}")
+
+    def on_done(result):
+        if result.success:
+            path_part = f" → {result.result_path.name}" if result.result_path else ""
+            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s){path_part}")
+        else:
+            console.print(f"  [red]Failed: {result.error}[/red]")
+
+    def on_prompt_complete(prompt_id, success, duration_s, prompt_num, total, result=None):
+        if duration_s >= 60:
+            mins, secs = divmod(int(duration_s), 60)
+            dur_str = f"{mins}m {secs:02d}s"
+        else:
+            dur_str = f"{duration_s:.1f}s"
+        counter = f"{prompt_num}/{total}"
+        val_badge = format_validation_badge(result)
+        if success:
+            console.print(rf"  [green]\[ok][/green]{val_badge}    {counter}  {prompt_id}  ({dur_str})")
+        else:
+            err = ""
+            if result is not None and result.response.done_reason:
+                err = f" - {str(result.response.done_reason).splitlines()[0][:80]}"
+            console.print(rf"  [red]\[fail][/red]  {counter}  {prompt_id}  (failed after {dur_str}{err})")
+
+    try:
+        results = asyncio.run(
+            execute_plan(
+                plan=plan,
+                backend=backend,
+                output_dir=output_dir,
+                resume=resume,
+                verbose=verbose,
+                on_task_start=on_start,
+                on_task_done=on_done,
+                on_prompt_complete=on_prompt_complete,
+                profile_vram=profile_vram,
+                heartbeat_s=60.0,
+            )
+        )
+    except KeyboardInterrupt:
+        elapsed = _time.monotonic() - start
+        console.print("\n[yellow]Interrupted by user.[/yellow]")
+        console.print(f"Elapsed: {elapsed:.0f}s")
+        raise typer.Exit(code=130)
+
+    if do_evaluate:
+        eval_paths = [r.result_path for r in results if r.success and r.result_path is not None]
+        if eval_paths:
+            console.rule("[bold]Evaluation[/bold]")
+            _run_post_phase_evaluation(
+                eval_paths=eval_paths,
+                eval_backend_name=eval_backend,
+                eval_model=eval_model,
+                host=host,
+                eval_timeout=eval_timeout,
+                rubric_path=rubric_path,
+                rubric_dir=rubric_dir,
+                results=results,
+            )
+
+    elapsed = _time.monotonic() - start
+    print_summary(results, elapsed)
+
+
+def _run_inline_single_suite(
+    suite,
+    suite_ref,
+    suite_path: Path,
+    model: str,
+    backend: InferenceBackend,
+    prompt_ids: list[str] | None,
+    output_dir: Path,
+    resume: bool,
+    verbose: bool,
+    profile_vram: bool,
+) -> Path | None:
+    """Today's `run` per-prompt inference loop, factored out for reuse.
+
+    Returns the written result path, or None if no prompts ran (full-resume
+    case). Preserves the per-prompt verbose console output and the `-p`
+    prompt-id filter — features the multi-task `execute_plan` path doesn't
+    expose today.
+    """
+    console.rule(f"[bold]{model}[/bold]")
+
+    prompts_to_run = list(suite.prompts)
+    if prompt_ids:
+        id_set = set(prompt_ids)
+        prompts_to_run = [p for p in prompts_to_run if p.id in id_set]
+        missing = id_set - {p.id for p in prompts_to_run}
+        if missing:
+            console.print(
+                f"[yellow]Warning: prompt IDs not found in suite: {missing}[/yellow]"
+            )
+
+    if resume:
+        already_done = find_completed_prompt_ids(
+            suite_ref.name, model, Path(output_dir),
+        )
+        before = len(prompts_to_run)
+        prompts_to_run = [p for p in prompts_to_run if p.id not in already_done]
+        skipped = before - len(prompts_to_run)
+        if skipped:
+            console.print(
+                f"[dim]Resuming: skipping {skipped} already-completed "
+                f"prompts[/dim]"
+            )
+
+    if not prompts_to_run:
+        console.print(
+            f"[dim]Nothing to run for {model} — all prompts already "
+            f"completed.[/dim]"
+        )
+        console.print()
+        return None
+
+    prompt_count = len(prompts_to_run)
+    run_prompt_ids = [p.id for p in prompts_to_run]
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task(f"Running {model}", total=prompt_count)
+
+        def on_complete(prompt_id: str, success: bool, duration_s: float, prompt_num: int, total: int, result: PromptResult | None = None) -> None:
+            status = "[green]ok[/green]" if success else "[red]FAIL[/red]"
+            dur = result.metrics.total_duration if result else None
+            dur_str = f"{dur / 1e9:.1f}s" if dur else ""
+            val_badge = format_validation_badge(result)
+
+            if verbose and result:
+                tps = result.metrics.tokens_per_second
+                toks = result.metrics.eval_count
+                done = result.response.done_reason or "?"
+                vram = result.metrics.peak_vram_bytes
+                parts = []
+                if dur_str:
+                    parts.append(dur_str)
+                if toks:
+                    parts.append(f"{toks} tokens")
+                if tps:
+                    parts.append(f"{tps:.1f} tok/s")
+                parts.append(f"done={done}")
+                if vram:
+                    parts.append(f"{vram / (1024**3):.2f}GB VRAM")
+                metrics_str = ", ".join(parts)
+                sep = " " if metrics_str else ""
+                progress.console.print(
+                    f"  {prompt_id}: {status}{val_badge}{sep}"
+                    f"[dim]{metrics_str}[/dim]"
+                )
+                preview = result.response.message.content[:200].replace("\n", " ")
+                progress.console.print(f"    [dim]{preview}...[/dim]")
+            else:
+                time_part = f" [dim]{dur_str}[/dim]" if dur_str else ""
+                progress.console.print(f"  {prompt_id}: {status}{val_badge}{time_part}")
+            progress.advance(task)
+
+        result = asyncio.run(
+            run_suite(
+                suite=suite,
+                suite_ref=suite_ref,
+                model=model,
+                backend=backend,
+                prompt_ids=run_prompt_ids,
+                output_dir=output_dir,
+                on_prompt_complete=on_complete,
+                suite_dir=suite_path.parent,
+                repeat_index=None,
+                total_repeats=None,
+                resume=False,
+                profile_vram=profile_vram,
+            )
+        )
+
+    written_path = result_path_for(result, output_dir)
+    console.print(f"[green]Results written to {written_path}[/green]")
+    _print_summary(result)
+    console.print()
+    return written_path
 
 
 def _print_summary(result: RunResult) -> None:
@@ -1338,391 +1629,18 @@ def eval_finalize(
     console.print(f"[green]Scorecard written to {path}[/green]")
 
 
-@app.command()
-def overnight(
-    models: Annotated[
-        list[str] | None,
-        typer.Option("--model", "-m", help="Model name(s). Repeat for multiple. Interactive picker if omitted."),
-    ] = None,
-    suite_paths: Annotated[
-        list[Path] | None,
-        typer.Option("--suite", "-s", help="Suite names or YAML paths. Repeat for multiple. Omit to auto-discover."),
-    ] = None,
-    repeats: Annotated[
-        int,
-        typer.Option("--repeats", "-n", help="Repeats per suite (ignored when --strategies is set; matrix expansion replaces repeats)."),
-    ] = 3,
-    backend_name: Annotated[
-        str,
-        typer.Option("--backend", envvar="PORCHBENCH_BACKEND", help="Inference backend: 'ollama' or 'openai-compat'."),
-    ] = "ollama",
-    host: Annotated[
-        str | None,
-        typer.Option("--host", "-H", envvar="OLLAMA_HOST", help="Ollama server URL."),
-    ] = None,
-    base_url: Annotated[
-        str | None,
-        typer.Option("--base-url", envvar="PORCHBENCH_BASE_URL", help="OpenAI-compat server URL."),
-    ] = None,
-    api_key: Annotated[
-        str | None,
-        typer.Option("--api-key", envvar="PORCHBENCH_API_KEY", help="API key for OpenAI-compat servers."),
-    ] = None,
-    output_dir: Annotated[
-        Path,
-        typer.Option("--output-dir", "-o", help="Directory for result JSON files."),
-    ] = Path("results"),
-    suite_dir: Annotated[
-        Path | None,
-        typer.Option(
-            "--suite-dir",
-            help="Directory to auto-discover suites from. Defaults to ./suites if present, else the packaged suites bundled with porchbench.",
-        ),
-    ] = None,
-    do_profile: Annotated[
-        bool,
-        typer.Option("--profile", help="Run system profiling before benchmarks."),
-    ] = False,
-    resume: Annotated[
-        bool,
-        typer.Option("--resume", help="Skip already-completed runs."),
-    ] = False,
-    yes: Annotated[
-        bool,
-        typer.Option("--yes", "-y", help="Skip confirmation prompt."),
-    ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Show per-prompt metrics."),
-    ] = False,
-    do_evaluate: Annotated[
-        bool,
-        typer.Option("--evaluate", help="Score all runs in a single post-phase batch after inference completes (judge model stays resident)."),
-    ] = False,
-    eval_backend: Annotated[
-        str,
-        typer.Option("--eval-backend", envvar="PORCHBENCH_EVAL_BACKEND", help="Evaluation backend: ollama, api, or claude-code."),
-    ] = "ollama",
-    eval_model: Annotated[
-        str | None,
-        typer.Option("--eval-model", envvar="PORCHBENCH_EVAL_MODEL", help="Judge model. Defaults per backend."),
-    ] = None,
-    rubric_path: Annotated[
-        Path | None,
-        typer.Option("--rubric", help="Rubric YAML for evaluation. Auto-resolved from suite if omitted."),
-    ] = None,
-    rubric_dir: Annotated[
-        Path | None,
-        typer.Option("--rubric-dir", help="Directory of category-specific rubrics."),
-    ] = None,
-    eval_timeout: Annotated[
-        int,
-        typer.Option("--eval-timeout", help="Timeout in seconds per prompt evaluation (claude-code backend)."),
-    ] = 120,
-    profile_vram: Annotated[
-        bool,
-        typer.Option("--profile-vram", help="Poll VRAM usage during inference (Ollama only)."),
-    ] = False,
-    set_overrides: Annotated[
-        list[str] | None,
-        typer.Option("--set", help="Override a suite default option as KEY=VALUE (e.g. --set think=false). Repeatable. Values parsed as YAML so booleans/ints/nulls round-trip."),
-    ] = None,
-    expand_strategies: Annotated[
-        bool,
-        typer.Option(
-            "--strategies",
-            help=(
-                "Expand each suite across all its strategies (prompt × strategy × model matrix). "
-                "Without this, overnight runs the baseline (one row per prompt). "
-                "Replaces the standalone `routes discover` command."
-            ),
-        ),
-    ] = False,
-) -> None:
-    """Queue multiple suites and models for unattended batch benchmarking."""
-    import time as _time
-
-    from porchbench.overnight import (
-        build_plan,
-        execute_plan,
-        print_plan,
-        print_summary,
+@app.command("overnight", hidden=True)
+def _overnight_removed() -> None:
+    console.print(
+        "[yellow]`overnight` was consolidated in v0.1.[/yellow]\n"
+        "Use [bold]porchbench run[/bold] — every flag is now supported there.\n"
+        "Common migrations:\n"
+        "  porchbench overnight ...                  -> porchbench run ...\n"
+        "  porchbench overnight --strategies ...     -> porchbench run --strategies ...\n"
+        "  porchbench overnight --profile --yes ...  -> porchbench run --profile --yes ..."
     )
+    raise typer.Exit(code=2)
 
-    from porchbench.suite import required_capabilities_for_suite
-
-    interactive = models is None or suite_paths is None
-
-    # Suite-first ordering: derive the union of required capabilities
-    # across all selected suites so the model picker can mark missing-cap
-    # models. Mirrors `run` flow.
-    if suite_paths:
-        paths = [find_suite(p) for p in suite_paths]
-    else:
-        from porchbench.interactive import select_suites
-        paths = select_suites(resolve_suite_dir(suite_dir))
-
-    # Validate --strategies against the selected suites BEFORE the model
-    # picker fires. Single-suite + flag set + suite has no strategies block
-    # = unambiguously wrong intent; hard-fail now so the user doesn't waste
-    # time picking models for a doomed run. Multi-suite mixed selection is
-    # legitimate (some suites expand, some baseline) — emit a per-suite
-    # warning and continue.
-    from porchbench.suite import suite_has_strategies
-    if expand_strategies:
-        without_strategies = [p for p in paths if not suite_has_strategies(p)]
-        if without_strategies and len(paths) == 1:
-            console.print(
-                f"[red]--strategies requested but {paths[0].name} has no `strategies:` block.[/red]\n"
-                f"  This suite has nothing to expand. Either drop --strategies (run baseline), "
-                f"or pick a strategies-bearing suite (e.g. routing-discovery, tool-use)."
-            )
-            raise typer.Exit(code=1)
-        for p in without_strategies:
-            console.print(
-                f"[yellow]Note:[/yellow] {p.name} has no strategies block — "
-                f"this suite will run baseline; --strategies applies only to "
-                f"strategies-bearing suites in this plan."
-            )
-
-    if models is None:
-        from porchbench.interactive import select_models
-
-        # Pre-load each suite to compute the union of required capabilities.
-        # `build_plan` re-loads them later (negligible cost vs. restructuring
-        # build_plan to accept already-loaded suites). Per-suite load
-        # failures are swallowed here — build_plan surfaces them with its
-        # own error path so we don't double-warn.
-        required_caps_set: set[str] = set()
-        for p in paths:
-            try:
-                required_caps_set.update(
-                    required_capabilities_for_suite(load_suite(p))
-                )
-            except Exception:
-                continue
-        required_caps = sorted(required_caps_set)
-
-        backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-        check_server_or_exit(backend, backend_name)
-        models = select_models(backend, required_capabilities=required_caps)
-
-    # Interactive options screen
-    if interactive:
-        from porchbench.interactive import select_overnight_options
-        opts = select_overnight_options(
-            default_repeats=repeats,
-            defaults={
-                "evaluate": do_evaluate,
-                "profile": do_profile,
-                "profile_vram": profile_vram,
-                "resume": resume,
-                "verbose": verbose,
-                "strategies": expand_strategies,
-            },
-        )
-        repeats = opts["repeats"]
-        do_evaluate = opts["evaluate"]
-        do_profile = opts["profile"]
-        profile_vram = opts["profile_vram"]
-        resume = opts["resume"]
-        verbose = opts["verbose"]
-        # If interactive options changed the toggle, re-validate before the
-        # plan builds — covers users who flip --strategies on in the menu
-        # against a non-strategies suite. Same hard-fail semantics as above.
-        if opts["strategies"] and not expand_strategies:
-            without_strategies = [p for p in paths if not suite_has_strategies(p)]
-            if without_strategies and len(paths) == 1:
-                console.print(
-                    f"[red]--strategies requested via toggle but {paths[0].name} has no `strategies:` block.[/red]"
-                )
-                raise typer.Exit(code=1)
-            for p in without_strategies:
-                console.print(
-                    f"[yellow]Note:[/yellow] {p.name} has no strategies block — baseline only."
-                )
-        expand_strategies = opts["strategies"]
-
-    overrides = parse_set_overrides(set_overrides)
-    if overrides:
-        console.print(f"Overrides: {overrides}")
-
-    # 2. Build plan
-    try:
-        plan = build_plan(
-            paths, models, repeats,
-            option_overrides=overrides,
-            expand_strategies=expand_strategies,
-        )
-    except Exception as exc:
-        console.print(f"[red]Failed to build plan: {exc}[/red]")
-        raise typer.Exit(code=1)
-
-    # 3. Display plan
-    console.print()
-    print_plan(plan, models, results_dir=output_dir)
-
-    # 4. Preflight checks
-    backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
-
-    console.print("[bold]Preflight checks[/bold]")
-
-    with console.status("  Checking server connectivity..."):
-        server_ok, server_msg = asyncio.run(backend.get_server_health())
-    status = "[green]PASS[/green]" if server_ok else "[red]FAIL[/red]"
-    console.print(f"  {status} Server: {server_msg}")
-
-    if not server_ok:
-        console.print("\n[red]Inference server not reachable. Aborting.[/red]")
-        raise typer.Exit(code=1)
-
-    # Verify every target model exists on the server before doing anything
-    # expensive. Without this, a typo or comma-as-separator mistake (e.g.
-    # `-m a:7b,b:3b` instead of `-m a:7b -m b:3b`) silently produces
-    # `<N> error: invalid model name (status code: 400)` for every prompt
-    # under --yes, wasting hours on guaranteed-to-fail inference.
-    check_models_or_exit(backend, models, backend_name)
-
-    from porchbench.overnight import check_gpu_status, check_vram_cofit
-
-    with console.status(f"  Warming up {models[0]} (loading model into VRAM)..."):
-        gpu_ok, gpu_msg = asyncio.run(check_gpu_status(backend, models[0]))
-    status = "[green]PASS[/green]" if gpu_ok else "[red]FAIL[/red]"
-    console.print(f"  {status} GPU acceleration: {gpu_msg}")
-
-    # Tool-calling capability check per (model, suite) — fail fast before
-    # queueing hours of inference that would just produce 0/N validations.
-    for task in plan:
-        check_tool_support_or_exit(backend, task.models, task.suite, backend_name)
-
-    # Resolve + validate the evaluator model before any inference work begins.
-    # Without this, a missing eval model would surface only after hours of
-    # inference, when post-phase scoring fails for every result.
-    if do_evaluate:
-        eval_model = resolve_eval_model_or_exit(
-            eval_backend, eval_model, backend, interactive=not yes,
-        )
-        if eval_backend == "ollama":
-            check_models_or_exit(backend, [eval_model], "ollama")
-        # Echo the resolved evaluator before the cofit check that depends
-        # on it — without this, the cofit message ("target + eval fit in
-        # VRAM (5.0 + 8.9 GB ...)") references an "eval" without naming
-        # which model the judge will be. Mirrors the `evaluate` command's
-        # `Evaluator: ollama/<judge>` preflight line.
-        console.print(
-            f"  [green]PASS[/green] Evaluator: [bold]{eval_backend}/{eval_model}[/bold]"
-        )
-
-    # VRAM co-fit check — only meaningful when --evaluate will load a judge on the same GPU
-    if do_evaluate and eval_backend == "ollama":
-        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, eval_model))
-        if cofit_ok:
-            console.print(f"  [green]PASS[/green] VRAM cofit: {cofit_msg}")
-        else:
-            console.print(f"  [yellow]WARN[/yellow] VRAM cofit: {cofit_msg}")
-
-    console.print()
-
-    # The pickers + plan table + preflight PASS lines already serve as
-    # visible confirmation. Ctrl-C is the off-ramp. `--yes/-y` retains its
-    # role gating *other* interactive prompts (eval-model picker fallback).
-
-    # 5. Optional profiling (Ollama only)
-    if do_profile:
-        if not isinstance(backend, OllamaBackend):
-            console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
-        else:
-            console.rule("[bold]System Profile[/bold]")
-            from porchbench.profiler import print_profile_summary, profile_system, write_profile
-
-            sys_profile = asyncio.run(profile_system(models, backend=backend))
-            path = write_profile(sys_profile, output_dir)
-            console.print(f"[green]Profile written to {path}[/green]\n")
-            print_profile_summary(sys_profile)
-            console.print()
-
-    # 7. Announce (but don't start) post-run evaluation
-    if do_evaluate:
-        console.print(
-            f"[bold]Post-run evaluation[/bold] will run after all inference completes "
-            f"([cyan]{eval_backend}/{eval_model}[/cyan])."
-        )
-        console.print()
-
-    # 8. Execute inference
-    console.rule("[bold]Running benchmarks[/bold]")
-    start = _time.monotonic()
-
-    def on_start(task, model, repeat):
-        repeat_str = f" repeat {repeat}/{task.repeats}" if repeat else ""
-        console.rule(f"[bold]{task.suite.suite.name}[/bold] / {model}{repeat_str}")
-
-    def on_done(result):
-        if result.success:
-            path_part = f" → {result.result_path.name}" if result.result_path else ""
-            console.print(f"  [green]Done[/green] ({result.duration_s:.0f}s){path_part}")
-        else:
-            console.print(f"  [red]Failed: {result.error}[/red]")
-
-    def on_prompt_complete(prompt_id, success, duration_s, prompt_num, total, result=None):
-        if duration_s >= 60:
-            mins, secs = divmod(int(duration_s), 60)
-            dur_str = f"{mins}m {secs:02d}s"
-        else:
-            dur_str = f"{duration_s:.1f}s"
-        counter = f"{prompt_num}/{total}"
-        val_badge = format_validation_badge(result)
-        if success:
-            console.print(rf"  [green]\[ok][/green]{val_badge}    {counter}  {prompt_id}  ({dur_str})")
-        else:
-            err = ""
-            if result is not None and result.response.done_reason:
-                err = f" - {str(result.response.done_reason).splitlines()[0][:80]}"
-            console.print(rf"  [red]\[fail][/red]  {counter}  {prompt_id}  (failed after {dur_str}{err})")
-
-    try:
-        results = asyncio.run(
-            execute_plan(
-                plan=plan,
-                backend=backend,
-                output_dir=output_dir,
-                resume=resume,
-                verbose=verbose,
-                on_task_start=on_start,
-                on_task_done=on_done,
-                on_prompt_complete=on_prompt_complete,
-                profile_vram=profile_vram,
-                heartbeat_s=60.0,
-            )
-        )
-    except KeyboardInterrupt:
-        elapsed = _time.monotonic() - start
-        console.print("\n[yellow]Interrupted by user.[/yellow]")
-        console.print(f"Elapsed: {elapsed:.0f}s")
-        raise typer.Exit(code=130)
-
-    # 9. Post-run batch evaluation — single judge-model load for all results
-    if do_evaluate:
-        eval_paths = [r.result_path for r in results if r.success and r.result_path is not None]
-        if eval_paths:
-            console.rule("[bold]Evaluation[/bold]")
-            _run_post_phase_evaluation(
-                eval_paths=eval_paths,
-                eval_backend_name=eval_backend,
-                eval_model=eval_model,
-                host=host,
-                eval_timeout=eval_timeout,
-                rubric_path=rubric_path,
-                rubric_dir=rubric_dir,
-                results=results,
-            )
-
-    # Capture elapsed after eval so the Overnight Complete duration covers
-    # both inference and judge-model scoring.
-    elapsed = _time.monotonic() - start
-
-    # 10. Summary
-    print_summary(results, elapsed)
 
 
 def _run_post_phase_evaluation(

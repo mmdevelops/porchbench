@@ -239,7 +239,7 @@ class PromptResult(BaseModel):
     contamination_risk: str | None = None  # high, medium, low — copied from Prompt
 
     # --- Routing discovery extensions ---
-    strategy: str | None = None  # strategy name when run via overnight --strategies
+    strategy: str | None = None  # strategy name when run via run --strategies
     correct: bool | None = None  # automated correctness check result
     expected_answer: str | None = None  # ground truth copied from prompt for analysis
 

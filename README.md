@@ -112,15 +112,18 @@ Measures model load/unload times, VRAM footprint, and co-residency capacity — 
 
 ### Run everything overnight
 
-Queue up a full benchmark run before bed or work. porchbench auto-discovers suites, runs them as straight benchmarks by default (one row per prompt), checks your GPU is working, and handles errors without stopping. Add `--strategies` to expand strategies-bearing suites into the prompt × strategy × model matrix instead of running them as a baseline.
+`run` accepts multiple suites — repeat `-s` to queue a full benchmark before bed or work. porchbench runs every suite as a straight benchmark by default (one row per prompt), checks your GPU is working, and handles errors without stopping. Add `--strategies` to expand strategies-bearing suites into the prompt × strategy × model matrix instead of running them as a baseline.
 
 ```bash
-porchbench overnight -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
+porchbench run -s coding-basics -s tool-use -s cross-domain \
+  -m gemma4:e4b -m qwen3:8b -m phi4:14b --repeats 3
 ```
 
-Add `--profile` to measure model load times and VRAM first, or `--yes` to skip the confirmation prompt for fully unattended runs. Add `--evaluate` to chain LLM-as-judge scoring as a single post-phase after all inference completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). Running eval as a post-phase keeps the judge model loaded once for the whole batch instead of swapping between target and judge on every run. With `--evaluate` you wake up to scorecards, not just raw results.
+Add `--profile` to measure model load times and VRAM first, or `--yes` for fully unattended mode (skips the eval-model picker fallback if no judge is configured). Add `--evaluate` to chain LLM-as-judge scoring as a single post-phase after all inference completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). Running eval as a post-phase keeps the judge model loaded once for the whole batch instead of swapping between target and judge on every run. With `--evaluate` you wake up to scorecards, not just raw results.
 
 Add `--resume` to skip `<suite, model, repeat>` triples whose result JSON is already in `results/`. Only completed runs are restored — a session interrupted mid-run loses its in-progress prompts because results write at the end of each run. Use it after a crash, an OOM, or an explicit Ctrl-C to pick up where the queue left off without re-paying for everything that already finished.
+
+> **Migrating from v0.0.x?** `porchbench overnight ...` consolidated into `porchbench run ...` (every flag is supported). `routes discover` consolidated into `run --strategies`. `routes analyze` was renamed to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
 
 ## Benchmark suites
 
