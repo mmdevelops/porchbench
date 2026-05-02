@@ -103,9 +103,16 @@ async def run_discovery(
     for model_name in models:
         console.print(f"\n[bold]Model: {model_name}[/bold]")
 
-        model_info = await backend.get_model_info(model_name)
+        from porchbench.runner import get_model_info_safe, get_system_info
 
-        from porchbench.runner import get_system_info
+        # Wrapped fetch — a transient connection error here (e.g. user
+        # restarted Ollama between models) would otherwise propagate out
+        # of asyncio.run() and kill the whole multi-model run, losing
+        # every model scheduled after this one. The stub fallback hands
+        # control to the per-cell try/except, which records each
+        # downstream chat() failure as an error PromptResult and writes
+        # the partial RunResult JSON for this model before moving on.
+        model_info = await get_model_info_safe(model_name, backend)
 
         run_meta = RunMetadata(
             suite=suite_ref,

@@ -284,7 +284,7 @@ async def run_suite(
         The completed RunResult (also written to disk).
     """
     # Gather model and system metadata
-    model_info = await _get_model_info_safe(model, backend)
+    model_info = await get_model_info_safe(model, backend)
     system_info = await get_system_info(backend)
 
     run_meta = RunMetadata(
@@ -443,8 +443,16 @@ def _write_result(run_result: RunResult, output_dir: str | Path) -> Path:
     return path
 
 
-async def _get_model_info_safe(model: str, backend: InferenceBackend) -> ModelInfo:
-    """Fetch model info, falling back to just the name on error."""
+async def get_model_info_safe(model: str, backend: InferenceBackend) -> ModelInfo:
+    """Fetch model info, falling back to just the name on error.
+
+    Used by run() and run_discovery() at the per-model setup boundary.
+    A bare `backend.get_model_info()` propagates ConnectionError straight
+    out of `asyncio.run()` if the inference server bounces between
+    models — which kills the entire multi-model command. The stub
+    fallback lets the per-prompt error-tolerant inference loop take
+    over and record errored cells instead.
+    """
     try:
         return await backend.get_model_info(model)
     except Exception as exc:

@@ -436,6 +436,71 @@ class TestResultPathFor:
         assert written.exists()
 
 
+class TestGetModelInfoSafe:
+    """Per-model setup must survive a transient inference-server bounce.
+
+    When the user restarts Ollama mid-multi-model run (`run` per-model
+    metadata fetch, or `routes discover` per-model loop), an unwrapped
+    `backend.get_model_info()` propagates ConnectionError out of
+    `asyncio.run()` and kills the entire command. The safe wrapper
+    falls back to a stub ModelInfo so the per-prompt error-tolerant
+    inference loop takes over and records each downstream failure as
+    an errored cell instead.
+    """
+
+    @pytest.mark.asyncio
+    async def test_happy_path_returns_real_model_info(self):
+        from porchbench.runner import get_model_info_safe
+        from porchbench.schemas import ModelDetails
+
+        backend = AsyncMock()
+        backend.get_model_info = AsyncMock(
+            return_value=ModelInfo(
+                name="qwen3:8b",
+                digest="abc123",
+                details=ModelDetails(family="qwen3", parameter_size="8B"),
+            )
+        )
+
+        info = await get_model_info_safe("qwen3:8b", backend)
+        assert info.name == "qwen3:8b"
+        assert info.digest == "abc123"
+        assert info.details.family == "qwen3"
+
+    @pytest.mark.asyncio
+    async def test_connection_error_falls_back_to_stub(self):
+        from porchbench.runner import get_model_info_safe
+
+        backend = AsyncMock()
+        backend.get_model_info = AsyncMock(
+            side_effect=ConnectionError(
+                "Failed to connect to Ollama. Please check that Ollama is "
+                "downloaded, running and accessible."
+            )
+        )
+
+        info = await get_model_info_safe("rnj-1:8b", backend)
+        assert info.name == "rnj-1:8b"
+        assert info.digest is None
+        # Bare ModelDetails — no family/parameter_size populated
+        assert info.details.family is None
+
+    @pytest.mark.asyncio
+    async def test_arbitrary_exception_also_falls_back(self):
+        # Any exception (LookupError, RuntimeError, etc.) degrades to a
+        # stub. The preflight `check_models_or_exit` already gated the
+        # model existing — at this stage we want maximum tolerance.
+        from porchbench.runner import get_model_info_safe
+
+        backend = AsyncMock()
+        backend.get_model_info = AsyncMock(
+            side_effect=RuntimeError("manifest checksum mismatch")
+        )
+
+        info = await get_model_info_safe("broken:1b", backend)
+        assert info.name == "broken:1b"
+
+
 class TestRunWithHeartbeat:
     """_run_with_heartbeat is the knob that turns 'silent for 15 min' into
     'visible progress' during slow ROCm cold-start compiles."""
