@@ -586,10 +586,22 @@ async def execute_plan(
                             on_prompt_complete=on_prompt_complete,
                             heartbeat_s=heartbeat_s,
                         )
+                        # When `run_suite` runs zero prompts (full-resume
+                        # case where everything was already complete), it
+                        # short-circuits without writing a result JSON.
+                        # Recording a result_path that wasn't written would
+                        # crash the post-phase eval reading a nonexistent
+                        # file. Latent bug today, more reachable under the
+                        # unified `run` multi-suite resume — guard at the
+                        # source.
+                        wrote_result = bool(run_result.results)
                         result = OvernightResult(
                             task=task, model=model, repeat=repeat_i,
                             success=True, duration_s=time.monotonic() - start,
-                            result_path=result_path_for(run_result, output_dir),
+                            result_path=(
+                                result_path_for(run_result, output_dir)
+                                if wrote_result else None
+                            ),
                         )
                     except KeyboardInterrupt:
                         raise

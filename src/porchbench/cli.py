@@ -65,7 +65,7 @@ _routes_removed_app = typer.Typer(
 def _routes_discover_removed() -> None:
     console.print(
         "[yellow]`routes discover` was removed in v0.1.[/yellow] "
-        "Use [bold]porchbench overnight --strategies[/bold] for the same matrix expansion."
+        "Use [bold]porchbench run --strategies[/bold] for the same matrix expansion."
     )
     raise typer.Exit(code=2)
 
@@ -1623,12 +1623,11 @@ def overnight(
 
     console.print()
 
-    # 5. Confirm
-    if not yes:
-        if not typer.confirm("Start overnight run?"):
-            raise typer.Exit()
+    # The pickers + plan table + preflight PASS lines already serve as
+    # visible confirmation. Ctrl-C is the off-ramp. `--yes/-y` retains its
+    # role gating *other* interactive prompts (eval-model picker fallback).
 
-    # 6. Optional profiling (Ollama only)
+    # 5. Optional profiling (Ollama only)
     if do_profile:
         if not isinstance(backend, OllamaBackend):
             console.print("[yellow]Warning: --profile skipped — requires Ollama backend.[/yellow]")
