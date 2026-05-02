@@ -352,6 +352,35 @@ Benchmarks saturate as models improve. MMLU went from discriminating to useless
 that includes tasks current local models cannot solve, and expect to replace or extend
 the suite as capabilities improve.
 
+### Context window sizing (`num_ctx`)
+
+The suite's `defaults.options.num_ctx` is the **total** context window — it must
+accommodate the longest prompt plus the response budget (`num_predict`). Ollama
+silently FIFO-truncates inputs that overflow `num_ctx`, with no field in the
+response indicating it happened. A truncated input usually still produces *an*
+answer, just one based on a head-clipped prompt — which silently corrupts the
+benchmark signal.
+
+The bundled suites set `num_ctx: 8192` against prompts that are well under 2K
+tokens, leaving generous headroom. When authoring a custom suite:
+
+- Size `num_ctx` to fit `max(prompt_tokens) + num_predict`, with a safety margin
+  for tokenizer variance across model families (a prompt that's 1500 tokens to
+  one model's tokenizer can be 1700 to another's).
+- Output truncation is detectable: porchbench captures `done_reason == "length"`
+  per prompt and the evaluator surfaces a `truncated_count` in the scorecard
+  with the hint `truncated before answer emitted (try think: false or a larger
+  num_predict)`. Input truncation is **not** detected automatically — see the
+  backlog item *"Suite preflight: input-token sizing vs num_ctx"* for the
+  planned tokenize-and-warn pre-flight check.
+
+If you're authoring long-context-heavy suites today, the safe operating
+procedure is: pre-tokenize representative prompts with the model family's
+tokenizer (e.g. `tiktoken cl100k_base` for GPT-derived families, or the
+HuggingFace tokenizer for the specific model), confirm the longest fits in
+`num_ctx - num_predict`, and bump `num_ctx` (via the suite YAML or
+`--set num_ctx=N`) until it does.
+
 ---
 
 ## Reproducibility Checklist

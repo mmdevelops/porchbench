@@ -128,7 +128,11 @@ def select_models(
         console.print("[red]No models selected.[/red]")
         raise typer.Exit(code=1)
 
-    return [names[i] for i in selected_idx]
+    chosen = [names[i] for i in selected_idx]
+    # Echo selection so the picker prompt above doesn't dangle without
+    # context once the next picker / page redraws over it.
+    console.print(f"[dim]Models: {', '.join(chosen)}[/dim]")
+    return chosen
 
 
 def select_evaluator_model(backend: InferenceBackend) -> str:
@@ -202,6 +206,7 @@ def select_suite(
         console.print("[red]No suite selected.[/red]")
         raise typer.Exit(code=1)
 
+    console.print(f"[dim]Suite: {chosen}[/dim]")
     return suite_dir / chosen
 
 
@@ -229,6 +234,7 @@ def select_suites(suite_dir: Path | None = None) -> list[Path]:
         console.print("[red]No suites selected.[/red]")
         raise typer.Exit(code=1)
 
+    console.print(f"[dim]Suites: {', '.join(selected)}[/dim]")
     return [suite_dir / name for name in selected]
 
 
