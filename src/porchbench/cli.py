@@ -653,15 +653,13 @@ def run(
     # --- Preflight ---
     backend = construct_backend(backend_name, host=host, base_url=base_url, api_key=api_key)
 
-    console.print("[bold]Preflight checks[/bold]")
-    with console.status("  Checking server connectivity..."):
-        server_ok, server_msg = asyncio.run(backend.get_server_health())
-    status = "[green]PASS[/green]" if server_ok else "[red]FAIL[/red]"
-    console.print(f"  {status} Server: {server_msg}")
-    if not server_ok:
-        console.print("\n[red]Inference server not reachable. Aborting.[/red]")
-        raise typer.Exit(code=1)
+    if not use_inline_path:
+        console.print("[bold]Preflight checks[/bold]")
 
+    # check_server_or_exit handles the server-health probe + clear exit on
+    # failure; using it here keeps run's preflight aligned with the rest
+    # of the codebase (and the existing test fixture mocks it directly).
+    check_server_or_exit(backend, backend_name)
     check_models_or_exit(backend, models, backend_name)
 
     # GPU warmup + VRAM cofit are multi-task-only preflight steps. They
