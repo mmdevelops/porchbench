@@ -1684,6 +1684,14 @@ def overnight(
         )
         if eval_backend == "ollama":
             check_models_or_exit(backend, [eval_model], "ollama")
+        # Echo the resolved evaluator before the cofit check that depends
+        # on it — without this, the cofit message ("target + eval fit in
+        # VRAM (5.0 + 8.9 GB ...)") references an "eval" without naming
+        # which model the judge will be. Mirrors the `evaluate` command's
+        # `Evaluator: ollama/<judge>` preflight line.
+        console.print(
+            f"  [green]PASS[/green] Evaluator: [bold]{eval_backend}/{eval_model}[/bold]"
+        )
 
     # VRAM co-fit check — only meaningful when --evaluate will load a judge on the same GPU
     if do_evaluate and eval_backend == "ollama":
