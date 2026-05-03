@@ -89,7 +89,7 @@ class OllamaEvalBackend:
         self._backend = OllamaBackend(host=host)
 
     async def generate(self, prompt: str) -> str:
-        options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=8192)
+        options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=32768)
         result = await self._backend.chat(
             messages=[{"role": "user", "content": prompt}],
             model=self.model,

@@ -361,8 +361,17 @@ response indicating it happened. A truncated input usually still produces *an*
 answer, just one based on a head-clipped prompt — which silently corrupts the
 benchmark signal.
 
-The bundled suites set `num_ctx: 8192` against prompts that are well under 2K
-tokens, leaving generous headroom. When authoring a custom suite:
+The bundled suites set `num_ctx: 32768` against prompts that are well under
+2K tokens, leaving generous headroom. The 32k figure aligns with the
+agent-harness project's default cap so cross-tool comparisons against the
+same Ollama server don't trigger model reloads (Ollama serializes requests
+against a loaded instance only when `num_ctx` and other model options match;
+a mismatch forces an unload/reload cycle that wastes minutes per transition
+and confounds latency measurements). On a 16 GB GPU the KV-cache cost at
+32k is roughly 5 GB for an 18B-class model, 2.5 GB for 7-8B, and under 1 GB
+for 3-4B — fits comfortably with a co-resident judge for the smaller
+classes; the 18B+target+judge case may want `--set num_ctx=16384` if VRAM
+cofit fails. When authoring a custom suite:
 
 - Size `num_ctx` to fit `max(prompt_tokens) + num_predict`, with a safety margin
   for tokenizer variance across model families (a prompt that's 1500 tokens to
