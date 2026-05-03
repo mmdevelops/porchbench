@@ -168,12 +168,32 @@ def parse_set_overrides(items: list[str] | None) -> dict[str, object]:
     return out
 
 
+def preview_eval_model(backend_name: str, explicit_model: str | None) -> str | None:
+    """Return the judge model that `resolve_eval_model_or_exit` *would* pick
+    without firing the interactive picker — for label-decoration only.
+
+    Mirrors the resolver's precedence (explicit CLI / env > cloud-backend
+    default), but stops short of prompting. Returns None when the resolver
+    would fall through to the interactive picker (ollama with no
+    PORCHBENCH_EVAL_MODEL set), so callers can render
+    `(judge: pick on confirm)` instead of guessing.
+    """
+    from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
+
+    if explicit_model:
+        return explicit_model
+    if backend_name in EVAL_BACKEND_DEFAULTS:
+        return EVAL_BACKEND_DEFAULTS[backend_name]
+    return None
+
+
 def resolve_eval_model_or_exit(
     backend_name: str,
     explicit_model: str | None,
     backend: InferenceBackend | None,
     *,
     interactive: bool,
+    force_pick: bool = False,
 ) -> str:
     """Resolve which model to use as the LLM-as-judge evaluator.
 
@@ -181,14 +201,21 @@ def resolve_eval_model_or_exit(
     cloud-backend default > interactive picker (ollama). For ollama with no
     explicit model, prompts the user to pick from currently-available models
     and offers to persist the choice to ./.env so future runs skip the prompt.
+
+    `force_pick=True` skips the explicit-model and cloud-default branches
+    and goes straight to the interactive picker — used by the run options
+    "Re-pick judge for this run" toggle. The picker's "save as default"
+    confirmation is also suppressed under `force_pick` since the user's
+    intent is a one-shot override, not a new persisted default.
     """
     from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
 
-    if explicit_model:
-        return explicit_model
+    if not force_pick:
+        if explicit_model:
+            return explicit_model
 
-    if backend_name in EVAL_BACKEND_DEFAULTS:
-        return EVAL_BACKEND_DEFAULTS[backend_name]
+        if backend_name in EVAL_BACKEND_DEFAULTS:
+            return EVAL_BACKEND_DEFAULTS[backend_name]
 
     if not interactive:
         console.print(
@@ -208,6 +235,9 @@ def resolve_eval_model_or_exit(
     from porchbench.interactive import select_evaluator_model
 
     chosen = select_evaluator_model(backend)
+
+    if force_pick:
+        return chosen
 
     if typer.confirm(f"Save '{chosen}' as default evaluator in .env?", default=True):
         _persist_eval_model_default(chosen)
@@ -546,8 +576,17 @@ def run(
             required_capabilities=sorted(required_caps_set),
         )
 
+    repick_judge = False
     if interactive:
         from porchbench.interactive import select_run_options
+        # Resolve which judge label to render alongside the Evaluate
+        # toggle. Uses the same precedence as the post-options resolver,
+        # but stops at the cloud-default / env layer — the interactive
+        # picker (if any) fires after the options screen confirms.
+        judge_preview = preview_eval_model(eval_backend, eval_model)
+        judge_label = (
+            f"{eval_backend}/{judge_preview}" if judge_preview else None
+        )
         opts = select_run_options(
             default_repeats=repeats,
             defaults={
@@ -558,6 +597,7 @@ def run(
                 "evaluate": do_evaluate,
                 "strategies": expand_strategies,
             },
+            judge_label=judge_label,
         )
         repeats = opts["repeats"]
         verbose = opts["verbose"]
@@ -565,6 +605,7 @@ def run(
         profile_vram = opts["profile_vram"]
         do_profile = opts["profile"]
         do_evaluate = opts["evaluate"]
+        repick_judge = opts.get("repick_judge", False)
         # Re-validate strategies if the toggle flipped on after suite picker
         if opts["strategies"] and not expand_strategies:
             without_strategies = [p for p in suite_paths if not suite_has_strategies(p)]
@@ -683,7 +724,9 @@ def run(
 
     if do_evaluate:
         eval_model = resolve_eval_model_or_exit(
-            eval_backend, eval_model, backend, interactive=not yes,
+            eval_backend, eval_model, backend,
+            interactive=not yes,
+            force_pick=repick_judge,
         )
         if eval_backend == "ollama":
             check_models_or_exit(backend, [eval_model], "ollama")

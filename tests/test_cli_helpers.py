@@ -120,3 +120,110 @@ def test_suite_has_strategies_false_for_unparseable_yaml(tmp_path):
     p = tmp_path / "broken.yaml"
     p.write_text("this is: : not valid : yaml :\n", encoding="utf-8")
     assert suite_has_strategies(p) is False
+
+
+# ---------------------------------------------------------------------------
+# preview_eval_model — read-only label resolver for the run options picker
+# ---------------------------------------------------------------------------
+
+
+def test_preview_eval_model_returns_explicit_when_set():
+    """CLI flag / PORCHBENCH_EVAL_MODEL wins over backend defaults."""
+    from porchbench.cli import preview_eval_model
+
+    assert preview_eval_model("ollama", "qwen3:8b") == "qwen3:8b"
+    assert preview_eval_model("api", "claude-haiku-4-5-20251001") == "claude-haiku-4-5-20251001"
+
+
+def test_preview_eval_model_returns_cloud_default_when_no_explicit():
+    """Cloud backends (api / claude-code) have stable named defaults — the
+    label resolver should surface them without firing the picker."""
+    from porchbench.cli import preview_eval_model
+    from porchbench.evaluator import EVAL_BACKEND_DEFAULTS
+
+    assert preview_eval_model("api", None) == EVAL_BACKEND_DEFAULTS["api"]
+    assert preview_eval_model("claude-code", None) == EVAL_BACKEND_DEFAULTS["claude-code"]
+
+
+def test_preview_eval_model_returns_none_for_ollama_no_explicit():
+    """Ollama with no explicit model = picker would fire — caller should
+    render `(judge: pick on confirm)` in the toggle label."""
+    from porchbench.cli import preview_eval_model
+
+    assert preview_eval_model("ollama", None) is None
+
+
+# ---------------------------------------------------------------------------
+# resolve_eval_model_or_exit force_pick branch — drives the "Re-pick judge
+# for this run" toggle. Must skip both the explicit-model and cloud-default
+# shortcuts, and must NOT prompt to persist the picked model.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_eval_model_force_pick_skips_explicit_and_persistence(monkeypatch):
+    """force_pick=True should ignore any explicit_model / env setting and
+    fire the picker; the persistence prompt must not appear (one-shot
+    override)."""
+    from unittest.mock import MagicMock
+
+    from porchbench import cli
+    from porchbench.backend import OllamaBackend
+
+    select_mock = MagicMock(return_value="picked-model:7b")
+    confirm_mock = MagicMock(return_value=True)
+    persist_mock = MagicMock()
+
+    # interactive.select_evaluator_model is imported inside the function;
+    # patch the module attr the call resolves to.
+    import porchbench.interactive as interactive_mod
+    monkeypatch.setattr(interactive_mod, "select_evaluator_model", select_mock)
+    monkeypatch.setattr(cli.typer, "confirm", confirm_mock)
+    monkeypatch.setattr(cli, "_persist_eval_model_default", persist_mock)
+
+    backend = MagicMock(spec=OllamaBackend)
+    chosen = cli.resolve_eval_model_or_exit(
+        "ollama",
+        explicit_model="env-default:8b",  # would be returned without force_pick
+        backend=backend,
+        interactive=True,
+        force_pick=True,
+    )
+
+    assert chosen == "picked-model:7b"
+    select_mock.assert_called_once_with(backend)
+    # Critical: no persistence prompt under force_pick — override is for
+    # this run only.
+    confirm_mock.assert_not_called()
+    persist_mock.assert_not_called()
+
+
+def test_resolve_eval_model_default_path_still_prompts_to_persist(monkeypatch):
+    """Regression check: the existing first-use path (no explicit, no
+    force_pick) must keep prompting to persist the picked default — that's
+    what saves users from re-picking on every subsequent run."""
+    from unittest.mock import MagicMock
+
+    from porchbench import cli
+    from porchbench.backend import OllamaBackend
+
+    select_mock = MagicMock(return_value="first-pick:8b")
+    confirm_mock = MagicMock(return_value=True)
+    persist_mock = MagicMock()
+
+    import porchbench.interactive as interactive_mod
+    monkeypatch.setattr(interactive_mod, "select_evaluator_model", select_mock)
+    monkeypatch.setattr(cli.typer, "confirm", confirm_mock)
+    monkeypatch.setattr(cli, "_persist_eval_model_default", persist_mock)
+
+    backend = MagicMock(spec=OllamaBackend)
+    chosen = cli.resolve_eval_model_or_exit(
+        "ollama",
+        explicit_model=None,
+        backend=backend,
+        interactive=True,
+        force_pick=False,
+    )
+
+    assert chosen == "first-pick:8b"
+    confirm_mock.assert_called_once()
+    persist_mock.assert_called_once_with("first-pick:8b")

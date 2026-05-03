@@ -401,14 +401,35 @@ def select_rubric_group(
 # Options screens
 # ---------------------------------------------------------------------------
 
-_RUN_TOGGLES = [
-    ("Verbose output", "verbose"),
-    ("Resume (skip completed)", "resume"),
-    ("Profile VRAM during inference", "profile_vram"),
-    ("Profile system first", "profile"),
-    ("Evaluate results in a post-phase batch after inference", "evaluate"),
-    ("Run all strategies (routing matrix; suites with a `strategies:` block only)", "strategies"),
-]
+def _build_run_toggles(judge_label: str | None) -> list[tuple[str, str]]:
+    """Compose the run-options toggle list, decorating the Evaluate label
+    with the resolved judge so users can see which model will be used
+    *before* opting in.
+
+    `judge_label` is rendered inline as `[dim](judge: <label>)[/dim]`. Pass
+    None when no judge is resolvable (the interactive picker will fire on
+    confirm) — the label degrades to `(judge: pick on confirm)`.
+    """
+    judge_hint = judge_label or "pick on confirm"
+    evaluate_label = (
+        f"Evaluate results in a post-phase batch after inference  "
+        f"[dim](judge: {judge_hint})[/dim]"
+    )
+    return [
+        ("Verbose output", "verbose"),
+        ("Resume (skip completed)", "resume"),
+        ("Profile VRAM during inference", "profile_vram"),
+        ("Profile system first", "profile"),
+        (evaluate_label, "evaluate"),
+        (
+            "Re-pick judge for this run (override saved default; this run only)",
+            "repick_judge",
+        ),
+        (
+            "Run all strategies (routing matrix; suites with a `strategies:` block only)",
+            "strategies",
+        ),
+    ]
 
 
 def _prompt_repeats(default: int) -> int:
@@ -450,10 +471,19 @@ def _prompt_toggles(
 def select_run_options(
     default_repeats: int = 1,
     defaults: dict[str, bool] | None = None,
+    judge_label: str | None = None,
 ) -> dict:
-    """Interactive options screen for the run command."""
+    """Interactive options screen for the run command.
+
+    `judge_label` is decorated onto the Evaluate toggle so users can see
+    which judge model the post-phase eval will use before ticking the
+    box. Resolve via the same precedence the eval-model resolver uses
+    (explicit CLI flag > env / .env > backend default for cloud); pass
+    None for "ollama with no PORCHBENCH_EVAL_MODEL set" so the label
+    advertises the picker.
+    """
     repeats = _prompt_repeats(default_repeats)
-    toggles = _prompt_toggles(_RUN_TOGGLES, defaults=defaults)
+    toggles = _prompt_toggles(_build_run_toggles(judge_label), defaults=defaults)
     return {"repeats": repeats, **toggles}
 
 

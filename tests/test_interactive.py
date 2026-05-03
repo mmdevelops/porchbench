@@ -1,6 +1,6 @@
 """Tests for interactive picker label rendering and capability gating."""
 
-from porchbench.interactive import _format_model_label
+from porchbench.interactive import _build_run_toggles, _format_model_label
 
 
 class TestFormatModelLabel:
@@ -52,3 +52,46 @@ class TestFormatModelLabel:
         )
         assert label == "any-model  [vision]"
         assert qualifies is True
+
+
+class TestBuildRunToggles:
+    """Run options picker decorates the Evaluate label with the resolved judge
+    so users see which model will score before opting in. Hybrid: a sibling
+    Re-pick toggle lets users override the saved default for one run without
+    leaving the picker."""
+
+    def _evaluate_label(self, toggles):
+        return next(label for label, key in toggles if key == "evaluate")
+
+    def test_resolved_judge_shows_inline(self):
+        toggles = _build_run_toggles(judge_label="ollama/gemma4:e4b")
+        label = self._evaluate_label(toggles)
+        assert "Evaluate results in a post-phase batch" in label
+        assert "(judge: ollama/gemma4:e4b)" in label
+        # Rich dim markup wraps the hint so the judge identity stays
+        # visually subordinate to the toggle's primary action.
+        assert "[dim]" in label and "[/dim]" in label
+
+    def test_unresolved_judge_advertises_picker(self):
+        # ollama backend with no PORCHBENCH_EVAL_MODEL set — picker fires
+        # post-confirm, label tells the user that's coming.
+        toggles = _build_run_toggles(judge_label=None)
+        label = self._evaluate_label(toggles)
+        assert "(judge: pick on confirm)" in label
+
+    def test_repick_toggle_present_and_keyed(self):
+        toggles = _build_run_toggles(judge_label="ollama/gemma4:e4b")
+        keys = [k for _, k in toggles]
+        assert "repick_judge" in keys
+        # Sits adjacent to evaluate so users find it without scanning the
+        # whole list.
+        assert keys.index("repick_judge") == keys.index("evaluate") + 1
+
+    def test_strategies_toggle_preserved(self):
+        # Regression check: adding the new toggle didn't drop the existing
+        # ones.
+        toggles = _build_run_toggles(judge_label=None)
+        keys = [k for _, k in toggles]
+        for required in ("verbose", "resume", "profile_vram", "profile",
+                         "evaluate", "repick_judge", "strategies"):
+            assert required in keys, f"missing toggle: {required}"
