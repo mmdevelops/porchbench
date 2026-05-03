@@ -213,3 +213,23 @@ class TestOvernightMigrationShim:
         assert result.exit_code == 2, result.output
         assert "consolidated in v0.1" in result.output
         assert "porchbench run" in result.output
+
+    def test_overnight_with_options_prints_breadcrumb(self):
+        """Users running their old `overnight --strategies -s X -m Y`
+        invocations must hit the migration breadcrumb, not a Typer
+        "No such option" parser error. The shim accepts arbitrary
+        extra args via context_settings and ignores them.
+        """
+        result = runner.invoke(
+            app, ["overnight", "--strategies", "-s", "tool-use", "-m", "qwen3:8b"],
+        )
+
+        assert result.exit_code == 2, result.output
+        assert "consolidated in v0.1" in result.output
+        assert "porchbench run --strategies" in result.output
+
+    def test_overnight_with_positional_args_prints_breadcrumb(self):
+        result = runner.invoke(app, ["overnight", "foo", "bar", "--unknown=qux"])
+
+        assert result.exit_code == 2, result.output
+        assert "consolidated in v0.1" in result.output

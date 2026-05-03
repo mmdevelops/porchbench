@@ -1677,8 +1677,19 @@ def eval_finalize(
     console.print(f"[green]Scorecard written to {path}[/green]")
 
 
-@app.command("overnight", hidden=True)
-def _overnight_removed() -> None:
+@app.command(
+    "overnight",
+    hidden=True,
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
+def _overnight_removed(ctx: typer.Context) -> None:
+    # Accept ANY positional / option arg so users running their old
+    # `porchbench overnight --strategies -s tool-use ...` invocations
+    # get the migration breadcrumb instead of a Typer "No such option"
+    # error. The shim ignores ctx.args; its only job is to print the
+    # pointer + exit 2 so downstream tooling can detect the deprecation
+    # without parsing stderr.
+    del ctx
     console.print(
         "[yellow]`overnight` was consolidated in v0.1.[/yellow]\n"
         "Use [bold]porchbench run[/bold] — every flag is now supported there.\n"
