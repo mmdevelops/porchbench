@@ -606,6 +606,16 @@ def run(
         do_profile = opts["profile"]
         do_evaluate = opts["evaluate"]
         repick_judge = opts.get("repick_judge", False)
+        # Re-pick judge alone is meaningless without post-phase evaluation;
+        # picking a judge for nothing-to-judge is the user clearly intending
+        # "score this run with a different judge". Imply --evaluate and tell
+        # them so the auto-promotion isn't silent.
+        if repick_judge and not do_evaluate:
+            console.print(
+                "[yellow]Note:[/yellow] Re-pick judge implies --evaluate; "
+                "enabling post-phase evaluation."
+            )
+            do_evaluate = True
         # Re-validate strategies if the toggle flipped on after suite picker
         if opts["strategies"] and not expand_strategies:
             without_strategies = [p for p in suite_paths if not suite_has_strategies(p)]

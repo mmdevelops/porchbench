@@ -233,3 +233,68 @@ class TestOvernightMigrationShim:
 
         assert result.exit_code == 2, result.output
         assert "consolidated in v0.1" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Re-pick judge toggle implies --evaluate
+# ---------------------------------------------------------------------------
+
+
+class TestRepickImpliesEvaluate:
+    """Re-pick judge alone is meaningless without post-phase evaluation.
+    Picking a different judge for nothing-to-judge would silently no-op,
+    leaving the user wondering why the model picker never appeared (the
+    bug behind this test). The CLI promotes `do_evaluate=True` when the
+    user tickets Re-pick alone, and surfaces a [Note] line so the
+    auto-promotion is visible.
+    """
+
+    def test_repick_alone_promotes_evaluate_and_prints_note(self):
+        captured: dict = {}
+
+        def _resolve_stub(backend_name, explicit, backend, *, interactive, force_pick=False):
+            captured["force_pick"] = force_pick
+            captured["called"] = True
+            raise typer.Exit(99)
+
+        opts_returned = {
+            "repeats": 1,
+            "verbose": False,
+            "resume": False,
+            "profile_vram": False,
+            "profile": False,
+            "evaluate": False,        # user did NOT tick Evaluate
+            "repick_judge": True,     # user DID tick Re-pick
+            "strategies": False,
+        }
+
+        with (
+            patch(
+                "porchbench.interactive.select_suites",
+                return_value=[find_suite("coding-basics")],
+            ),
+            patch(
+                "porchbench.interactive.select_models",
+                return_value=["fake-model:1b"],
+            ),
+            patch(
+                "porchbench.interactive.select_run_options",
+                return_value=opts_returned,
+            ),
+            patch("porchbench.cli.construct_backend", return_value=MagicMock()),
+            patch("porchbench.cli.check_server_or_exit"),
+            patch("porchbench.cli.check_models_or_exit"),
+            patch("porchbench.cli.check_tool_support_or_exit"),
+            patch("porchbench.cli.resolve_eval_model_or_exit", side_effect=_resolve_stub),
+        ):
+            result = runner.invoke(app, ["run"])
+
+        # The auto-promotion message surfaces so the user knows what
+        # happened.
+        assert "Re-pick judge implies --evaluate" in result.output, result.output
+        # Crucially: resolve_eval_model_or_exit was reached at all,
+        # which proves do_evaluate was flipped to True. Also confirms
+        # force_pick=True propagated from the toggle.
+        assert captured.get("called") is True, "resolve was never called — eval branch skipped"
+        assert captured.get("force_pick") is True, "force_pick should propagate from repick_judge"
+        assert result.exit_code == 99, result.output
