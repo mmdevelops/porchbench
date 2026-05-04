@@ -1368,7 +1368,7 @@ def compare(
 def analyze_routes_cmd(
     result_paths: Annotated[
         list[Path] | None,
-        typer.Option("--result", "-r", help="Result files from `overnight --strategies`. Interactive picker if omitted."),
+        typer.Option("--result", "-r", help="Result files from `run --strategies`. Interactive picker if omitted."),
     ] = None,
     output_dir: Annotated[
         Path,
@@ -1389,7 +1389,7 @@ def analyze_routes_cmd(
         ),
     ] = None,
 ) -> None:
-    """Analyze `overnight --strategies` results to find optimal routing strategies."""
+    """Analyze `run --strategies` results to find optimal routing strategies."""
     from porchbench.routing import analyze_routes
 
     # Interactive selection when args omitted. Prefix with a usage hint so
@@ -1403,7 +1403,7 @@ def analyze_routes_cmd(
         console.print(
             "[bold]analyze-routes[/bold] is cross-model — "
             "pick [bold]≥2 routing-discovery results from different models[/bold] "
-            "(same suite, run via [cyan]porchbench overnight --strategies[/cyan])."
+            "(same suite, run via [cyan]porchbench run --strategies[/cyan])."
         )
         result_paths = select_results(
             filter_predicate=_is_routing_discovery_result,
@@ -1432,11 +1432,11 @@ def analyze_routes_cmd(
             for r in non_routing
         )
         console.print(
-            f"[red]analyze-routes requires results produced by `porchbench overnight --strategies` "
+            f"[red]analyze-routes requires results produced by `porchbench run --strategies` "
             f"(prompts must carry a strategy tag). These files have no strategy data:\n  "
             f"{offenders}\n"
-            f"If you intended to run a strategy matrix, use `porchbench overnight --strategies "
-            f"-s <suite>` (not `porchbench run`).[/red]"
+            f"If you intended to run a strategy matrix, re-run with "
+            f"`porchbench run --strategies -s <suite>`.[/red]"
         )
         raise typer.Exit(code=1)
 
@@ -1450,7 +1450,7 @@ def analyze_routes_cmd(
         only = next(iter(distinct_models)) if distinct_models else "<none>"
         console.print(
             f"[red]analyze-routes needs at least 2 distinct models to compare; "
-            f"got 1 ({only}). Re-run `porchbench overnight --strategies` with "
+            f"got 1 ({only}). Re-run `porchbench run --strategies` with "
             f"`-m <model> -m <other-model>` and pass both result files to "
             f"`analyze-routes`.[/red]"
         )

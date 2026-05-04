@@ -312,7 +312,7 @@ def aggregate_by_model(
 ) -> list[ModelRow]:
     """Group scorecards by model label and aggregate across repeats.
 
-    Multiple scorecards for the same model (e.g. from `overnight --repeats N`)
+    Multiple scorecards for the same model (e.g. from `run --repeats N`)
     collapse into a single ModelRow with mean scores and a repeat count.
     Per-prompt best/worst lookups pool scores by prompt_id across repeats and
     average — so a prompt that was consistently easy for a model stays ranked

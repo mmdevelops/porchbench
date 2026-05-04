@@ -41,7 +41,7 @@ SECONDS_PER_PROMPT_DEFAULT = 30.0
 
 @dataclass
 class OvernightTask:
-    """A unit of work in the overnight plan."""
+    """A unit of work in the multi-task run plan."""
 
     suite_path: Path
     suite: Suite
@@ -435,7 +435,7 @@ def print_plan(
     """
     any_expansion = any(t.expand_strategies for t in plan)
 
-    table = Table(title="Overnight Plan", title_style="bold")
+    table = Table(title="Run Plan", title_style="bold")
     table.add_column("Suite", style="bold")
     table.add_column("Prompts", justify="right")
     if any_expansion:
@@ -517,7 +517,7 @@ async def execute_plan(
     profile_vram: bool = False,
     heartbeat_s: float | None = None,
 ) -> list[OvernightResult]:
-    """Execute the overnight plan with error resilience.
+    """Execute the multi-task run plan with error resilience.
 
     Inference runs one model at a time to completion. Successful standard
     runs record their on-disk `result_path` so a post-phase evaluator can
@@ -627,13 +627,13 @@ async def execute_plan(
 
 
 def print_summary(results: list[OvernightResult], total_elapsed: float) -> None:
-    """Print a formatted summary of the overnight run."""
+    """Print a formatted summary of the multi-task run."""
     hours = int(total_elapsed // 3600)
     minutes = int((total_elapsed % 3600) // 60)
     seconds = int(total_elapsed % 60)
     time_str = f"{hours}h {minutes:02d}m {seconds:02d}s" if hours else f"{minutes}m {seconds:02d}s"
 
-    console.print(f"\n[bold]=== Overnight Complete ({time_str}) ===[/bold]\n")
+    console.print(f"\n[bold]=== Run Complete ({time_str}) ===[/bold]\n")
 
     # Group by suite
     by_suite: dict[str, list[OvernightResult]] = {}

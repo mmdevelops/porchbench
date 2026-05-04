@@ -2,7 +2,7 @@
 
 Implements the routing discovery pipeline from DESIGN-ROUTING.md:
 1. Expand prompts across strategies (run_discovery, surfaced as
-   `overnight --strategies`)
+   `run --strategies`)
 2. Check correctness against expected answers
 3. Analyze the result matrix to find routing patterns (analyze_routes,
    surfaced as the top-level `analyze-routes` command)

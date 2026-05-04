@@ -74,7 +74,7 @@ def _portable_suite_id(path: Path) -> str:
 def suite_has_strategies(path: Path) -> bool:
     """Cheap YAML peek: does the suite define a non-empty `strategies:` block?
 
-    Used by `overnight --strategies` to detect "you toggled the matrix
+    Used by `run --strategies` to detect "you toggled the matrix
     expansion but the suite has no strategies block to expand against"
     — single-suite single-error, multi-suite per-suite warning + skip.
     Reads only as much YAML as needed; tolerant of unparseable files
