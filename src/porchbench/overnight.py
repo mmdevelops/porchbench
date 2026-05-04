@@ -1,11 +1,13 @@
-"""Overnight orchestration: unattended multi-suite benchmark runs.
+"""Multi-task orchestration: unattended multi-suite benchmark runs.
 
 Builds an execution plan, runs preflight checks, and executes one
 model at a time with error resilience. Default dispatch is baseline
 (one row per prompt, no strategy system message). Opt into the
 strategy matrix (prompt × strategy × model fan-out) per-task via
 `OvernightTask.expand_strategies`, which the CLI surfaces as
-`overnight --strategies` and an options-screen toggle.
+`run --strategies` and an options-screen toggle. Module name kept
+as `overnight` because the dataclass / helpers are imported widely
+(`OvernightTask`, `build_plan`, `execute_plan`); rename deferred.
 """
 
 from __future__ import annotations

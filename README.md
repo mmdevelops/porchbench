@@ -52,7 +52,7 @@ The first time you run an Ollama-backed eval without `--evaluator`, porchbench p
 
 Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
-To collapse run + score into one step, pass `--evaluate` to `porchbench run` (mirrors the same flag on `overnight`). All inference completes first, then the judge model loads once and scores every result in a single post-phase batch — no swap thrashing between target model and judge. Compose with `--eval-backend ollama|api|claude-code` and `--eval-model <name>` to override defaults. With `--yes` (unattended) on `overnight`, you must pass `--eval-model` or set `PORCHBENCH_EVAL_MODEL` — the picker won't fire.
+To collapse run + score into one step, pass `--evaluate` to `porchbench run`. All inference completes first, then the judge model loads once and scores every result in a single post-phase batch — no swap thrashing between target model and judge. Compose with `--eval-backend ollama|api|claude-code` and `--eval-model <name>` to override defaults. With `--yes` (unattended), you must pass `--eval-model` or set `PORCHBENCH_EVAL_MODEL` — the picker won't fire.
 
 ### Compare models
 
@@ -136,7 +136,7 @@ Suites ship bundled with the package and are referenced by name:
 | `routing-discovery` | 92 | Prompt strategy x model scale interactions with 5 strategies (universal, brevity, direct, chain-of-thought, structured) |
 | `tool-use` | 19 | Agent-style tasks with sandboxed code execution, scored by outcome state. Ships 4 tool-planning strategies (universal, cot, direct, structured) |
 
-**Which suites benefit from `overnight --strategies`?** Only suites that define a `strategies:` block in their YAML — currently `routing-discovery` and `tool-use`. The strategy set is chosen per-suite because different domains have different strategy × scale interactions worth measuring: CoT helps reasoning, a "numbered plan" preamble helps tool-use planning, neither would meaningfully differentiate factual recall. `coding-basics` and `cross-domain` intentionally stick to a single default prompt — they answer "how good is this model at X" rather than "which prompt strategy unlocks the smaller model." Without `--strategies`, every suite (including the strategies-bearing ones) runs as a straight benchmark.
+**Which suites benefit from `run --strategies`?** Only suites that define a `strategies:` block in their YAML — currently `routing-discovery` and `tool-use`. The strategy set is chosen per-suite because different domains have different strategy × scale interactions worth measuring: CoT helps reasoning, a "numbered plan" preamble helps tool-use planning, neither would meaningfully differentiate factual recall. `coding-basics` and `cross-domain` intentionally stick to a single default prompt — they answer "how good is this model at X" rather than "which prompt strategy unlocks the smaller model." Without `--strategies`, every suite (including the strategies-bearing ones) runs as a straight benchmark.
 
 **Customizing or adding your own:** drop a YAML file in `./suites/` next to where you run `porchbench` and it automatically overrides the packaged copy with the same name (or adds a new one). Same pattern for `./rubrics/`. You can also pass an explicit path: `--suite ./my-suite.yaml`.
 
