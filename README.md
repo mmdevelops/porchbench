@@ -48,7 +48,7 @@ Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If yo
 porchbench evaluate --result results/<your-result-file>.json
 ```
 
-The first time you run an Ollama-backed eval without `--evaluator`, porchbench prompts you to pick a judge from your locally-pulled models and offers to save the choice as `PORCHBENCH_EVAL_MODEL` in `./.env`. Subsequent runs skip the prompt. Override anytime with `--evaluator <name>` or by editing `.env`. Cloud backends (`--backend api`, `--backend claude-code`) use stable defaults (`claude-sonnet-4-6`, `sonnet`) without prompting.
+The first time you run an Ollama-backed eval without `--evaluator`, porchbench prompts you to pick a judge from your locally-pulled models and offers to save the choice as `PORCHBENCH_EVAL_MODEL` in `./.env`. Subsequent runs skip the prompt. Override anytime with `--evaluator <name>` or by editing `.env`. Cloud backends (`--eval-backend api`, `--eval-backend claude-code`) use stable defaults (`claude-sonnet-4-6`, `sonnet`) without prompting.
 
 Scorecards are written to `scorecards/` as `<timestamp>_<run-id-prefix>.json`.
 
@@ -165,7 +165,7 @@ src/porchbench/        Python package
   profiler.py          Hardware and model profiling
   compare.py           Side-by-side comparison rendering
   leaderboard.py       Cross-scorecard ranking
-  overnight.py         Unattended multi-suite orchestration
+  overnight.py         Multi-task orchestration (build_plan, execute_plan)
   doctor.py            Environment diagnostics — `porchbench doctor`
   metrics.py           Throughput and latency metrics
   statistics.py        Bootstrap CIs, paired comparisons, effect sizes

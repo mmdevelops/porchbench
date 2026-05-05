@@ -17,7 +17,7 @@ repository-code: "https://github.com/mmdevelops/porchbench"
 url: "https://github.com/mmdevelops/porchbench"
 license: Apache-2.0
 version: 0.1.0
-date-released: 2026-04-16
+date-released: 2026-05-04
 keywords:
   - large-language-models
   - benchmarking
