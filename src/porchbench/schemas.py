@@ -1,8 +1,8 @@
 """Pydantic models for suite definitions, run results, rubrics, and scorecards.
 
 Covers the full data lifecycle: suite YAML → run result JSON → scorecard JSON.
-Schema extension fields from DESIGN-ROUTING.md and DESIGN-SANDBOX.md are included
-as optional fields so the validation layer accepts all suite types.
+Routing-discovery and tool-use/sandbox extension fields are included as optional
+attributes so the validation layer accepts all suite types.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ class SuiteDefaults(BaseModel):
 
 
 class Strategy(BaseModel):
-    """A prompt strategy template for routing discovery (DESIGN-ROUTING.md)."""
+    """A prompt strategy template for routing discovery."""
 
     system_message: str = ""
 
@@ -78,12 +78,12 @@ class Prompt(BaseModel):
     # --- Methodology extension (METHODOLOGY.md) ---
     contamination_risk: str | None = None  # high, medium, low
 
-    # --- Routing extensions (DESIGN-ROUTING.md) ---
+    # --- Routing extensions ---
     answer_type: str | None = None  # factual, numeric, code, explanation, open-ended
     reasoning_depth: str | None = None  # shallow, medium, deep
     expected_answer: str | None = None
 
-    # --- Sandbox extensions (DESIGN-SANDBOX.md) — models deferred, typed as Any ---
+    # --- Sandbox extensions — sub-models deferred, typed as Any ---
     mode: str = "text"  # text | tool-use
     tools: list[dict[str, Any]] | None = None
     sandbox: dict[str, Any] | None = None
@@ -264,7 +264,7 @@ class PromptResult(BaseModel):
     correct: bool | None = None  # automated correctness check result
     expected_answer: str | None = None  # ground truth copied from prompt for analysis
 
-    # --- Tool-use extensions (DESIGN-SANDBOX.md) ---
+    # --- Tool-use extensions ---
     validation_passed: bool | None = None  # sandbox validator result
     validation_reason: str | None = None
     stopped_reason: str | None = None  # done, max_tool_calls, max_turns, error
@@ -410,7 +410,7 @@ class EvalData(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Routing discovery schemas (DESIGN-ROUTING.md)
+# Routing discovery schemas
 # ---------------------------------------------------------------------------
 
 
@@ -491,7 +491,7 @@ class RoutingAnalysis(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# System profile schemas (DESIGN-ROUTING.md profiler)
+# System profile schemas (profiler subsystem)
 # ---------------------------------------------------------------------------
 
 

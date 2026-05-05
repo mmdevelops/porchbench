@@ -1,6 +1,6 @@
 """Routing discovery: strategy expansion, correctness checking, and analysis.
 
-Implements the routing discovery pipeline from DESIGN-ROUTING.md:
+The routing discovery pipeline:
 1. Expand prompts across strategies (run_discovery, surfaced as
    `run --strategies`)
 2. Check correctness against expected answers

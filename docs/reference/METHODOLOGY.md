@@ -4,8 +4,6 @@ Standards and practices for rigorous LLM evaluation in porchbench. Informed by
 academic literature, established benchmark frameworks (HELM, lm-evaluation-harness,
 OpenLLM Leaderboard v2), and Anthropic's agent evaluation guide.
 
-**Depends on:** DESIGN.md (core framework), DESIGN-ROUTING.md (routing discovery)
-
 ---
 
 ## Statistical Rigor
@@ -307,7 +305,8 @@ This follows the OpenLLM Leaderboard v2 methodology.
 
 ### Weighted composites
 
-The existing rubric design (DESIGN.md) uses weighted criteria with 1-5 scales. When
+Shipped rubrics use weighted criteria with 1-5 scales (see `src/porchbench/data/rubrics/`
+for the YAML files and `Rubric` in `src/porchbench/schemas.py` for the schema). When
 computing weighted scores:
 - Report both the composite and per-criterion scores
 - Include the rubric version in the scorecard (rubric evolution = new evaluation, not
@@ -411,8 +410,9 @@ Every run result should capture sufficient metadata for exact reproduction:
 | `num_ctx` | From options | Context window affects quality and VRAM |
 | `num_predict` | From options | Max output length |
 
-Most of this is already in the run result schema (DESIGN.md). The additions are
-model file SHA (from `ollama.show()` digest) and Ollama server version.
+Most of this is already in the `RunResult` schema (see `src/porchbench/schemas.py`,
+exported as `from porchbench import RunResult`). The additions are model file SHA
+(from `ollama.show()` digest) and Ollama server version.
 
 ---
 
