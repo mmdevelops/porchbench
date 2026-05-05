@@ -31,12 +31,23 @@ _JSON_OPENER_RE = re.compile(r"[\{\[]")
 
 
 def _has_tool_call_shape(obj: Any) -> bool:
-    """Tool-call shape predicate: ``{"name": str, "arguments": dict}``."""
-    return (
-        isinstance(obj, dict)
-        and isinstance(obj.get("name"), str)
-        and isinstance(obj.get("arguments"), dict)
-    )
+    """Tool-call shape predicate: ``{"name": str, "arguments": dict}``.
+
+    Also unwraps one level of ``{"function": {...}}`` or
+    ``{"function_call": {...}}`` — Anthropic SDK / OpenAI-tool-call wrappers
+    that some Ollama-served fine-tunes emit when failing-to-structured.
+    Mirrors the shape set the agent-harness project's detector covers, per
+    the cross-project detector pact.
+    """
+    if not isinstance(obj, dict):
+        return False
+    if isinstance(obj.get("name"), str) and isinstance(obj.get("arguments"), dict):
+        return True
+    for wrapper in ("function", "function_call"):
+        inner = obj.get(wrapper)
+        if isinstance(inner, dict) and _has_tool_call_shape(inner):
+            return True
+    return False
 
 
 def looks_like_tool_call_json(content: str) -> bool:

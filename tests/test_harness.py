@@ -317,6 +317,12 @@ async def test_harness_records_error_for_unknown_tool():
     '{"foo": "bar"} {"name": "x", "arguments": {}}',
     # Pretty-printed multiline (also seen in real runs)
     '{\n  "name": "read_file",\n  "arguments": {\n    "path": "data.txt"\n  }\n}',
+    # Wrapped shapes — Anthropic SDK / OpenAI-tool-call conventions that some
+    # Ollama-served fine-tunes emit when failing-to-structured. Mirrors
+    # agent-harness's detector per the cross-project pact (2026-05).
+    '{"function": {"name": "read_file", "arguments": {"path": "x"}}}',
+    '{"function_call": {"name": "read_file", "arguments": {"path": "x"}}}',
+    '```json\n{"function": {"name": "x", "arguments": {}}}\n```',
 ])
 def test_looks_like_tool_call_json_recognises_tool_call_shapes(content: str):
     assert looks_like_tool_call_json(content) is True
@@ -339,6 +345,10 @@ def test_looks_like_tool_call_json_recognises_tool_call_shapes(content: str):
     "[]",
     '```json\n[]\n```',
     '[{"foo": "bar"}, {"baz": 1}]',  # list of non-tool-call dicts
+    # Wrapper key present but inner shape is wrong — must NOT register
+    '{"function": {"name": "x"}}',  # missing arguments
+    '{"function_call": "not_a_dict"}',  # inner not a dict
+    '{"function": {"foo": "bar"}}',  # inner has neither name nor arguments
 ])
 def test_looks_like_tool_call_json_rejects_non_tool_call_content(content: str):
     assert looks_like_tool_call_json(content) is False
