@@ -19,24 +19,72 @@ dist/
 build/
 .eggs/
 *.egg
+*.so
+*.dylib
+*.dll
+
+# Python tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.tox/
+.nox/
+
+# Coverage / benchmarks
+.coverage
+.coverage.*
+htmlcov/
+.benchmarks/
+
+# Pip / packaging scratch
+pip-log.txt
+pip-delete-this-directory.txt
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# IDE
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE / editor
 .vscode/
 .idea/
+.cursor/
+.aider*
 *.swp
 *.swo
+
+# Scratch files left by editors and patch tools
+*.bak
+*.orig
+*.rej
+*.tmp
+*.log
 
 # OS
 .DS_Store
 Thumbs.db
 
-# User config
+# User config — env vars and direnv
 .env
+.env.local
+.env.*.local
+.envrc
+
+# Defensive: credentials / private keys must never enter the repo
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+id_rsa
+id_ed25519
+secrets/
+credentials.json
 
 # porchbench outputs (regenerable)
 results/
