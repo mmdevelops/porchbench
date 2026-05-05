@@ -100,8 +100,6 @@ porchbench analyze-routes \
   --result results/<discovery-result-2>.json
 ```
 
-> **Migrating from v0.0.x routes commands?** `routes discover` was consolidated into `run --strategies` (same matrix expansion, now on the unified benchmark command). `routes analyze` was promoted to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
-
 ### Profile your hardware
 
 ```bash
@@ -122,8 +120,6 @@ porchbench run -s coding-basics -s tool-use -s cross-domain \
 Add `--profile` to measure model load times and VRAM first, or `--yes` for fully unattended mode (skips the eval-model picker fallback if no judge is configured). Add `--evaluate` to chain LLM-as-judge scoring as a single post-phase after all inference completes — pick the judge backend with `--eval-backend ollama|api|claude-code` (defaults to local ollama). Running eval as a post-phase keeps the judge model loaded once for the whole batch instead of swapping between target and judge on every run. With `--evaluate` you wake up to scorecards, not just raw results.
 
 Add `--resume` to skip `<suite, model, repeat>` triples whose result JSON is already in `results/`. Only completed runs are restored — a session interrupted mid-run loses its in-progress prompts because results write at the end of each run. Use it after a crash, an OOM, or an explicit Ctrl-C to pick up where the queue left off without re-paying for everything that already finished.
-
-> **Migrating from v0.0.x?** `porchbench overnight ...` consolidated into `porchbench run ...` (every flag is supported). `routes discover` consolidated into `run --strategies`. `routes analyze` was renamed to top-level `analyze-routes`. Old invocations print a one-line breadcrumb pointing at the new commands.
 
 ## Benchmark suites
 
