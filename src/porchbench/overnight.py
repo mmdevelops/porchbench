@@ -329,12 +329,20 @@ async def check_vram_cofit(
     backend: InferenceBackend,
     target_models: list[str],
     eval_model: str,
+    *,
+    num_ctx: int = 8192,
 ) -> tuple[bool, str]:
     """Warn if target + eval model can't cofit in VRAM.
 
     Returns (ok, message). `ok=False` is advisory only — the caller should
     surface the warning but not block the run. Only meaningful on
     OllamaBackend where we can look up disk sizes.
+
+    `num_ctx` is the worst-case context window in use across the run; it
+    drives a context-aware headroom estimate for KV cache (which scales
+    linearly with context length on each resident model). The default 8192
+    matches the prior fixed 1.5 GB headroom and is what the unit tests
+    assume; production callers should pass the actual planned value.
     """
     if not isinstance(backend, OllamaBackend):
         return True, "cofit check not available for this backend"
@@ -353,26 +361,35 @@ async def check_vram_cofit(
         sizes_gb[m] = size_bytes / (1024**3)
 
     eval_gb = sizes_gb[eval_model]
-    # Leave ~1 GB headroom for KV cache + compute graph on each side
-    HEADROOM_GB = 1.5
+
+    # Headroom = compute graph (roughly fixed) + KV cache (scales linearly
+    # with num_ctx, summed across both resident models). Anchored to the
+    # 1.5 GB that empirically worked at 8K context with two models, then
+    # scaled. At 32K the formula gives 4.5 GB; at 4K, 1.0 GB.
+    COMPUTE_GRAPH_GB = 0.5
+    KV_GB_AT_8K_BOTH_SIDES = 1.0
+    headroom_gb = COMPUTE_GRAPH_GB + KV_GB_AT_8K_BOTH_SIDES * (num_ctx / 8192)
 
     # Worst-case: largest target model + eval model + headroom must fit in VRAM
     worst_target = max(target_models, key=lambda m: sizes_gb[m])
     worst_target_gb = sizes_gb[worst_target]
-    combined = worst_target_gb + eval_gb + HEADROOM_GB
+    combined = worst_target_gb + eval_gb + headroom_gb
 
     if combined <= vram_gb:
         return True, (
             f"target + eval fit in VRAM "
-            f"({worst_target_gb:.1f} + {eval_gb:.1f} GB + ~1.5 GB headroom ≤ {vram_gb:.1f} GB)"
+            f"({worst_target_gb:.1f} + {eval_gb:.1f} GB + ~{headroom_gb:.1f} GB headroom "
+            f"@ num_ctx={num_ctx} ≤ {vram_gb:.1f} GB)"
         )
 
     return False, (
         f"target + eval don't cofit ({worst_target}={worst_target_gb:.1f} GB + "
-        f"{eval_model}={eval_gb:.1f} GB + ~1.5 GB headroom = {combined:.1f} GB > "
-        f"{vram_gb:.1f} GB). Ollama will swap between models at eval time. "
+        f"{eval_model}={eval_gb:.1f} GB + ~{headroom_gb:.1f} GB headroom "
+        f"@ num_ctx={num_ctx} = {combined:.1f} GB > {vram_gb:.1f} GB). "
+        f"Ollama will swap between models at eval time. "
         f"Mitigations: --eval-backend claude-code / --eval-backend api (off-GPU judge); "
-        f"smaller --eval-model; or drop --evaluate and run `porchbench evaluate -r results/*.json` later."
+        f"smaller --eval-model; or drop --evaluate now and run `porchbench evaluate` "
+        f"later — it'll prompt for the result files to score."
     )
 
 

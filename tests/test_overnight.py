@@ -512,3 +512,40 @@ class TestCheckVramCofit:
 
         assert ok is True
         assert "not available" in msg
+
+    @pytest.mark.asyncio
+    async def test_headroom_scales_with_num_ctx(self):
+        """Same models on tight VRAM: fits at 8K context, doesn't fit at 32K.
+
+        Pins the linear KV-cache scaling: at 8K the headroom matches the prior
+        fixed 1.5 GB; at 32K (current suite default) it's 4.5 GB, which can
+        flip the verdict.
+        """
+        from porchbench.backend import OllamaBackend
+        from porchbench.overnight import check_vram_cofit
+
+        backend = MagicMock(spec=OllamaBackend)
+
+        async def _fake_size(_backend, model):
+            return {"target:8b": 2 * 1024**3, "judge": 2 * 1024**3}[model]
+
+        with (
+            patch("porchbench.overnight.detect_gpu", return_value=("Test GPU", 6.0)),
+            patch("porchbench.overnight._get_ollama_model_size_bytes", side_effect=_fake_size),
+        ):
+            # 8K: 2 + 2 + 1.5 = 5.5 ≤ 6 → fits
+            ok_8k, msg_8k = await check_vram_cofit(
+                backend, ["target:8b"], "judge", num_ctx=8192,
+            )
+            # 32K: 2 + 2 + 4.5 = 8.5 > 6 → doesn't fit
+            ok_32k, msg_32k = await check_vram_cofit(
+                backend, ["target:8b"], "judge", num_ctx=32768,
+            )
+
+        assert ok_8k is True
+        assert "num_ctx=8192" in msg_8k
+        assert "1.5 GB headroom" in msg_8k
+
+        assert ok_32k is False
+        assert "num_ctx=32768" in msg_32k
+        assert "4.5 GB headroom" in msg_32k

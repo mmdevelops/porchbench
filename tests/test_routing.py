@@ -5,6 +5,7 @@ import pytest
 from porchbench.routing import (
     _find_best_cell,
     _parse_param_size,
+    _routing_discovery_filename,
     analyze_routes,
     build_routing_matrix,
     check_correctness,
@@ -139,6 +140,55 @@ class TestFindBestCell:
 
     def test_empty_list(self):
         assert _find_best_cell([]) is None
+
+
+# ---------------------------------------------------------------------------
+# Filename construction
+# ---------------------------------------------------------------------------
+
+
+class TestRoutingDiscoveryFilename:
+    """The strategy-write filename uses the actual suite slug, not a hardcoded
+    `routing-discovery` literal. Earlier behavior misnamed every
+    `tool-use --strategies` output with the routing-discovery slug, making
+    on-disk files indistinguishable from a real routing-discovery suite run.
+    """
+
+    def _build(self, suite_name: str) -> RunResult:
+        from datetime import UTC, datetime
+        return RunResult(
+            run=RunMetadata(
+                timestamp=datetime(2026, 5, 6, 1, 50, 10, tzinfo=UTC),
+                suite=SuiteReference(
+                    name=suite_name, version="1.0", file=f"<bundled>/{suite_name}.yaml",
+                    sha256="x" * 64,
+                ),
+                model=ModelInfo(name="m:8b", details=ModelDetails(parameter_size="8B")),
+                system=SystemInfo(),
+            ),
+            results=[],
+            summary=RunSummary(
+                total_prompts=0, completed=0, failed=0, total_duration_s=0.0,
+            ),
+        )
+
+    def test_tool_use_suite_uses_tool_use_slug(self):
+        run = self._build("Tool Use Discovery")
+        assert _routing_discovery_filename(run, "ministral-3:8b") == (
+            "2026-05-06T01-50-10_tool-use-discovery_ministral-3-8b.json"
+        )
+
+    def test_routing_discovery_suite_unchanged(self):
+        run = self._build("Routing Discovery")
+        assert _routing_discovery_filename(run, "qwen3:8b") == (
+            "2026-05-06T01-50-10_routing-discovery_qwen3-8b.json"
+        )
+
+    def test_model_slug_strips_colons_and_slashes(self):
+        run = self._build("Tool Use Discovery")
+        assert _routing_discovery_filename(run, "org/model:tag") == (
+            "2026-05-06T01-50-10_tool-use-discovery_org-model-tag.json"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -363,9 +413,11 @@ class TestAnalyzeRoutesCli:
     def test_picker_filters_to_routing_discovery_files(self, tmp_path):
         """The interactive picker for `routes analyze` must hide non-routing
         result files so users can't accidentally pick a regular `run` output.
-        Filter is filename pre-filter + content check (`results[0].strategy`
-        non-null) — filename alone is ambiguous when a suite is literally
-        named `routing-discovery` and run via plain `porchbench run`."""
+        Filter is a pure content check (`results[0].strategy` non-null) —
+        filename is no longer pre-filtered because the on-disk slug now
+        reflects the actual suite (e.g. `tool-use-discovery` for
+        `tool-use --strategies`), so a fixed substring rule would
+        false-reject valid strategy-bearing files."""
         from typer.testing import CliRunner
 
         from porchbench.cli import app
@@ -391,7 +443,9 @@ class TestAnalyzeRoutesCli:
         """When a suite literally named `routing-discovery` got run via plain
         `porchbench run`, the resulting filename matches `_routing-discovery_`
         but the contents have no strategy tags. The picker filter must drop
-        these via the content check, not just trust the filename."""
+        these via the content check (the filename pre-filter has been
+        removed entirely, but legacy files of this shape are still
+        correctly rejected by the content check)."""
         from typer.testing import CliRunner
 
         from porchbench.cli import app

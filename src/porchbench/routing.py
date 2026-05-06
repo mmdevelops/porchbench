@@ -58,6 +58,22 @@ def count_discovery_runs(suite: Suite, models: list[str]) -> int:
     return len(suite.prompts) * n_strategies * len(models)
 
 
+def _routing_discovery_filename(run_result: RunResult, model_name: str) -> str:
+    """Build the on-disk filename for a strategy-expansion run.
+
+    Uses the actual suite slug (e.g. ``tool-use-discovery``,
+    ``routing-discovery``), matching the convention ``runner.py`` uses for
+    non-strategy runs. The filename was previously hardcoded to
+    ``routing-discovery`` regardless of source suite, which made
+    ``tool-use --strategies`` output indistinguishable on disk from a
+    ``routing-discovery`` suite run.
+    """
+    ts = run_result.run.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
+    suite_slug = run_result.run.suite.slug
+    model_slug = model_name.replace(":", "-").replace("/", "-")
+    return f"{ts}_{suite_slug}_{model_slug}.json"
+
+
 async def _run_tool_use_discovery_cell(
     prompt,
     model: str,
@@ -243,10 +259,7 @@ async def run_discovery(
         # Write per-model result
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        ts = run_result.run.timestamp.strftime("%Y-%m-%dT%H-%M-%S")
-        model_slug = model_name.replace(":", "-").replace("/", "-")
-        filename = f"{ts}_routing-discovery_{model_slug}.json"
-        path = out_dir / filename
+        path = out_dir / _routing_discovery_filename(run_result, model_name)
         path.write_text(run_result.model_dump_json(indent=2), encoding="utf-8")
         console.print(f"  [green]Written: {path}[/green]")
 

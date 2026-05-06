@@ -64,6 +64,11 @@ EVAL_BACKEND_DEFAULTS: dict[str, str] = {
     "claude-code": "sonnet",
 }
 
+# Context window for the Ollama judge. Exposed at module level because the
+# VRAM cofit preflight in `cli.py` needs it to size headroom for the judge's
+# KV cache.
+EVALUATOR_NUM_CTX = 32768
+
 
 # ---------------------------------------------------------------------------
 # Backend protocol — any callable that takes a prompt string and returns text
@@ -89,7 +94,9 @@ class OllamaEvalBackend:
         self._backend = OllamaBackend(host=host)
 
     async def generate(self, prompt: str) -> str:
-        options = ModelOptions(temperature=0, seed=42, num_predict=2048, num_ctx=32768)
+        options = ModelOptions(
+            temperature=0, seed=42, num_predict=2048, num_ctx=EVALUATOR_NUM_CTX,
+        )
         result = await self._backend.chat(
             messages=[{"role": "user", "content": prompt}],
             model=self.model,

@@ -114,16 +114,16 @@ def check_server_or_exit(backend: InferenceBackend, backend_name: str) -> None:
 
 
 def _is_routing_discovery_result(path: Path) -> bool:
-    """Cheap content check: does this result file carry strategy tags?
+    """Does this result file carry per-prompt strategy tags?
 
-    Filename alone is ambiguous — a suite literally named "routing-discovery"
-    run via regular `porchbench run` produces filename-matching files that
-    have no per-prompt `strategy` tag. We pre-filter on the conventional
-    filename substring (free) and content-check survivors via raw
-    `json.loads` on the first prompt result (~milliseconds per file).
+    Strategy-bearing runs (``--strategies``) are what ``analyze-routes``
+    consumes. Filename is not a reliable signal — the slug now reflects
+    the actual suite (``tool-use-discovery`` vs ``routing-discovery``
+    vs anything else with a strategy block) — so we content-check every
+    candidate via a raw ``json.loads`` on the first prompt result. JSON
+    parse is sub-millisecond per file; result directories rarely exceed
+    dozens of files.
     """
-    if "_routing-discovery_" not in path.name:
-        return False
     try:
         import json as _json
         data = _json.loads(path.read_text(encoding="utf-8"))
@@ -746,9 +746,19 @@ def run(
 
     # VRAM cofit check — multi-task-only (same rationale as the GPU
     # warmup above; only meaningful for batch runs where the judge model
-    # would compete with target models for VRAM).
+    # would compete with target models for VRAM). Pass the worst-case
+    # context length (largest target num_ctx vs the judge's) so the
+    # headroom estimate scales with KV cache.
     if not use_inline_path and do_evaluate and eval_backend == "ollama":
-        cofit_ok, cofit_msg = asyncio.run(check_vram_cofit(backend, models, eval_model))
+        from porchbench.evaluator import EVALUATOR_NUM_CTX
+
+        worst_num_ctx = max(
+            *(task.suite.defaults.options.num_ctx for task in plan),
+            EVALUATOR_NUM_CTX,
+        )
+        cofit_ok, cofit_msg = asyncio.run(
+            check_vram_cofit(backend, models, eval_model, num_ctx=worst_num_ctx)
+        )
         if cofit_ok:
             console.print(f"  [green]PASS[/green] VRAM cofit: {cofit_msg}")
         else:
