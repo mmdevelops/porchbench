@@ -1,0 +1,1492 @@
+{
+  "run": {
+    "id": "6ed19f81-12ac-448c-9e33-b98b686bae84",
+    "timestamp": "2026-05-06T01:09:05.549077Z",
+    "suite": {
+      "name": "Coding Basics",
+      "version": "2.0",
+      "file": "<bundled>/coding-basics.yaml",
+      "sha256": "30e288639c1a71a04fff37b0df5d83690de1a989a386bea224055db8a3b75136",
+      "rubric": "coding"
+    },
+    "model": {
+      "name": "granite4.1:8b",
+      "digest": "444af1c4b2fedd6b54041aca558e7300b0b3d5c0468c44619126240323ba2852",
+      "details": {
+        "format": "gguf",
+        "family": "granite",
+        "parameter_size": "8.8B",
+        "quantization_level": "Q4_K_M"
+      }
+    },
+    "system": {
+      "ollama_version": "Ollama v0.22.1",
+      "gpu": "AMD Radeon RX 9070 XT",
+      "vram_gb": 15.8,
+      "os": "Windows 11",
+      "kv_cache_type": null
+    },
+    "repeat_index": null,
+    "total_repeats": null,
+    "porchbench_version": "0.1.0"
+  },
+  "results": [
+    {
+      "prompt_id": "code-fizzbuzz",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "loops",
+        "conditionals"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that prints numbers 1 to 100.\nFor multiples of 3 print \"Fizz\", for multiples of 5 print \"Buzz\",\nfor multiples of both print \"FizzBuzz\".\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that accomplishes the task you described:\n\n```python\ndef fizz_buzz():\n    for i in range(1, 101):\n        if i % 3 == 0 and i % 5 == 0:\n            print(\"FizzBuzz\")\n        elif i % 3 == 0:\n            print(\"Fizz\")\n        elif i % 5 == 0:\n            print(\"Buzz\")\n        else:\n            print(i)\n```\n\nExplanation:\n\n1. The function `fizz_buzz()` is defined without any parameters.\n\n2. A `for` loop is used to iterate over the numbers from 1 to 100 (inclusive). The `range(1, 101)` function generates a sequence of numbers starting from 1 up to, but not including, 101.\n\n3. Inside the loop, conditional statements are used to check the divisibility of each number:\n   - If the current number `i` is divisible by both 3 and 5 (i.e., `i % 3 == 0 and i % 5 == 0`), it means the number is a multiple of both 3 and 5. In this case, \"FizzBuzz\" is printed.\n   - If the current number `i` is divisible by 3 (i.e., `i % 3 == 0`), but not by 5, \"Fizz\" is printed.\n   - If the current number `i` is divisible by 5 (i.e., `i % 5 == 0`), but not by 3, \"Buzz\" is printed.\n   - If none of the above conditions are met, meaning the number is not a multiple of 3 or 5, the number itself is printed using `print(i)`.\n\n4. The loop continues until all numbers from 1 to 100 have been processed.\n\nTo execute the function and see the output, simply call it:\n\n```python\nfizz_buzz()\n```\n\nThis will print the desired FizzBuzz sequence for numbers 1 to 100."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 48,
+        "prompt_eval_duration": 32013400,
+        "eval_count": 425,
+        "eval_duration": 4596537700,
+        "total_duration": 10310863100,
+        "load_duration": 5462084500,
+        "tokens_per_second": 92.46089725316514,
+        "time_to_first_token_ms": 32.0134,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must check divisibility by 15 (or both 3 and 5) before checking 3 or 5 individually. Should use range(1, 101). Output must include FizzBuzz for 15, 30, 45, etc.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-word-count",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "strings",
+        "dicts"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that takes a string of text and returns\na dictionary mapping each word to the number of times it appears.\nHandle punctuation and case-insensitivity.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a Python function that processes a given string of text, normalizes it by handling punctuation and case insensitivity, and then counts the occurrences of each word. The result is returned as a dictionary where keys are words and values are their respective counts.\n\n```python\nimport re\nfrom collections import defaultdict\n\ndef count_words(text):\n    # Normalize the text: convert to lower case\n    text = text.lower()\n    \n    # Remove punctuation using regex, keeping only words and spaces\n    text = re.sub(r'[^\\w\\s]', '', text)\n    \n    # Split the text into words\n    words = text.split()\n    \n    # Use a defaultdict to count occurrences of each word\n    word_count = defaultdict(int)\n    for word in words:\n        word_count[word] += 1\n    \n    return dict(word_count)\n\n# Example usage:\ntext = \"Hello, world! Hello, Python. Python is great; isn't it?\"\nword_counts = count_words(text)\nprint(word_counts)\n```\n\n### Explanation:\n\n1. **Normalization**: The text is first converted to lowercase using `text.lower()` to ensure case insensitivity.\n2. **Punctuation Removal**: A regular expression (`re.sub(r'[^\\w\\s]', '', text)`) is used to remove all characters that are not word characters (alphanumeric plus underscore) or whitespace. This effectively strips punctuation from the text.\n3. **Splitting into Words**: The cleaned text is split into individual words using `text.split()`, which splits on any whitespace by default.\n4. **Counting Occurrences**: A `defaultdict` from the `collections` module is utilized to count how many times each word appears in the list of words. Each time a word is encountered, its count is incremented.\n5. **Returning the Result**: Finally, the `defaultdict` is converted to a regular dictionary and returned.\n\n### Example Output:\nFor the input text `\"Hello, world! Hello, Python. Python is great; isn't it?\"`, the function will output:\n\n```python\n{'hello': 2, 'world': 1, 'python': 2, 'is': 1, 'great': 1, 'isnt': 1, 'it': 1}\n```\n\nThis demonstrates that the function correctly handles punctuation and is case-insensitive, counting each word's occurrences accurately."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 41,
+        "prompt_eval_duration": 30317300,
+        "eval_count": 484,
+        "eval_duration": 5490681700,
+        "total_duration": 5801310400,
+        "load_duration": 31600500,
+        "tokens_per_second": 88.14934582713109,
+        "time_to_first_token_ms": 30.3173,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must lowercase input and strip punctuation before counting. Should handle empty strings. A correct solution for \"Hello hello, world!\" produces {\"hello\": 2, \"world\": 1}.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-validate-email",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "validation",
+        "regex"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that validates an email address.\nIt should check for basic structure (user@domain.tld) without\nusing a regex library. Explain your validation choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a Python function that validates an email address by checking its basic structure (`user@domain.tld`) without using any regular expression libraries. The function will break down the email into components and validate each part according to common rules for email addresses.\n\n### Validation Choices:\n1. **Splitting on '@'**: Ensures there is exactly one `@` symbol separating the local part (before `@`) from the domain part (after `@`). An invalid email should have either no `@` or more than one.\n2. **Local Part Validation**:\n   - Must not be empty.\n   - Can contain letters (a-z, A-Z), digits (0-9), dots (`.`), underscores (`_`), plus signs (`+`), and hyphens (`-`).\n   - Dots cannot be the first or last character, nor can they be consecutive.\n3. **Domain Part Validation**:\n   - Must contain at least one dot (`.`) separating the domain name from the top-level domain (TLD).\n   - Each part of the domain (separated by dots) must not be empty and should only contain letters, digits, and hyphens.\n   - The TLD must consist of at least two characters.\n\n### Python Function:\n\n```python\ndef validate_email(email):\n    # Split the email into local and domain parts\n    parts = email.split('@')\n    \n    # Check if there is exactly one '@'\n    if len(parts) != 2:\n        return False\n    \n    local_part, domain_part = parts\n    \n    # Validate the local part\n    if not local_part:\n        return False\n    \n    # Local part can contain letters, digits, dots, underscores, plus signs, and hyphens\n    valid_chars_local = set(\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-\")\n    if any(char not in valid_chars_local for char in local_part):\n        return False\n    \n    # Dots cannot be the first or last character, nor can they be consecutive\n    if local_part.startswith('.') or local_part.endswith('.') or '..' in local_part:\n        return False\n    \n    # Validate the domain part\n    if '.' not in domain_part:\n        return False\n    \n    # Domain parts (split by '.') must not be empty and should only contain letters, digits, and hyphens\n    valid_chars_domain = set(\"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-\")\n    domain_parts = domain_part.split('.')\n    \n    for part in domain_parts[:-1]:  # All parts except the last one (TLD)\n        if not part or any(char not in valid_chars_domain for char in part):\n            return False\n    \n    tld = domain_parts[-1]\n    if len(tld) < 2:\n        return False\n    \n    # TLD should only contain letters\n    if not tld.isalpha():\n        return False\n    \n    return True\n\n# Example usage:\nemail = \"example@domain.com\"\nprint(validate_email(email))  # Should print: True\n```\n\n### Explanation:\n- **Splitting and Length Check**: The function first splits the email by `@` and checks that exactly two parts are returned, ensuring there's one `@`.\n- **Local Part Validation**:\n  - It ensures the local part is not empty.\n  - It verifies each character in the local part is within a set of allowed characters.\n  - It checks for invalid dot placements (start/end or consecutive).\n- **Domain Part Validation**:\n  - Ensures there's at least one dot, separating the domain and TLD.\n  - Validates each segment of the domain (except the last) for non-empty status and valid characters.\n  - Checks that the TLD is at least two characters long and contains only letters.\n\nThis function provides a basic level of email validation suitable for many applications without relying on external libraries. However, it does not cover all edge cases or internationalized email addresses (e.g., those with non-ASCII characters). For comprehensive validation, especially in production environments, consider using well-tested libraries or more detailed regex patterns."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 43,
+        "prompt_eval_duration": 30402000,
+        "eval_count": 834,
+        "eval_duration": 9068428600,
+        "total_duration": 9565078800,
+        "load_duration": 34585600,
+        "tokens_per_second": 91.96742200738063,
+        "time_to_first_token_ms": 30.402,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must check for exactly one @, non-empty local part and domain, at least one dot in domain portion, no spaces. Should not accept \"user@\" or \"@domain.com\" or \"user@domain\".\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-list-comprehension",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "idioms"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rewrite this function using Python list comprehensions and explain\nwhy the comprehension version is (or isn't) better:\n\ndef get_even_squares(numbers):\n    result = []\n    for n in numbers:\n        if n % 2 == 0:\n            result.append(n ** 2)\n    return result\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Let's rewrite the `get_even_squares` function using a Python list comprehension and then discuss why this version might be preferable.\n\n### Original Function\n\n```python\ndef get_even_squares(numbers):\n    result = []\n    for n in numbers:\n        if n % 2 == 0:\n            result.append(n ** 2)\n    return result\n```\n\nThis function iterates over each number in the `numbers` list, checks if it is even (`n % 2 == 0`), and if so, appends its square (`n ** 2`) to the `result` list. Finally, it returns the `result` list containing the squares of all even numbers from the input.\n\n### List Comprehension Version\n\n```python\ndef get_even_squares(numbers):\n    return [n ** 2 for n in numbers if n % 2 == 0]\n```\n\n### Explanation and Comparison\n\n#### Why the List Comprehension Version is Better (or Not)\n\n1. **Conciseness**: The list comprehension version is more concise. It accomplishes the same task in a single line of code, making it easier to read at a glance.\n\n2. **Performance**: For small to medium-sized lists, the performance difference between the two versions is negligible. However, list comprehensions are generally optimized internally by Python and can be faster than equivalent `for` loop constructs due to reduced overhead from function calls and loop control structures.\n\n3. **Readability for Those Familiar with Comprehensions**: For developers who are accustomed to or prefer functional programming paradigms, the comprehension version is more expressive. It clearly states the transformation (`n ** 2`) being applied to each element (`for n in numbers`) that meets a condition (`if n % 2 == 0`).\n\n4. **Maintainability**: While both versions are straightforward for this specific task, list comprehensions can become less readable if they grow too complex (e.g., involving multiple nested conditions or operations). In such cases, breaking the comprehension into a multi-line function might be preferable.\n\n5. **Functional Style**: List comprehensions align well with Python's functional programming capabilities, allowing for more elegant handling of data transformations and filtering without explicitly mutating state.\n\n#### When It Might Not Be Better\n\n- **Complex Logic**: If the logic within the loop is complex or involves multiple steps that are easier to understand when broken down into a traditional `for` loop, using a comprehension might reduce readability.\n  \n- **Debugging**: Debuggers and IDEs often provide better support for stepping through traditional loops compared to comprehensions, which can be a consideration in development environments where extensive debugging is required.\n\n- **Educational Context**: For beginners learning Python, the explicitness of a `for` loop might be more instructive than a comprehension, as it clearly demonstrates iteration and conditional logic.\n\nIn summary, for this specific function—filtering even numbers and squaring them—the list comprehension version is generally preferred due to its conciseness, readability (for those familiar with comprehensions), and slight performance benefits. However, the choice between using a comprehension or an explicit loop should also consider the context of the codebase, the complexity of the logic involved, and the familiarity of the team with Python's functional programming features."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 71,
+        "prompt_eval_duration": 43539500,
+        "eval_count": 671,
+        "eval_duration": 7293177500,
+        "total_duration": 7721648000,
+        "load_duration": 33646500,
+        "tokens_per_second": 92.0037939567493,
+        "time_to_first_token_ms": 43.5395,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Correct comprehension: [n ** 2 for n in numbers if n % 2 == 0]. Should note that comprehension is more readable and slightly faster for simple transformations but less suitable for complex multi-step logic.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-binary-search",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "algorithms",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain how binary search works step by step,\nthen implement it in Python.\nAnalyze its time and space complexity.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### How Binary Search Works (Step-by-Step)\n\nBinary search is an efficient algorithm for finding the position of a target value within a **sorted** array. The key idea is to repeatedly divide the search interval in half, which reduces the problem size logarithmically.\n\n#### Steps:\n\n1. **Initialize Pointers**: \n   - Set two pointers, `low` and `high`, pointing to the start (index 0) and end (index `len(array) - 1`) of the array, respectively.\n   \n2. **Loop Until Convergence**:\n   - While `low` is less than or equal to `high`, perform the following steps:\n     - Calculate the middle index: `mid = low + (high - low) // 2`. This avoids potential overflow that could occur with `(low + high) // 2`.\n     - Compare the target value with the element at the middle index (`array[mid]`):\n       - **If** `target == array[mid]`, the target is found; return `mid`.\n       - **If** `target < array[mid]`, adjust the `high` pointer to `mid - 1` (search in the left half).\n       - **If** `target > array[mid]`, adjust the `low` pointer to `mid + 1` (search in the right half).\n\n3. **Target Not Found**:\n   - If the loop exits without finding the target, it means the target is not present in the array; return `-1` (or any sentinel value indicating absence).\n\n#### Example:\n\nConsider a sorted array `[1, 3, 5, 7, 9]` and a target value `5`.\n\n- Initial pointers: `low = 0`, `high = 4`.\n- First iteration:\n  - `mid = 0 + (4 - 0) // 2 = 2`.\n  - `array[mid] = array[2] = 5`, which equals the target. Return `2`.\n\n### Implementation in Python\n\n```python\ndef binary_search(arr, target):\n    low, high = 0, len(arr) - 1\n    \n    while low <= high:\n        mid = low + (high - low) // 2\n        \n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            low = mid + 1\n        else:\n            high = mid - 1\n            \n    return -1  # Target not found\n\n# Example usage:\nsorted_array = [1, 3, 5, 7, 9]\ntarget_value = 5\nindex = binary_search(sorted_array, target_value)\nprint(f\"Index of {target_value}: {index}\")\n```\n\n### Time and Space Complexity Analysis\n\n- **Time Complexity**:\n  - The algorithm divides the search interval in half each iteration. Therefore, the maximum number of iterations required is `log₂(n)`, where `n` is the number of elements in the array.\n  - Hence, the time complexity is **O(log n)**.\n\n- **Space Complexity**:\n  - Binary search uses a constant amount of extra space for variables (`low`, `high`, `mid`). It does not depend on the size of the input array.\n  - Therefore, the space complexity is **O(1)** (constant space).\n\nBinary search is highly efficient for large datasets due to its logarithmic time complexity and minimal additional space requirements. However, it requires the input array to be sorted beforehand; if sorting is needed, that should also be considered in the overall complexity analysis."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 32,
+        "prompt_eval_duration": 26860600,
+        "eval_count": 740,
+        "eval_duration": 8038161100,
+        "total_duration": 8474009800,
+        "load_duration": 33692800,
+        "tokens_per_second": 92.06085705348703,
+        "time_to_first_token_ms": 26.8606,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use low/high pointers and mid = (low + high) // 2. Time O(log n), space O(1) for iterative. Common bug: using mid = (low + high) / 2 (float division). Must handle empty list and missing element.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-rate-limiter",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "algorithms",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a simple rate limiter class in Python that allows\nat most N requests per time window of W seconds.\nExplain your design choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of a simple rate limiter class in Python, designed to allow at most `N` requests within any sliding time window of `W` seconds. The design choices are explained afterward.\n\n### Rate Limiter Implementation\n\n```python\nimport time\nfrom collections import deque\n\nclass RateLimiter:\n    def __init__(self, max_requests: int, window_seconds: float):\n        self.max_requests = max_requests\n        self.window_seconds = window_seconds\n        self.request_queue = deque()\n\n    def is_allowed(self) -> bool:\n        current_time = time.time()\n        \n        # Remove requests outside the sliding window\n        while self.request_queue and self.request_queue[0] < current_time - self.window_seconds:\n            self.request_queue.popleft()\n        \n        # Check if we are within the rate limit\n        if len(self.request_queue) < self.max_requests:\n            # Record this request's timestamp\n            self.request_queue.append(current_time)\n            return True\n        else:\n            return False\n\n# Example usage\nif __name__ == \"__main__\":\n    limiter = RateLimiter(max_requests=5, window_seconds=10)\n\n    for _ in range(7):\n        if limiter.is_allowed():\n            print(\"Request allowed at\", time.time())\n        else:\n            print(\"Rate limit exceeded at\", time.time())\n        time.sleep(1)  # Simulate a delay between requests\n```\n\n### Design Choices Explained\n\n1. **Sliding Window Logic**: The rate limiter uses a sliding window approach to ensure that the count of requests is always within the specified `N` for any continuous period of `W` seconds. This method is more flexible than fixed time windows (e.g., per minute) because it adapts to bursts of requests and provides smoother rate limiting.\n\n2. **Deque for Timestamp Management**: A `deque` from Python's `collections` module is used to store timestamps of incoming requests. Deques are chosen because they offer O(1) complexity for append and popleft operations, which are crucial for efficiently managing the sliding window by removing outdated request timestamps.\n\n3. **Efficient Window Cleanup**: Before checking if a new request can be allowed, the code iterates through the deque to remove any entries older than `W` seconds from the current time (`current_time - self.window_seconds`). This ensures that only relevant requests (those within the sliding window) are considered for rate limiting.\n\n4. **Simplicity and Extensibility**: The implementation is kept simple yet extensible. For instance, it can be easily modified to support different types of rate limits (e.g., per IP address, per user ID) by incorporating additional identifiers into the request queue entries or using a dictionary mapping identifiers to their respective deques.\n\n5. **Time Measurement with `time.time()`**: The current time is fetched using `time.time()`, which returns the number of seconds since the Epoch (January 1, 1970). This provides sufficient precision for most rate-limiting scenarios without introducing significant overhead or complexity.\n\n6. **Blocking vs. Non-blocking Behavior**: The `is_allowed` method is non-blocking and simply returns a boolean indicating whether the request can proceed. In a real-world scenario, additional logic could be added to handle rejected requests (e.g., returning HTTP 429 Too Many Requests).\n\n### Conclusion\n\nThis rate limiter class provides a straightforward yet effective mechanism for enforcing request limits over a sliding time window. Its design choices prioritize simplicity, efficiency, and flexibility, making it suitable for integration into various applications requiring rate limiting functionality."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 37,
+        "prompt_eval_duration": 32040600,
+        "eval_count": 732,
+        "eval_duration": 7951023700,
+        "total_duration": 8393000200,
+        "load_duration": 32145200,
+        "tokens_per_second": 92.06361691514012,
+        "time_to_first_token_ms": 32.0406,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-csv-parser",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "parsing"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that parses a CSV string into a list\nof dictionaries, using the first row as headers. Handle quoted\nfields that may contain commas. Don't use the csv module.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a Python function that parses a CSV string into a list of dictionaries, using the first row as headers. It handles quoted fields that may contain commas without using the `csv` module.\n\n```python\ndef parse_csv(csv_string):\n    lines = csv_string.strip().split('\\n')\n    if not lines:\n        return []\n\n    # Use the first line as headers\n    headers = _parse_line(lines[0])\n    result = []\n    \n    # Process each subsequent line\n    for line in lines[1:]:\n        values = _parse_line(line)\n        row_dict = dict(zip(headers, values))\n        result.append(row_dict)\n\n    return result\n\ndef _parse_line(line):\n    \"\"\"\n    Parses a single CSV line into a list of fields.\n    Handles quoted fields that may contain commas.\n    \"\"\"\n    fields = []\n    field = ''\n    in_quotes = False\n    i = 0\n    \n    while i < len(line):\n        char = line[i]\n        \n        if char == '\"':\n            # Toggle the in_quotes state\n            in_quotes = not in_quotes\n            # If we are closing a quoted field, skip the closing quote\n            if not in_quotes:\n                # Check for escaped quotes (\"\" inside a quoted field)\n                if i + 1 < len(line) and line[i + 1] == '\"':\n                    field += '\"'\n                    i += 1  # Skip the next quote character\n                else:\n                    fields.append(field)\n                    field = ''\n            continue\n        \n        if char == ',' and not in_quotes:\n            # End of a field\n            fields.append(field)\n            field = ''\n        else:\n            field += char\n        \n        i += 1\n    \n    # Append the last field\n    fields.append(field)\n    \n    return fields\n\n# Example usage:\ncsv_data = '''name,age,city\n\"John Doe\",30,\"New York\"\nAlice,25,\"Los Angeles\"\n\"Bob Smith\",\"35, Jr.\",Chicago'''\n\nparsed_data = parse_csv(csv_data)\nfor row in parsed_data:\n    print(row)\n```\n\n### Explanation:\n\n1. **`parse_csv` Function**:\n   - Splits the input `csv_string` into lines.\n   - Uses the first line to determine headers by calling `_parse_line`.\n   - Iterates over the remaining lines, parsing each into values and zipping them with headers to form a dictionary.\n\n2. **`_parse_line` Function**:\n   - Parses a single CSV line into a list of fields.\n   - Handles quoted fields that may contain commas or escaped quotes (`\"\"`).\n   - Uses a state variable `in_quotes` to track whether the parser is inside a quoted field.\n\n3. **Example Usage**:\n   - Demonstrates parsing a sample CSV string with headers and rows containing quoted fields with commas.\n\nThis function should correctly parse most standard CSV formats while handling quoted fields appropriately."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 47,
+        "prompt_eval_duration": 31625300,
+        "eval_count": 595,
+        "eval_duration": 6447135800,
+        "total_duration": 6809450300,
+        "load_duration": 33215900,
+        "tokens_per_second": 92.2890440744245,
+        "time_to_first_token_ms": 31.6253,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must handle quoted fields containing commas (e.g., \"Smith, Jr.\" stays as one field). Must use first row as header keys. Should handle escaped quotes within quoted fields.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-retry-decorator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "decorators",
+        "error-handling"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python decorator called `retry` that retries a function\nup to N times if it raises an exception, with exponential backoff.\nShow example usage.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of a Python decorator named `retry` that will attempt to execute a given function up to `N` times in case it raises an exception. It uses exponential backoff for the delays between retries.\n\n```python\nimport time\nimport functools\n\ndef retry(max_attempts=3, delay=1):\n    \"\"\"\n    A decorator that retries a function up to max_attempts times if it raises an exception.\n    Uses exponential backoff for the delays between retries.\n\n    :param max_attempts: Maximum number of attempts including the first call (default is 3).\n    :param delay: Initial delay in seconds before the first retry (default is 1 second).\n    \"\"\"\n    def decorator_retry(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            attempt = 0\n            while attempt < max_attempts:\n                try:\n                    return func(*args, **kwargs)\n                except Exception as e:\n                    attempt += 1\n                    if attempt >= max_attempts:\n                        raise e\n                    backoff_time = delay * (2 ** (attempt - 1))\n                    print(f\"Attempt {attempt} failed with exception: {e}. Retrying in {backoff_time} seconds...\")\n                    time.sleep(backoff_time)\n        return wrapper\n    return decorator_retry\n\n# Example usage:\n\n@retry(max_attempts=5, delay=2)\ndef unstable_function():\n    import random\n    if random.choice([True, False]):\n        print(\"Function succeeded!\")\n        return \"Success\"\n    else:\n        raise Exception(\"Random failure occurred!\")\n\ntry:\n    result = unstable_function()\n    print(result)\nexcept Exception as e:\n    print(f\"Final attempt failed with exception: {e}\")\n```\n\n### Explanation:\n\n1. **Decorator Definition**: The `retry` decorator takes two parameters, `max_attempts` (default is 3) and `delay` (default is 1 second). It returns a nested function (`decorator_retry`) that wraps the target function.\n\n2. **Wrapper Function**: Inside `decorator_retry`, we define `wrapper`, which actually performs the retry logic. It uses a while loop to attempt calling the function up to `max_attempts` times.\n\n3. **Exception Handling**: If the function raises an exception, it increments the `attempt` counter and checks if further attempts are allowed (`attempt < max_attempts`). If not, it re-raises the last caught exception.\n\n4. **Exponential Backoff**: Before retrying, it calculates the delay using exponential backoff: `delay * (2 ** (attempt - 1))`. This means the wait time doubles with each subsequent attempt.\n\n5. **Logging and Sleep**: It prints a message indicating the failure and the delay before sleeping for the calculated `backoff_time`.\n\n6. **Example Usage**: The `unstable_function` is decorated with `@retry(max_attempts=5, delay=2)`, meaning it will retry up to 5 times with an initial delay of 2 seconds between retries. Inside the function, a random decision determines whether it succeeds or raises an exception.\n\nThis decorator can be very useful for handling transient errors in network requests, database operations, or any other operation that might fail intermittently due to external factors."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 40,
+        "prompt_eval_duration": 31382300,
+        "eval_count": 664,
+        "eval_duration": 7214884300,
+        "total_duration": 7616413900,
+        "load_duration": 33411800,
+        "tokens_per_second": 92.03196785844509,
+        "time_to_first_token_ms": 31.3823,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Decorator must accept max_retries parameter. Must implement exponential backoff (delay doubles each retry). Must re-raise the last exception after exhausting retries. Should use functools.wraps to preserve function metadata.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-linked-list",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "data-structures"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a singly linked list in Python with methods for\nappend, prepend, delete by value, and a __repr__ that shows\nthe list contents. Explain when you'd use this over a Python list.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of a singly linked list in Python, including the requested methods: `append`, `prepend`, `delete_by_value`, and `__repr__`. After the code, I'll explain scenarios where using a singly linked list might be preferable to a Python built-in list.\n\n### Singly Linked List Implementation\n\n```python\nclass Node:\n    def __init__(self, value):\n        self.value = value\n        self.next = None\n\nclass SinglyLinkedList:\n    def __init__(self):\n        self.head = None\n\n    def append(self, value):\n        \"\"\"Add a node with the specified value to the end of the list.\"\"\"\n        new_node = Node(value)\n        if not self.head:\n            self.head = new_node\n            return\n        last_node = self.head\n        while last_node.next:\n            last_node = last_node.next\n        last_node.next = new_node\n\n    def prepend(self, value):\n        \"\"\"Add a node with the specified value to the beginning of the list.\"\"\"\n        new_node = Node(value)\n        new_node.next = self.head\n        self.head = new_node\n\n    def delete_by_value(self, value):\n        \"\"\"Delete the first node that contains the specified value.\"\"\"\n        current_node = self.head\n\n        if current_node and current_node.value == value:\n            self.head = current_node.next\n            current_node = None\n            return\n\n        prev = None\n        while current_node and current_node.value != value:\n            prev = current_node\n            current_node = current_node.next\n\n        if current_node is None:\n            return  # Value not found in the list\n\n        prev.next = current_node.next\n        current_node = None\n\n    def __repr__(self):\n        \"\"\"Return a string representation of the list.\"\"\"\n        nodes = []\n        current_node = self.head\n        while current_node:\n            nodes.append(repr(current_node.value))\n            current_node = current_node.next\n        return ' -> '.join(nodes)\n\n# Example usage:\nsll = SinglyLinkedList()\nsll.append(1)\nsll.prepend(0)\nsll.append(2)\nsll.delete_by_value(1)\nprint(sll)  # Output: 0 -> 2\n```\n\n### When to Use a Singly Linked List Over a Python List\n\n1. **Dynamic Size with Frequent Insertions/Deletions at the Beginning**: \n   - Python lists are implemented as dynamic arrays. Inserting or deleting elements at the beginning of a list requires shifting all subsequent elements, which is an O(n) operation. In contrast, a singly linked list allows for O(1) insertions and deletions at the head.\n\n2. **Memory Efficiency for Large Data Sets**:\n   - If you're dealing with large data sets where memory usage is a concern, linked lists can be more efficient than dynamic arrays because they allocate memory for each node individually rather than requiring contiguous block of memory.\n\n3. **Implementing Specific Algorithms or Data Structures**:\n   - Certain algorithms and data structures (e.g., stacks, queues, graphs) are naturally implemented using linked lists due to their ability to efficiently add or remove elements from specific positions without the overhead of resizing an array.\n\n4. **When You Need a Non-Contiguous Memory Structure**:\n   - If your application requires non-contiguous memory allocation for performance reasons (e.g., avoiding cache misses), linked lists can be advantageous because each node is allocated separately.\n\n5. **Educational Purposes or Understanding Fundamental Data Structures**:\n   - Learning about and implementing fundamental data structures like singly linked lists helps in understanding how more complex data structures are built and managed under the hood.\n\nIn summary, while Python's built-in list (dynamic array) offers fast random access and is generally more efficient for most use cases due to its contiguous memory allocation and optimized internal operations, a singly linked list shines in scenarios involving frequent insertions or deletions at arbitrary positions, especially at the head of the list."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 50,
+        "prompt_eval_duration": 31961300,
+        "eval_count": 816,
+        "eval_duration": 8859792200,
+        "total_duration": 9343425400,
+        "load_duration": 33894000,
+        "tokens_per_second": 92.10148292191323,
+        "time_to_first_token_ms": 31.9613,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must implement Node class with value/next. Append is O(n) without tail pointer, O(1) with. Delete must handle head deletion and missing values. __repr__ should show chain like \"1 -> 2 -> 3 -> None\".\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-cache-decorator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "decorators",
+        "performance"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a memoization decorator in Python from scratch (don't use\nfunctools.lru_cache). It should cache results based on function\narguments. Discuss the limitations of your approach.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of a simple memoization decorator in Python, followed by a discussion of its limitations.\n\n### Memoization Decorator Implementation\n\n```python\ndef memoize(func):\n    cache = {}\n    \n    def wrapper(*args, **kwargs):\n        # Create a key based on the function arguments\n        key = (args, tuple(sorted(kwargs.items())))\n        \n        # Check if the result is already cached\n        if key in cache:\n            return cache[key]\n        else:\n            # Compute the result and store it in the cache\n            result = func(*args, **kwargs)\n            cache[key] = result\n            return result\n    \n    return wrapper\n\n# Example usage\n@memoize\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)\n\nprint(fibonacci(10))  # Output: 55\n```\n\n### Explanation\n\n1. **Cache Initialization**: A dictionary `cache` is initialized to store the results of function calls.\n2. **Wrapper Function**: The `wrapper` function takes any number of positional and keyword arguments.\n3. **Key Creation**: A unique key is created from the arguments using a tuple containing the positional arguments (`args`) and a sorted tuple of keyword argument items (`kwargs`). Sorting ensures that the order of keyword arguments does not affect the cache key.\n4. **Cache Check**: The wrapper checks if the result for the given key is already in the cache. If it is, the cached result is returned immediately.\n5. **Function Execution & Caching**: If the result is not cached, the original function `func` is called with the provided arguments, and its result is stored in the cache under the generated key before being returned.\n\n### Limitations of This Approach\n\n1. **Argument Hashability**: The keys used for caching are tuples derived from the function's arguments. For this to work correctly, all arguments must be hashable (i.e., they can be used as dictionary keys). Unhashable types like lists or dictionaries will cause issues.\n   \n   ```python\n   @memoize\n   def problematic_function(lst):\n       return sum(lst)\n   \n   # This will raise a TypeError because lists are unhashable\n   problematic_function([1, 2, 3])\n   ```\n\n2. **Mutable Default Arguments**: If the function accepts mutable default arguments (e.g., lists or dictionaries), these could lead to unexpected behavior since they might be modified between calls, affecting cache integrity.\n\n3. **No Expiration**: The cache does not expire or clear itself after a certain period or number of entries. This can lead to excessive memory usage if the decorated function is called with many unique arguments over time.\n\n4. **Limited to Function Arguments**: This decorator only caches based on the function's input arguments. It does not account for side effects or state changes within the function that might affect subsequent calls.\n\n5. **No Support for Non-Pure Functions**: The decorator assumes the function is pure (i.e., it always returns the same result given the same inputs and has no side effects). If the function performs I/O operations, modifies global state, or depends on external mutable states, memoization may lead to incorrect behavior.\n\n6. **Performance Overhead for Simple Cases**: For functions that are already fast or called infrequently with unique arguments, the overhead of checking and updating the cache might outweigh the benefits of memoization.\n\n### Conclusion\n\nWhile this simple memoization decorator can significantly speed up function calls for expensive computations by caching results based on input arguments, it has several limitations related to argument types, mutable defaults, cache management, and function purity. For more robust solutions, especially in production environments, consider using or extending existing libraries like `functools.lru_cache` that provide additional features such as maxsize limits, timeouts, and thread safety."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 46,
+        "prompt_eval_duration": 31488600,
+        "eval_count": 790,
+        "eval_duration": 8582437000,
+        "total_duration": 9049249500,
+        "load_duration": 33416400,
+        "tokens_per_second": 92.04844731164353,
+        "time_to_first_token_ms": 31.4886,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use a dict keyed by function arguments. Must handle unhashable arguments gracefully (either skip caching or raise clear error). Should mention limitation: unbounded cache growth without eviction.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-iterator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "iterators",
+        "protocol"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python class that implements the iterator protocol\nto yield Fibonacci numbers up to a maximum value. Show how\nto use it in a for loop.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a Python class named `FibonacciIterator` that implements the iterator protocol to yield Fibonacci numbers up to a specified maximum value. The class includes an `__iter__()` method, which returns the iterator object itself, and a `__next__()` method, which returns the next Fibonacci number in the sequence until the maximum value is reached.\n\n```python\nclass FibonacciIterator:\n    def __init__(self, max_value):\n        self.max_value = max_value\n        self.a, self.b = 0, 1\n\n    def __iter__(self):\n        return self\n\n    def __next__(self):\n        if self.a > self.max_value:\n            raise StopIteration\n        current = self.a\n        self.a, self.b = self.b, self.a + self.b\n        return current\n\n# Example usage in a for loop\nif __name__ == \"__main__\":\n    max_val = 100\n    print(f\"Fibonacci numbers up to {max_val}:\")\n    for fib_number in FibonacciIterator(max_val):\n        print(fib_number)\n```\n\n### Explanation:\n- **Initialization (`__init__` method):** The constructor takes `max_value` as an argument, which defines the upper limit for the Fibonacci sequence. It initializes two variables, `a` and `b`, to represent the first two numbers in the Fibonacci sequence (0 and 1).\n- **Iterator Protocol (`__iter__` method):** This method returns the iterator object itself, adhering to the iterator protocol.\n- **Next Value (`__next__` method):** This method yields the next Fibonacci number. It checks if the current value `a` exceeds `max_value`. If so, it raises a `StopIteration` exception to signal the end of iteration. Otherwise, it returns the current value of `a`, then updates `a` and `b` to the next two numbers in the sequence.\n- **Example Usage:** The script demonstrates how to use the `FibonacciIterator` class within a for loop to print all Fibonacci numbers up to 100.\n\nWhen you run this script, it will output:\n```\nFibonacci numbers up to 100:\n0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n```\n\nThis shows the Fibonacci sequence starting from 0 and continuing until each number is less than or equal to 100."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 39,
+        "prompt_eval_duration": 30902000,
+        "eval_count": 499,
+        "eval_duration": 5407952400,
+        "total_duration": 5727355700,
+        "load_duration": 34861900,
+        "tokens_per_second": 92.27152221236267,
+        "time_to_first_token_ms": 30.902,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must implement __iter__ returning self and __next__ raising StopIteration when value exceeds max. Sequence: 0, 1, 1, 2, 3, 5, 8... Must work in a for loop.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-context-manager",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "context-managers"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python context manager called Timer that measures\nand prints the execution time of a code block. Implement it\nboth as a class and using contextlib. Explain the tradeoffs.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below are two implementations of a `Timer` context manager in Python: one using a custom class and another using the `contextlib` module. After each implementation, I'll explain the trade-offs between them.\n\n### Implementation 1: Using a Custom Class\n\n```python\nimport time\n\nclass Timer:\n    def __enter__(self):\n        self.start = time.time()\n        return self\n    \n    def __exit__(self, exc_type, exc_val, exc_tb):\n        end = time.time()\n        print(f\"Execution time: {end - self.start:.4f} seconds\")\n```\n\n**Usage Example:**\n\n```python\nwith Timer():\n    # Code block to measure\n    sum([i for i in range(1000000)])\n```\n\n### Implementation 2: Using `contextlib`\n\n```python\nimport time\nfrom contextlib import ContextDecorator\n\nclass Timer(ContextDecorator):\n    def __enter__(self):\n        self.start = time.time()\n        return self\n    \n    def __exit__(self, exc_type, exc_val, exc_tb):\n        end = time.time()\n        print(f\"Execution time: {end - self.start:.4f} seconds\")\n        # Returning False allows any exceptions to propagate\n        return False\n```\n\n**Usage Example:**\n\n```python\n@Timer\ndef my_function():\n    sum([i for i in range(1000000)])\n\nmy_function()\n```\n\n### Trade-offs Between the Two Implementations\n\n1. **Flexibility and Reusability:**\n   - **Class-based Implementation:** The class-based approach is straightforward and reusable across different contexts without modification. It's ideal when you need a standalone context manager that can be used with `with` statements.\n   - **Contextlib Implementation:** By inheriting from `ContextDecorator`, the function-based implementation (`@Timer`) allows the decorator to work both as a context manager (with `with`) and as a decorator (using `@`). This dual functionality makes it more flexible for scenarios where you might want to apply timing to functions without explicitly using a `with` block.\n\n2. **Simplicity vs. Complexity:**\n   - **Class-based Implementation:** Simpler to understand for those familiar with basic context manager concepts (`__enter__` and `__exit__`). It's more verbose but clear in its intent.\n   - **Contextlib Implementation:** Slightly more abstract due to the use of decorators and inheritance from `ContextDecorator`. However, it reduces boilerplate code and can be cleaner for simple timing tasks.\n\n3. **Exception Handling:**\n   - Both implementations handle exceptions similarly by printing the execution time regardless of whether an exception occurred within the block. The context manager's `__exit__` method in both cases returns `False`, allowing any exceptions to propagate after timing is reported.\n\n4. **Performance Overhead:**\n   - Both implementations introduce minimal overhead due to the use of `time.time()`. The difference in performance between them is negligible for most practical purposes, especially when measuring execution time over longer durations or within larger code blocks.\n\n5. **Readability and Maintenance:**\n   - **Class-based Implementation:** More readable for those who prefer explicit context manager syntax (`with Timer():`). It's easier to maintain if the timing logic needs to be extended (e.g., adding logging, handling different time units).\n   - **Contextlib Implementation:** Slightly less verbose and can make function signatures cleaner when applied as a decorator. However, it might obscure the timing functionality for those unfamiliar with decorators or `ContextDecorator`.\n\n### Conclusion\n\n- Use the **class-based implementation** if you need a straightforward context manager that is explicitly used within `with` blocks and may require additional logic in `__enter__` or `__exit__`.\n- Opt for the **contextlib implementation** when you want a concise, flexible solution that can be applied as both a decorator and a context manager, especially useful for quick timing of function executions.\n\nBoth approaches are valid; the choice depends on your specific use case and coding style preferences."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 45,
+        "prompt_eval_duration": 30554800,
+        "eval_count": 824,
+        "eval_duration": 8955988200,
+        "total_duration": 9459047800,
+        "load_duration": 32711400,
+        "tokens_per_second": 92.00548075755616,
+        "time_to_first_token_ms": 30.5548,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Class version must implement __enter__ (start timer) and __exit__ (print elapsed). contextlib version uses @contextmanager with yield. Should note class version is reusable and supports attributes, contextlib is more concise.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-thread-pool",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "concurrency",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a simple thread pool in Python that accepts callables,\nruns them across a fixed number of worker threads, and provides\na way to wait for all tasks to complete. Discuss the GIL implications.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of a simple thread pool in Python using the `concurrent.futures` module, which abstracts away much of the complexity involved in managing threads directly. This example demonstrates how to submit callables (functions or methods) to the thread pool and wait for all tasks to complete.\n\n### Implementation\n\n```python\nimport concurrent.futures\nimport time\n\n# Define a simple callable that simulates work by sleeping\ndef task(n):\n    print(f\"Task {n} started.\")\n    time.sleep(2)  # Simulate I/O-bound or CPU-bound work\n    print(f\"Task {n} completed.\")\n\ndef main():\n    # Number of worker threads in the pool\n    max_workers = 3\n\n    # Create a ThreadPoolExecutor with the specified number of workers\n    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:\n        # Submit tasks to the thread pool\n        futures = [executor.submit(task, i) for i in range(5)]\n\n        # Wait for all submitted tasks to complete\n        for future in concurrent.futures.as_completed(futures):\n            try:\n                # Retrieve the result of each task (if any)\n                future.result()\n            except Exception as exc:\n                print(f\"Task generated an exception: {exc}\")\n\n    print(\"All tasks have completed.\")\n\nif __name__ == \"__main__\":\n    main()\n```\n\n### Explanation\n\n1. **ThreadPoolExecutor**: This class from `concurrent.futures` manages a pool of threads and allows you to submit callables for execution.\n2. **max_workers**: Specifies the maximum number of worker threads in the pool. In this example, we set it to 3.\n3. **submit()**: Used to schedule a callable (`task`) to be executed with the given arguments. It returns a `Future` object representing the execution of the callable.\n4. **as_completed()**: An iterator that yields futures as they complete (finish or raise an exception). This is useful for waiting on multiple tasks and processing their results as they become available.\n\n### GIL Implications\n\nThe Global Interpreter Lock (GIL) in CPython prevents multiple native threads from executing Python bytecodes at once. This lock is necessary because CPython's memory management is not thread-safe.\n\n- **CPU-bound tasks**: For CPU-bound operations, the GIL means that even if you have a multi-threaded program, only one thread can execute Python bytecode at a time. Thus, using multiple threads for CPU-bound tasks in CPython won't lead to true parallelism and may not improve performance. Instead, it could increase overhead due to context switching.\n  \n- **I/O-bound tasks**: For I/O-bound operations (e.g., network requests, file I/O), the GIL is less of a bottleneck because threads can release the GIL while waiting for I/O operations to complete. Thus, threading can be beneficial for improving performance in these scenarios by allowing other threads to run during I/O wait times.\n\nIn our example, `task` simulates an I/O-bound operation with `time.sleep()`. Therefore, using a thread pool is appropriate here because the GIL's impact is minimized while waiting for simulated I/O. If `task` were performing heavy CPU computations, we might see limited benefits from threading due to the GIL.\n\n### Conclusion\n\nThis simple thread pool implementation demonstrates how to manage concurrent execution of callables in Python. While it effectively handles I/O-bound tasks by leveraging multiple threads, it's important to consider the GIL's implications for CPU-bound workloads. For such cases, alternative approaches like multiprocessing or using a different Python interpreter (e.g., Jython, IronPython) that doesn't have a GIL might be more suitable."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 49,
+        "prompt_eval_duration": 32426100,
+        "eval_count": 763,
+        "eval_duration": 8278902500,
+        "total_duration": 8744700000,
+        "load_duration": 32810200,
+        "tokens_per_second": 92.16197436797934,
+        "time_to_first_token_ms": 32.4261,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use a task queue (Queue) with worker threads pulling from it. Must support shutdown/wait. Must mention GIL limits thread pool to I/O-bound tasks; CPU-bound needs multiprocessing.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-event-emitter",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "design-patterns"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement an EventEmitter class in Python that supports:\n- on(event, callback) to register handlers\n- emit(event, *args) to fire an event\n- off(event, callback) to unregister\nInclude error handling and discuss thread safety.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is an implementation of an `EventEmitter` class in Python that supports the methods you requested: `on`, `emit`, and `off`. This implementation includes basic error handling and a discussion on thread safety.\n\n### EventEmitter Implementation\n\n```python\nimport threading\nfrom collections import defaultdict\n\nclass EventEmitter:\n    def __init__(self):\n        # Dictionary to hold events and their corresponding callbacks\n        self._events = defaultdict(list)\n        # Lock for thread-safe operations\n        self._lock = threading.Lock()\n\n    def on(self, event: str, callback):\n        \"\"\"\n        Register a handler for an event.\n        \n        :param event: The name of the event.\n        :param callback: The function to be called when the event is emitted.\n        :raises ValueError: If the callback is not callable.\n        \"\"\"\n        if not callable(callback):\n            raise ValueError(\"Callback must be a callable object.\")\n        \n        with self._lock:\n            self._events[event].append(callback)\n\n    def emit(self, event: str, *args, **kwargs):\n        \"\"\"\n        Fire an event and call all registered handlers.\n        \n        :param event: The name of the event to emit.\n        :param args: Positional arguments to pass to each callback.\n        :param kwargs: Keyword arguments to pass to each callback.\n        \"\"\"\n        with self._lock:\n            callbacks = list(self._events[event])  # Copy the list to avoid modification during iteration\n            for callback in callbacks:\n                try:\n                    callback(*args, **kwargs)\n                except Exception as e:\n                    print(f\"Error executing callback {callback}: {e}\")\n\n    def off(self, event: str, callback):\n        \"\"\"\n        Unregister a handler from an event.\n        \n        :param event: The name of the event.\n        :param callback: The function to be unregistered.\n        \"\"\"\n        with self._lock:\n            if event in self._events and callable(callback):\n                self._events[event].remove(callback)\n                # Clean up empty event lists\n                if not self._events[event]:\n                    del self._events[event]\n\n# Example usage\nif __name__ == \"__main__\":\n    emitter = EventEmitter()\n\n    def handler1(data):\n        print(f\"Handler 1 received: {data}\")\n\n    def handler2(data, extra):\n        print(f\"Handler 2 received: {data}, with extra: {extra}\")\n\n    # Register handlers\n    emitter.on(\"my_event\", handler1)\n    emitter.on(\"my_event\", handler2)\n\n    # Emit the event\n    emitter.emit(\"my_event\", \"Hello\", extra=\"World\")\n\n    # Unregister a handler\n    emitter.off(\"my_event\", handler1)\n\n    # Emit again to see the effect of unregistration\n    emitter.emit(\"my_event\", \"Final message\")\n```\n\n### Error Handling\n\n- **`on(event, callback)`**: Checks if the provided `callback` is callable. Raises a `ValueError` if it isn't.\n- **`emit(event, *args, **kwargs)`**: Wraps the call to each registered callback in a try-except block to catch and log any exceptions that occur during execution.\n\n### Thread Safety\n\nThe implementation uses a `threading.Lock` (`self._lock`) to ensure that operations modifying or accessing the `_events` dictionary are thread-safe. This lock is acquired before:\n- Registering/unregistering callbacks with `on()`/`off()`.\n- Emitting events with `emit()`.\n\nThis ensures that no two threads can modify the event list for a given event simultaneously, preventing race conditions and ensuring consistent state across threads.\n\n### Discussion\n\nWhile this implementation provides basic thread safety through locking, it may introduce performance bottlenecks in highly concurrent scenarios due to lock contention. For more complex or high-performance applications, consider using finer-grained locks (e.g., separate locks for different events) or exploring lock-free data structures and synchronization primitives available in Python's `concurrent.futures` or third-party libraries like `multiprocessing`.\n\nAdditionally, this implementation does not support event prioritization or wildcard event listeners. Extending the class to include these features would involve more sophisticated management of the `_events` dictionary and potentially additional parameters for `on()` and `emit()`."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 56,
+        "prompt_eval_duration": 37871900,
+        "eval_count": 871,
+        "eval_duration": 9476433000,
+        "total_duration": 10020969700,
+        "load_duration": 33648600,
+        "tokens_per_second": 91.91222055809396,
+        "time_to_first_token_ms": 37.8719,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must store callbacks in a dict[str, list[callable]]. on() appends, off() removes specific callback, emit() calls all registered handlers. Should handle exceptions in individual handlers without stopping other handlers. Thread safety requires a lock around the callback registry.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-json-differ",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "algorithms",
+        "recursion"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that takes two JSON-like Python dicts\nand returns a description of the differences: added keys,\nremoved keys, and changed values (including nested dicts).\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a Python function named `compare_json_dicts` that compares two JSON-like Python dictionaries (`dict1` and `dict2`) and returns a structured description of the differences. The differences include:\n\n- **Added Keys**: Keys present in `dict2` but not in `dict1`.\n- **Removed Keys**: Keys present in `dict1` but not in `dict2`.\n- **Changed Values**: Key-value pairs that exist in both dictionaries but have different values, including nested dictionaries.\n\nThe function uses recursion to handle nested dictionaries and provides a detailed report of the differences.\n\n```python\ndef compare_json_dicts(dict1, dict2):\n    def _compare(d1, d2, path=\"\"):\n        added = []\n        removed = []\n        changed = []\n\n        # Collect keys from both dictionaries\n        keys1, keys2 = set(d1.keys()), set(d2.keys())\n\n        # Identify added and removed keys\n        for key in keys2 - keys1:\n            added.append(f\"{path}{key}\")\n        for key in keys1 - keys2:\n            removed.append(f\"{path}{key}\")\n\n        # Compare common keys\n        for key in keys1 & keys2:\n            value1, value2 = d1[key], d2[key]\n            current_path = f\"{path}{key}.\"\n            if isinstance(value1, dict) and isinstance(value2, dict):\n                # Recursively compare nested dictionaries\n                sub_added, sub_removed, sub_changed = _compare(value1, value2, current_path)\n                added.extend(sub_added)\n                removed.extend(sub_removed)\n                changed.extend(sub_changed)\n            elif value1 != value2:\n                # Values have changed\n                changed.append(f\"{current_path[:-1]}: {value1} -> {value2}\")\n\n        return added, removed, changed\n\n    added_keys, removed_keys, changed_values = _compare(dict1, dict2)\n\n    # Format the output for readability\n    report = {\n        \"Added Keys\": added_keys,\n        \"Removed Keys\": removed_keys,\n        \"Changed Values\": changed_values\n    }\n\n    return report\n\n\n# Example usage:\ndict_a = {\n    \"name\": \"Alice\",\n    \"age\": 30,\n    \"address\": {\"city\": \"Wonderland\", \"zip\": \"12345\"}\n}\n\ndict_b = {\n    \"name\": \"Alice\",\n    \"age\": 31,\n    \"email\": \"alice@example.com\",\n    \"address\": {\"city\": \"Dreamland\", \"zip\": \"67890\"}\n}\n\ndifferences = compare_json_dicts(dict_a, dict_b)\nprint(differences)\n```\n\n### Explanation:\n- **Recursive Comparison**: The `_compare` function is defined within `compare_json_dicts` to handle nested dictionaries recursively. It checks for added and removed keys at each level of the dictionary hierarchy.\n- **Handling Nested Dictionaries**: When both values corresponding to a key are dictionaries, the function calls itself recursively to compare these nested structures.\n- **Value Changes**: If values differ for a common key (and they are not both dictionaries), it records this change in the `changed_values` list.\n- **Path Tracking**: The `path` parameter helps track the hierarchical path of keys, making the output more informative and easier to understand.\n\n### Output:\nThe function returns a dictionary with three lists: `Added Keys`, `Removed Keys`, and `Changed Values`. Each entry in these lists describes where the change occurred within the original dictionaries' structure. This approach provides a clear and detailed comparison suitable for debugging or auditing changes between two JSON-like structures."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 42,
+        "prompt_eval_duration": 32763100,
+        "eval_count": 732,
+        "eval_duration": 7936430500,
+        "total_duration": 8376711800,
+        "load_duration": 31766000,
+        "tokens_per_second": 92.23289991640448,
+        "time_to_first_token_ms": 32.7631,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must recursively compare nested dicts. Must report added keys, removed keys, and changed values separately. Must handle type changes (e.g., value was string, now dict). Lists can be compared by equality or element-wise.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-big-o",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "cs",
+        "algorithms",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain Big O notation to someone who understands basic programming\nbut has no formal CS education. Use concrete examples for O(1),\nO(n), O(n^2), and O(log n). Explain why it matters in practice.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Let's explore Big O notation using simple, relatable examples that illustrate how algorithms perform as the size of their input grows. We'll look at four common complexities: **O(1)**, **O(n)**, **O(n²)**, and **O(log n)**.\n\n### 1. **O(1) - Constant Time**\n\n**Explanation:**  \nAn algorithm with O(1) complexity takes the same amount of time to execute, no matter how large the input is. It performs a fixed number of operations.\n\n**Example:**  \nImagine you have an array of your favorite snacks, and you want to grab the first snack (e.g., a chocolate bar). No matter how many snacks are in the array, you always take the same amount of time to reach the first one:\n\n```python\nsnacks = [\"chocolate\", \"candy\", \"chip\", ...]\nfirst_snack = snacks[0]  # This operation is O(1)\n```\n\n**Why it matters:**  \nO(1) algorithms are highly efficient because their execution time does not increase with input size. They are ideal for operations like accessing an element in an array by index or retrieving a value from a hash table.\n\n### 2. **O(n) - Linear Time**\n\n**Explanation:**  \nAn algorithm with O(n) complexity takes time proportional to the size of the input. If the input doubles, the execution time also roughly doubles.\n\n**Example:**  \nSuppose you need to check if a specific snack (e.g., \"candy\") is in your array of snacks:\n\n```python\nsnacks = [\"chocolate\", \"candy\", \"chip\", ...]\nis_candy_present = any(snack == \"candy\" for snack in snacks)  # This operation is O(n)\n```\n\nIf there are **n** snacks, you might have to look at each one once. If the array has 100 snacks and \"candy\" is near the end, you'll check all 100.\n\n**Why it matters:**  \nO(n) algorithms are straightforward and efficient for moderate-sized inputs. They are common in tasks like searching through a list or computing the sum of elements.\n\n### 3. **O(n²) - Quadratic Time**\n\n**Explanation:**  \nAn algorithm with O(n²) complexity has execution time proportional to the square of the input size. As the input grows, the execution time increases quadratically.\n\n**Example:**  \nConsider checking every possible pair of snacks to see if any two are the same (e.g., comparing each snack with every other snack):\n\n```python\nsnacks = [\"chocolate\", \"candy\", \"chip\", ...]\nfor i in range(len(snacks)):\n    for j in range(i + 1, len(snacks)):\n        if snacks[i] == snacks[j]:\n            print(\"Duplicate found!\")\n```\n\nIf there are **n** snacks, you perform roughly \\( n \\times (n - 1) / 2 \\) comparisons. For 100 snacks, this results in about 4,950 checks.\n\n**Why it matters:**  \nO(n²) algorithms become impractical for large inputs due to their rapid growth in execution time. They are often seen in simple sorting algorithms like Bubble Sort or in nested loops that compare elements pairwise.\n\n### 4. **O(log n) - Logarithmic Time**\n\n**Explanation:**  \nAn algorithm with O(log n) complexity grows logarithmically as the input size increases. It reduces the problem size significantly at each step, leading to fewer operations overall.\n\n**Example:**  \nImagine you have a sorted list of snacks and want to find \"candy\" using binary search:\n\n```python\nsnacks = [\"apple\", \"banana\", \"cherry\", \"date\", \"elderberry\", \"fig\", \"grape\"]\ntarget = \"date\"\nlow, high = 0, len(snacks) - 1\n\nwhile low <= high:\n    mid = (low + high) // 2\n    if snacks[mid] == target:\n        print(\"Found!\")\n        break\n    elif snacks[mid] < target:\n        low = mid + 1\n    else:\n        high = mid - 1\n```\n\nEach iteration halves the search space. For 100 snacks, you might need at most about 7 comparisons (since \\( \\log_2(100) \\approx 6.64 \\)).\n\n**Why it matters:**  \nO(log n) algorithms are highly efficient for large inputs because they quickly narrow down the problem size. They are commonly used in searching sorted data structures like binary search trees or arrays.\n\n### **Why Big O Notation Matters in Practice**\n\n1. **Predictability:** It helps predict how an algorithm will perform as input sizes grow, allowing developers to choose the most appropriate solution for a given problem.\n2. **Scalability:** Understanding complexity ensures that applications remain responsive even as data volumes increase.\n3. **Resource Management:** Efficient algorithms use less CPU time and memory, leading to faster execution and lower resource consumption.\n4. **Problem Solving:** Recognizing patterns in algorithmic complexity aids in selecting or designing algorithms that solve problems effectively.\n\nIn summary, Big O notation provides a high-level understanding of an algorithm's efficiency, guiding developers toward solutions that balance performance and scalability in real-world applications."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 55,
+        "prompt_eval_duration": 35292100,
+        "eval_count": 1091,
+        "eval_duration": 11884015000,
+        "total_duration": 12556347000,
+        "load_duration": 33340300,
+        "tokens_per_second": 91.80399048638023,
+        "time_to_first_token_ms": 35.2921,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-rest-principles",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "architecture",
+        "http",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What are the core principles of REST? Explain each one and give\nan example of a common API design mistake that violates it.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "REST (Representational State Transfer) is an architectural style for designing networked applications. It relies on a stateless, client-server, cacheable communications protocol — typically HTTP. The core principles of REST are often summarized by the following five constraints:\n\n1. **Client-Server**: This principle separates the user interface concerns from the data storage concerns, allowing both to develop independently. The client is responsible for rendering the user experience and handling user input, while the server handles data storage, business logic, and returns appropriate responses.\n\n   *Example of a violation*: Embedding server-specific UI elements or functionality within the API responses (e.g., returning HTML snippets that are meant to be rendered by a specific browser) ties the client too closely to the server's implementation details, violating the separation of concerns.\n\n2. **Stateless**: Each request from client to server must contain all the information needed to understand and complete the request. The server does not store any client context between requests. This statelessness facilitates scalability and reliability because each request can be processed independently.\n\n   *Example of a violation*: Using session cookies or hidden form fields to maintain user state across requests without encoding that state within the request itself (e.g., relying on a server-side session ID passed in URL parameters). This approach introduces unnecessary complexity and violates the stateless nature of RESTful services.\n\n3. **Cacheable**: Responses must define themselves as cacheable or not to prevent repeated network trips for the same data. HTTP provides mechanisms for caching responses, which can significantly improve performance and reduce latency.\n\n   *Example of a violation*: Marking all responses as `Cache-Control: no-cache` or similar directives that prevent caching, even when the response content is static or changes infrequently. This unnecessarily increases load on servers and reduces client-side responsiveness.\n\n4. **Uniform Interface**: The principle of a uniform interface simplifies and decouples the architecture, enabling each part to evolve independently. REST defines four interface constraints: identification of resources (URI), manipulation of resources through representations, self-descriptive messages, and hypermedia as the engine of application state (HATEOAS).\n\n   *Example of a violation*: Using non-standard HTTP methods or URI patterns for operations that could be uniformly expressed with standard GET, POST, PUT, DELETE verbs. For instance, using `GET /users/create` instead of `POST /users` to create a new user violates the uniform interface constraint by introducing custom semantics not universally understood.\n\n5. **Layered System**: This allows an architecture composed of hierarchical layers, where each layer knows only about the layer directly beneath it. A client is unaware of any intermediary servers through which its request passes, enabling load balancing, shared caches, and protection against threats.\n\n   *Example of a violation*: Bypassing intermediate proxies or load balancers by hardcoding direct connections to backend services in the API client code. This undermines the ability to scale or modify the infrastructure without affecting clients, violating the layered system constraint.\n\nEach of these principles contributes to building scalable, maintainable, and interoperable web services. Violating any of them can lead to increased complexity, reduced performance, and decreased flexibility in your API design."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 34,
+        "prompt_eval_duration": 26933900,
+        "eval_count": 639,
+        "eval_duration": 6936497700,
+        "total_duration": 7327835700,
+        "load_duration": 33826900,
+        "tokens_per_second": 92.12141741213293,
+        "time_to_first_token_ms": 26.9339,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-git-rebase",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "tools",
+        "git",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the difference between git merge and git rebase.\nWhen would you use each? What are the dangers of rebasing?\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Let's explore the differences between `git merge` and `git rebase`, their appropriate use cases, and the potential risks associated with rebasing.\n\n### Git Merge\n\n**Definition:**\n- `git merge` is a command used to combine two branches together. It creates a new commit that integrates changes from one branch into another, effectively joining their histories.\n\n**How it works:**\n1. You switch to the branch you want to integrate changes into (e.g., `main`).\n2. You execute `git merge <branch-name>` where `<branch-name>` is the branch containing the changes you wish to incorporate.\n3. Git creates a new \"merge commit\" that combines the histories of both branches.\n\n**When to use:**\n- When you want to integrate changes from another branch into your current branch, especially when the changes are already on a remote repository and have been shared with others.\n- When working in a team where multiple developers are contributing to the same feature or bug fix, and you want to keep a clear history of each contribution.\n\n**Advantages:**\n- Preserves the history of both branches, making it easier to understand how changes were integrated over time.\n- Merge commits can be useful for tracking when specific features or fixes were introduced.\n\n### Git Rebase\n\n**Definition:**\n- `git rebase` is a command used to move a sequence of commits from one branch to another. It effectively \"replays\" the changes made in one branch onto another, creating a linearized history.\n\n**How it works:**\n1. You switch to the branch containing the changes you want to integrate (e.g., `feature-branch`).\n2. You execute `git rebase <base-branch>` where `<base-branch>` is typically your main or target branch.\n3. Git takes each commit from the current branch, applies it on top of the specified base branch, and creates new commits with updated timestamps.\n\n**When to use:**\n- When you want a clean, linear project history without unnecessary merge commits, especially useful for feature branches that are not yet merged into `main`.\n- Before pushing changes to a remote repository when your local branch is ahead of the remote branch, to ensure a straightforward integration process.\n\n**Advantages:**\n- Produces a cleaner, more readable commit history by avoiding merge commits.\n- Allows you to easily adjust or reorder commits before they are integrated into the main branch.\n\n### Dangers of Rebasing\n\n1. **Rewriting History:** Since rebasing rewrites commit history, it can cause confusion if others have already pulled your changes and based their work on them. It's generally not recommended to rebase public branches (e.g., those pushed to a remote repository) as it can lead to conflicts for other developers.\n   \n2. **Conflict Resolution Required:** If the commits being rebased introduce conflicting changes, you must resolve these conflicts manually each time they occur during the rebase process. This can be more cumbersome than resolving conflicts during a merge.\n\n3. **Loss of Context:** Merge commits preserve the context of when and why certain changes were integrated. Rebase removes this context by creating new commits that appear as if the changes always existed in their final form, which might obscure the original development timeline.\n\n4. **Potential for Data Loss:** If not done carefully (e.g., rebasing onto a branch that has diverged significantly), there's a risk of losing work or overwriting important changes unintentionally.\n\n### Summary\n\n- Use `git merge` when you want to integrate changes in a way that preserves the history and is safe for shared branches.\n- Use `git rebase` when you need a clean, linear commit history and are working with local branches that haven't been pushed yet or where you're sure no one else has based their work on your commits.\n\nAlways communicate with your team about rebasing practices to avoid conflicts and ensure everyone is aligned on the project's version control strategy."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 34,
+        "prompt_eval_duration": 26789100,
+        "eval_count": 803,
+        "eval_duration": 8742881200,
+        "total_duration": 9222195100,
+        "load_duration": 32325300,
+        "tokens_per_second": 91.84615250176338,
+        "time_to_first_token_ms": 26.7891,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-solid",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": [
+        "cs",
+        "design-principles",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 8192,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the SOLID principles with a concrete Python example\nfor each. Don't just define them — show code that violates\neach principle, then refactor it to comply.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Let's go through each of the SOLID principles one by one, starting with an example that violates the principle, followed by a refactored version that adheres to it.\n\n### 1. Single Responsibility Principle (SRP)\n\n**Violation:**\nA class that handles both user authentication and logging is responsible for two things, violating SRP.\n\n```python\nclass UserAuthLogger:\n    def login(self, username, password):\n        # Authentication logic here\n        pass\n\n    def log_activity(self, message):\n        # Logging activity here\n        print(f\"Log: {message}\")\n```\n\n**Refactored (Compliant):**\nSeparate the authentication and logging responsibilities into distinct classes.\n\n```python\nclass UserAuth:\n    def login(self, username, password):\n        # Authentication logic here\n        pass\n\nclass ActivityLogger:\n    def log_activity(self, message):\n        print(f\"Log: {message}\")\n```\n\n### 2. Open/Closed Principle (OCP)\n\n**Violation:**\nA class that processes different types of payments requires modification each time a new payment type is added.\n\n```python\nclass PaymentProcessor:\n    def process_payment(self, method, amount):\n        if method == \"CREDIT_CARD\":\n            # Process credit card here\n            pass\n        elif method == \"PAYPAL\":\n            # Process PayPal here\n            pass\n        else:\n            raise NotImplementedError(\"Payment method not supported\")\n```\n\n**Refactored (Compliant):**\nUse an interface/abstract class and let subclasses handle specific payment methods.\n\n```python\nfrom abc import ABC, abstractmethod\n\nclass PaymentMethod(ABC):\n    @abstractmethod\n    def process(self, amount):\n        pass\n\nclass CreditCard(PaymentMethod):\n    def process(self, amount):\n        # Process credit card here\n        print(f\"Processing {amount} via credit card\")\n\nclass PayPal(PaymentMethod):\n    def process(self, amount):\n        # Process PayPal here\n        print(f\"Processing {amount} via PayPal\")\n\nclass PaymentProcessor:\n    def __init__(self, payment_method: PaymentMethod):\n        self.payment_method = payment_method\n\n    def process_payment(self, amount):\n        self.payment_method.process(amount)\n```\n\n### 3. Liskov Substitution Principle (LSP)\n\n**Violation:**\nA subclass that overrides a method changes the expected behavior in a way that violates LSP.\n\n```python\nclass Bird:\n    def fly(self):\n        print(\"Flying...\")\n\nclass Penguin(Bird):\n    def fly(self):\n        raise NotImplementedError(\"This bird cannot fly\")\n```\n\n**Refactored (Compliant):**\nEnsure subclasses can replace their base class without altering the correctness of the program.\n\n```python\nclass Bird:\n    def fly(self):\n        print(\"Flying...\")\n\nclass Penguin(Bird):\n    # No need to override if it doesn't make sense behavior-wise\n    pass\n```\n\n### 4. Interface Segregation Principle (ISP)\n\n**Violation:**\nA single interface that many clients implement, but only a few use, violates ISP.\n\n```python\nclass ServiceInterface:\n    def service_one(self):\n        pass\n\n    def service_two(self):\n        pass\n\nclass ClientOne(ServiceInterface):\n    def service_one(self):\n        print(\"Client One Service One\")\n    \n    # Unused by ClientOne\n    def service_two(self):\n        pass\n```\n\n**Refactored (Compliant):**\nSplit the large interface into smaller, more specific ones.\n\n```python\nclass ServiceOne:\n    def service_one(self):\n        print(\"Service One\")\n\nclass ServiceTwo:\n    def service_two(self):\n        print(\"Service Two\")\n\nclass ClientOne(ServiceOne):\n    pass\n\nclass ClientTwo(ServiceOne, ServiceTwo):\n    pass\n```\n\n### 5. Dependency Inversion Principle (DIP)\n\n**Violation:**\nA high-level module depends on a low-level module directly, violating DIP.\n\n```python\nclass Database:\n    def fetch_data(self):\n        # Fetch data from the database\n        return \"Data\"\n\nclass HighLevelModule:\n    def __init__(self):\n        self.database = Database()\n\n    def process_data(self):\n        data = self.database.fetch_data()\n        print(f\"Processing: {data}\")\n```\n\n**Refactored (Compliant):**\nDepend upon abstractions; do not depend on concrete implementations.\n\n```python\nfrom abc import ABC, abstractmethod\n\nclass DataProvider(ABC):\n    @abstractmethod\n    def fetch_data(self):\n        pass\n\nclass Database(DataProvider):\n    def fetch_data(self):\n        return \"Data\"\n\nclass HighLevelModule:\n    def __init__(self, data_provider: DataProvider):\n        self.data_provider = data_provider\n\n    def process_data(self):\n        data = self.data_provider.fetch_data()\n        print(f\"Processing: {data}\")\n```\n\nEach of these examples demonstrates a violation of a SOLID principle followed by a refactored version that adheres to the principle, making the code more maintainable, scalable, and easier to understand."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 43,
+        "prompt_eval_duration": 31300700,
+        "eval_count": 1027,
+        "eval_duration": 11187698900,
+        "total_duration": 11815716600,
+        "load_duration": 32671400,
+        "tokens_per_second": 91.79725063927133,
+        "time_to_first_token_ms": 31.3007,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-concurrency",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": [
+        "cs",
+        "concurrency",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the difference between concurrency and parallelism.\nThen explain threads vs processes vs async/await in Python,\nincluding when each is appropriate and why.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### Concurrency vs Parallelism\n\n**Concurrency** refers to the ability of a system to manage multiple tasks at the same time. It involves dealing with a lot of things simultaneously, but not necessarily doing them simultaneously. In concurrent systems, tasks are interleaved in such a way that each task makes progress while waiting for resources or I/O operations. Concurrency is about structuring and managing the execution of multiple tasks within a single program.\n\n**Parallelism**, on the other hand, involves executing multiple computations or processes simultaneously, typically leveraging multi-core processors or distributed systems to perform calculations at the same time. Parallelism requires that the system has the capability to execute different parts of a program in parallel, which can lead to significant performance improvements for suitable tasks (e.g., data processing, simulations).\n\nIn summary:\n- **Concurrency** is about dealing with lots of things at once and structuring your program accordingly.\n- **Parallelism** is about doing multiple things at once on multi-core or distributed systems.\n\n### Threads vs Processes vs Async/Await in Python\n\n#### Threads\n- **Definition**: A thread is the smallest unit of execution within a process. Multiple threads can exist within the same process, sharing resources such as memory and file handles.\n- **Use Case**: Suitable for I/O-bound tasks (e.g., reading from/writing to files, network communications) where the program spends time waiting for external events.\n- **Pros**:\n  - Low overhead compared to processes.\n  - Easy data sharing due to shared memory space.\n- **Cons**:\n  - Limited by Global Interpreter Lock (GIL) in CPython, which can hinder CPU-bound parallelism.\n  - Requires careful management of shared resources to avoid race conditions.\n\n#### Processes\n- **Definition**: A process is an instance of a program being executed. Each process has its own memory space and system resources.\n- **Use Case**: Ideal for CPU-bound tasks (e.g., heavy computations, data processing) where parallel execution can significantly reduce computation time.\n- **Pros**:\n  - Bypasses GIL limitations, allowing true parallelism on multi-core systems.\n  - Isolated memory space prevents issues like race conditions from affecting shared resources.\n- **Cons**:\n  - Higher overhead due to separate memory spaces and inter-process communication (IPC) mechanisms.\n  - More complex management compared to threads.\n\n#### Async/Await\n- **Definition**: Asynchronous programming in Python uses the `async` and `await` keywords to define coroutines, which are functions that can pause their execution before completing, enabling non-blocking operations.\n- **Use Case**: Best suited for I/O-bound tasks where waiting on external resources (e.g., network requests, file I/O) is common. It allows a single thread to handle multiple asynchronous operations efficiently.\n- **Pros**:\n  - Efficiently handles many concurrent I/O-bound tasks with minimal overhead.\n  - Simplifies writing non-blocking code without the complexity of managing threads or processes.\n- **Cons**:\n  - Not suitable for CPU-bound tasks, as it does not provide true parallelism and can be limited by GIL.\n  - Requires understanding of coroutine mechanics and event loops.\n\n### When to Use Each\n\n- **Threads**: Use when you need to perform multiple I/O-bound operations concurrently within the same program and want to share data easily between these operations. Be mindful of the GIL if your tasks are CPU-bound.\n  \n- **Processes**: Opt for processes when dealing with CPU-bound tasks that can benefit from true parallel execution across multiple cores, or when you need to isolate resource usage and avoid shared memory issues.\n\n- **Async/Await**: Choose async/await for I/O-bound operations where the program frequently waits on external resources. It's particularly useful in web servers, network applications, or any scenario with high concurrency requirements but limited CPU processing needs.\n\nIn Python, the choice between threads, processes, and async/await depends heavily on the nature of the tasks (I/O-bound vs. CPU-bound), the need for resource isolation, and the complexity you're willing to manage in your application."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 38,
+        "prompt_eval_duration": 30402800,
+        "eval_count": 829,
+        "eval_duration": 9003949200,
+        "total_duration": 9491191600,
+        "load_duration": 32644900,
+        "tokens_per_second": 92.07071048335102,
+        "time_to_first_token_ms": 30.4028,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-rest-api",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "http",
+        "databases"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design a REST API for a library management system.\nInclude endpoints, data models, error handling strategy,\nand explain your choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! Below is a detailed design for a REST API tailored for a library management system. This design includes endpoints, data models, an error handling strategy, and explanations for each choice.\n\n### Data Models\n\n1. **Book**\n   - `id`: Unique identifier (UUID)\n   - `title`: String\n   - `author`: String\n   - `isbn`: String\n   - `published_date`: Date\n   - `genre`: Array of strings\n   - `available_copies`: Integer\n   - `total_copies`: Integer\n\n2. **Author**\n   - `id`: Unique identifier (UUID)\n   - `name`: String\n   - `biography`: String\n\n3. **Member**\n   - `id`: Unique identifier (UUID)\n   - `first_name`: String\n   - `last_name`: String\n   - `email`: String\n   - `join_date`: Date\n   - `status`: Enum (`active`, `inactive`)\n\n4. **Loan**\n   - `id`: Unique identifier (UUID)\n   - `book_id`: UUID (references Book.id)\n   - `member_id`: UUID (references Member.id)\n   - `loan_date`: Date\n   - `due_date`: Date\n   - `return_date`: Date (nullable)\n\n### Endpoints\n\n#### Books\n- **GET** `/books`\n  - Retrieves a list of all books.\n  - Query Parameters: `?search=title_or_author`, `?genre=genre_name`, `?available=true/false`\n  \n- **POST** `/books`\n  - Adds a new book to the library.\n  - Request Body: JSON object matching the Book model.\n\n- **GET** `/books/{bookId}`\n  - Retrieves details of a specific book by its ID.\n\n- **PUT** `/books/{bookId}`\n  - Updates an existing book's information.\n  - Request Body: JSON object with fields to update.\n\n- **DELETE** `/books/{bookId}`\n  - Deletes a book from the library (soft delete, marking as inactive).\n\n#### Authors\n- **GET** `/authors`\n  - Retrieves a list of all authors.\n\n- **POST** `/authors`\n  - Adds a new author.\n\n- **GET** `/authors/{authorId}`\n  - Retrieves details of a specific author by its ID.\n\n- **PUT** `/authors/{authorId}`\n  - Updates an existing author's information.\n\n#### Members\n- **GET** `/members`\n  - Retrieves a list of all members.\n  \n- **POST** `/members`\n  - Registers a new library member.\n\n- **GET** `/members/{memberId}`\n  - Retrieves details of a specific member by its ID.\n\n- **PUT** `/members/{memberId}`\n  - Updates an existing member's information (e.g., email, status).\n\n#### Loans\n- **POST** `/loans`\n  - Initiates a new loan for a book to a member.\n  - Request Body: JSON object with `book_id` and `member_id`.\n\n- **GET** `/loans/{loanId}`\n  - Retrieves details of a specific loan by its ID.\n\n- **PUT** `/loans/{loanId}/return`\n  - Marks a loan as returned, updating the return date.\n\n### Error Handling Strategy\n\n1. **Standard HTTP Status Codes**\n   - `200 OK`: Successful GET request.\n   - `201 Created`: Resource successfully created (POST).\n   - `204 No Content`: Successful DELETE or update without content to return.\n   - `400 Bad Request`: Invalid request payload or missing required fields.\n   - `401 Unauthorized`: Authentication failed or token missing.\n   - `403 Forbidden`: User lacks permission to perform the action.\n   - `404 Not Found`: Resource (book, author, member, loan) not found.\n   - `409 Conflict`: Operation would cause a conflict (e.g., duplicate entry).\n   - `500 Internal Server Error`: Unexpected server error.\n\n2. **Error Response Format**\n   ```json\n   {\n     \"error\": {\n       \"code\": \"HTTP_STATUS_CODE\",\n       \"message\": \"Detailed error message\"\n     }\n   }\n   ```\n   Example for a 404 Not Found:\n   ```json\n   {\n     \"error\": {\n       \"code\": \"404\",\n       \"message\": \"Book with ID '12345' not found.\"\n     }\n   }\n   ```\n\n3. **Validation Errors**\n   - Use `422 Unprocessable Entity` for validation errors.\n   - Include field-specific error messages in the response body:\n   ```json\n   {\n     \"error\": {\n       \"code\": \"422\",\n       \"message\": \"Validation failed.\",\n       \"details\": [\n         {\"field\": \"title\", \"message\": \"Title cannot be empty.\"},\n         {\"field\": \"isbn\", \"message\": \"ISBN must be a valid ISBN-13.\"}\n       ]\n     }\n   }\n   ```\n\n### Choices Explained\n\n1. **UUID for Identifiers**: Ensures globally unique identifiers, avoiding conflicts in distributed systems.\n2. **RESTful Conventions**: Following standard REST principles (e.g., using `GET` for retrieval, `POST` for creation) makes the API intuitive and consistent with common web practices.\n3. **Soft Delete for Books**: Allows historical data retention without cluttering active listings.\n4. **Detailed Error Responses**: Enhances client-side debugging by providing clear feedback on what went wrong.\n5. **Validation Errors Separately Handled**: Differentiates between server errors and client input validation issues, improving user experience.\n\nThis design provides a robust foundation for a library management system's API, balancing simplicity with the necessary functionality to manage books, authors, members, and loans effectively."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 33,
+        "prompt_eval_duration": 27339700,
+        "eval_count": 1174,
+        "eval_duration": 12779783400,
+        "total_duration": 13489829200,
+        "load_duration": 33166500,
+        "tokens_per_second": 91.86384176119918,
+        "time_to_first_token_ms": 27.3397,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-auth-system",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "security",
+        "architecture",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design an authentication and authorization system for a\nmulti-tenant SaaS application. Cover user registration,\nlogin, session management, role-based access, and at least\nthree security considerations.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Designing an authentication and authorization system for a multi-tenant Software as a Service (SaaS) application requires careful consideration of scalability, security, and usability across multiple tenants sharing the same infrastructure. Below is a comprehensive design that covers user registration, login, session management, role-based access control (RBAC), and three critical security considerations.\n\n### 1. User Registration\n\n**Flow:**\n- **Tenant Identification:** Upon sign-up, users select or are assigned to a specific tenant.\n- **Email Verification:** Send an email with a verification link to confirm the user's email address.\n- **Password Hashing:** Store passwords using strong hashing algorithms (e.g., bcrypt, Argon2) with salt to prevent rainbow table attacks.\n- **Tenant Context Storage:** Store tenant-specific information securely alongside user data.\n\n**Security Considerations:**\n- **Rate Limiting:** Implement rate limiting on registration attempts to mitigate brute-force attacks.\n- **CAPTCHA:** Use CAPTCHA during the registration process to deter automated sign-up bots.\n- **Data Validation:** Validate all input fields for appropriate format and length to prevent injection attacks.\n\n### 2. Login\n\n**Flow:**\n- **Credential Submission:** Users submit their credentials (email/username and password) through a secure HTTPS connection.\n- **Authentication Service Call:** The client sends the credentials to an authentication service, which verifies them against stored hashes.\n- **Token Issuance:** Upon successful verification, issue JSON Web Tokens (JWTs) or session cookies containing tenant ID and user ID.\n\n**Security Considerations:**\n- **HTTPS Enforcement:** Ensure all communication between clients and servers is encrypted using HTTPS.\n- **Multi-Factor Authentication (MFA):** Offer MFA options (e.g., SMS codes, authenticator apps) for enhanced security.\n- **Password Policy:** Enforce strong password policies, including minimum length, complexity requirements, and regular expiration prompts.\n\n### 3. Session Management\n\n**Flow:**\n- **Session Creation:** Upon login, create a session tied to the user's tenant ID and store it securely on the server or in secure HTTP-only cookies.\n- **Session Timeout:** Implement automatic logout after periods of inactivity (e.g., 15 minutes) and provide options for manual logout.\n- **Token Revocation:** Allow users to revoke active sessions from their account settings page.\n\n**Security Considerations:**\n- **Secure Cookie Flags:** Use `HttpOnly` and `Secure` flags on session cookies to prevent JavaScript access and ensure transmission over HTTPS only.\n- **Session Expiration:** Regularly expire old sessions and provide mechanisms for immediate revocation in case of suspected compromise.\n- **Cross-Site Request Forgery (CSRF) Protection:** Include anti-CSRF tokens in forms and API requests to protect against unauthorized actions.\n\n### 4. Role-Based Access Control (RBAC)\n\n**Flow:**\n- **Role Definition:** Define roles within each tenant (e.g., Admin, Manager, User) with specific permissions.\n- **Permission Mapping:** Map user accounts to roles; roles define access levels to application resources and operations.\n- **Access Checks:** On every request, verify the user's role against required permissions for the requested resource or action.\n\n**Security Considerations:**\n- **Least Privilege Principle:** Assign users the minimum set of permissions necessary to perform their duties.\n- **Regular Review:** Periodically review and adjust roles and permissions as tenant needs evolve or when employees change roles within a company.\n- **Audit Trails:** Maintain logs of access attempts, role changes, and permission assignments for auditing purposes.\n\n### 5. Security Considerations\n\n1. **Data Encryption:**\n   - **At Rest:** Encrypt sensitive data stored in databases using strong encryption algorithms (e.g., AES-256).\n   - **In Transit:** Ensure all data transmitted between clients and servers is encrypted using TLS/SSL protocols.\n\n2. **Regular Security Audits & Penetration Testing:**\n   - Conduct regular security audits to identify vulnerabilities.\n   - Perform penetration testing to simulate attacks and validate the effectiveness of defenses.\n\n3. **Compliance with Standards:**\n   - Adhere to relevant compliance standards (e.g., GDPR, HIPAA) depending on the application's target market and data types handled.\n   - Implement necessary data protection measures, such as data minimization and user consent management for personal data processing.\n\n### Conclusion\n\nThis authentication and authorization system design for a multi-tenant SaaS application emphasizes robust security practices while ensuring scalability and usability. By addressing user registration, login, session management, RBAC, and key security considerations, the system aims to protect against common vulnerabilities and ensure secure access control across diverse tenants. Continuous monitoring, updates, and adherence to evolving security standards are essential for maintaining a resilient authentication framework."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 45,
+        "prompt_eval_duration": 31991000,
+        "eval_count": 964,
+        "eval_duration": 10493101800,
+        "total_duration": 11072642900,
+        "load_duration": 32335500,
+        "tokens_per_second": 91.86987969563013,
+        "time_to_first_token_ms": 31.991,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-queue-system",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "distributed",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design a simple message queue system. Cover the API,\npersistence strategy, delivery guarantees, and how you'd\nhandle consumer failures. Compare at-most-once vs\nat-least-once vs exactly-once delivery.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### Simple Message Queue System Design\n\n#### **1. API Overview**\n\nThe API for a simple message queue system should be straightforward, supporting basic operations such as producing messages, consuming messages, and managing queues.\n\n**Producer API:**\n- `produce(queueName, message)`: Sends a message to the specified queue.\n- `close()`: Closes the producer connection gracefully.\n\n**Consumer API:**\n- `subscribe(queueName, callback)`: Subscribes to a queue and registers a callback function to process incoming messages.\n- `unsubscribe(queueName)`: Unsubscribes from a queue.\n- `ack(messageId)`: Acknowledges receipt of a message (important for at-least-once or exactly-once semantics).\n- `close()`: Closes the consumer connection gracefully.\n\n#### **2. Persistence Strategy**\n\nTo ensure durability and prevent data loss, messages should be persisted before being delivered to consumers. A simple yet effective strategy is:\n\n- **Write-Ahead Log (WAL):** Store incoming messages in a log file or database table before acknowledging their receipt to the producer.\n- **Checkpointing:** Periodically flush the WAL to disk to ensure that recent messages are safely stored even in case of system failures.\n\n#### **3. Delivery Guarantees**\n\nThe delivery guarantees define how the message queue ensures messages reach consumers under various failure scenarios:\n\n- **At-Most-Once:** Messages may be delivered zero or one time. If a consumer fails after receiving a message, it is lost. This is the simplest guarantee and minimizes overhead but does not handle failures well.\n  \n- **At-Least-Once:** Messages are guaranteed to be delivered at least once. If a consumer fails before acknowledging a message, it will be redelivered. This requires idempotent processing on the consumer side.\n\n- **Exactly-Once:** Each message is delivered exactly once, even in the presence of failures. This typically involves additional coordination between producer and consumer (e.g., transaction IDs or deduplication mechanisms).\n\n#### **4. Handling Consumer Failures**\n\nTo robustly handle consumer failures:\n\n- **Timeouts & Retries:** Implement timeouts for processing messages. If a message is not acknowledged within a specified timeout, it should be retried.\n- **Dead Letter Queue (DLQ):** For messages that fail to process after multiple retries, route them to a DLQ for manual inspection and reprocessing.\n- **Idempotency:** Ensure consumer operations are idempotent to safely handle message redelivery.\n\n#### **5. Comparison of Delivery Guarantees**\n\n| Guarantee          | Description                                                                                     | Pros                                      | Cons                                       |\n|--------------------|-------------------------------------------------------------------------------------------------|-------------------------------------------|--------------------------------------------|\n| **At-Most-Once**   | Messages may be delivered zero or one time.                                                      | Simple, low overhead                      | No guarantee against loss due to failures  |\n| **At-Least-Once**  | Messages are guaranteed to be delivered at least once; duplicates possible if consumer fails early.| Robust against consumer failures          | Requires idempotent processing             |\n| **Exactly-Once**   | Each message is delivered exactly once, even in failure scenarios.                             | Highest reliability                      | Complex implementation, higher overhead    |\n\n### Conclusion\n\nDesigning a simple yet effective message queue system involves careful consideration of the API design, persistence strategy, delivery guarantees, and consumer failure handling mechanisms. By choosing appropriate strategies for each aspect—such as using write-ahead logs for persistence, implementing retries and dead letter queues for fault tolerance, and selecting the right delivery guarantee based on application requirements—you can build a robust messaging infrastructure that balances simplicity with reliability."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 53,
+        "prompt_eval_duration": 38413900,
+        "eval_count": 738,
+        "eval_duration": 8018844200,
+        "total_duration": 8477168900,
+        "load_duration": 33388000,
+        "tokens_per_second": 92.0332134648532,
+        "time_to_first_token_ms": 38.4139,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "debug-race-condition",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "debugging",
+        "concurrency"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "This Python code has a race condition. Identify it, explain\nwhy it's dangerous, and fix it:\n\nimport threading\n\ncounter = 0\n\ndef increment():\n    global counter\n    for _ in range(100000):\n        counter += 1\n\nthreads = [threading.Thread(target=increment) for _ in range(4)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(counter)\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### Race Condition Identification\n\nThe race condition in the provided Python code occurs within the `increment` function, specifically at the line:\n\n```python\ncounter += 1\n```\n\nWhen multiple threads execute this line concurrently, they may interfere with each other's operations on `counter`. Here's why:\n\n1. **Shared Resource**: `counter` is a global variable shared among all threads.\n2. **Non-Atomic Operation**: The operation `counter += 1` is not atomic. It involves reading the current value of `counter`, incrementing it, and writing the new value back to `counter`. If two or more threads execute this sequence simultaneously, they might read the same initial value of `counter`, perform their increments independently, and then write back the same incremented value. This leads to a lost update.\n3. **Concurrent Execution**: The four threads created by the list comprehension `[threading.Thread(target=increment) for _ in range(4)]` all run concurrently on multi-core processors or through time-slicing on single-core systems. Without proper synchronization, they can interleave their execution of `counter += 1`.\n\n### Why It's Dangerous\n\nThe danger of this race condition is that it results in **incorrect final value** of `counter`. Instead of the expected sum of increments from all threads (which should be \\(4 \\times 100000 = 400000\\)), the actual output can vary and often falls short of this number. This inconsistency can lead to unpredictable behavior in programs relying on accurate counting or summation, potentially causing bugs that are hard to diagnose.\n\n### Fixing the Race Condition\n\nTo fix the race condition, we need to ensure that increments to `counter` are performed atomically. Python's standard library provides a synchronization primitive called `Lock` (or higher-level constructs like `threading.Semaphore`, `threading.Condition`, etc.) that can be used for this purpose.\n\nHere’s how you can fix the code using a `Lock`:\n\n```python\nimport threading\n\ncounter = 0\nlock = threading.Lock()  # Create a lock object\n\ndef increment():\n    global counter\n    for _ in range(100000):\n        with lock:  # Acquire the lock before entering the critical section\n            counter += 1  # This operation is now atomic relative to other threads\n\nthreads = [threading.Thread(target=increment) for _ in range(4)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\nprint(counter)\n```\n\n### Explanation of the Fix\n\n- **Lock Creation**: `lock = threading.Lock()` creates a lock object that can be used to synchronize access to shared resources.\n- **Critical Section**: The `with lock:` statement ensures that only one thread at a time can execute the code within its block (the critical section). Before executing this block, a thread must acquire the lock. If another thread tries to enter this block while the lock is held, it will be blocked until the lock is released.\n- **Atomic Increment**: By wrapping `counter += 1` inside the `with lock:` block, we ensure that increments are performed atomically relative to other threads, preventing race conditions.\n\nThis modification guarantees that each increment operation on `counter` is executed without interference from concurrent thread executions, leading to the correct final value of `400000` (assuming no other errors or interruptions)."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 96,
+        "prompt_eval_duration": 44898500,
+        "eval_count": 692,
+        "eval_duration": 7520799500,
+        "total_duration": 7959905000,
+        "load_duration": 31818200,
+        "tokens_per_second": 92.01149425669439,
+        "time_to_first_token_ms": 44.8985,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "refactor-god-function",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "refactoring",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "This function does too many things. Refactor it into smaller,\nwell-named functions and explain your reasoning:\n\ndef process_order(order):\n    if order['quantity'] <= 0:\n        return {'error': 'Invalid quantity'}\n    subtotal = order['price'] * order['quantity']\n    if order.get('coupon') == 'SAVE10':\n        subtotal *= 0.9\n    tax = subtotal * 0.08\n    total = subtotal + tax\n    if order.get('email'):\n        print(f\"Sending receipt to {order['email']}\")\n    return {'subtotal': subtotal, 'tax': tax, 'total': total}\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Certainly! The original `process_order` function performs several distinct tasks: validating the quantity, calculating the subtotal (with a conditional coupon discount), computing tax and total, and optionally sending an email receipt. By breaking these responsibilities into separate functions, we enhance readability, maintainability, and testability of the code.\n\nHere's a refactored version with explanations for each step:\n\n```python\ndef validate_quantity(order):\n    \"\"\"Validate that the order quantity is greater than zero.\"\"\"\n    if order['quantity'] <= 0:\n        return {'error': 'Invalid quantity'}\n    return None\n\ndef calculate_subtotal(order):\n    \"\"\"Calculate the subtotal of the order, applying a coupon discount if applicable.\"\"\"\n    subtotal = order['price'] * order['quantity']\n    if order.get('coupon') == 'SAVE10':\n        subtotal *= 0.9\n    return subtotal\n\ndef compute_tax(subtotal):\n    \"\"\"Compute the tax based on an 8% rate.\"\"\"\n    return subtotal * 0.08\n\ndef compute_total(subtotal, tax):\n    \"\"\"Calculate the total by adding the subtotal and tax.\"\"\"\n    return subtotal + tax\n\ndef send_receipt(order):\n    \"\"\"Send a receipt email if an email address is provided in the order.\"\"\"\n    if order.get('email'):\n        print(f\"Sending receipt to {order['email']}\")\n\ndef process_order(order):\n    \"\"\"Main function to orchestrate the order processing workflow.\"\"\"\n    # Step 1: Validate quantity\n    validation_error = validate_quantity(order)\n    if validation_error:\n        return validation_error\n\n    # Step 2: Calculate subtotal (with coupon discount if applicable)\n    subtotal = calculate_subtotal(order)\n\n    # Step 3: Compute tax based on the subtotal\n    tax = compute_tax(subtotal)\n\n    # Step 4: Compute total by adding subtotal and tax\n    total = compute_total(subtotal, tax)\n\n    # Step 5: Optionally send receipt email\n    send_receipt(order)\n\n    # Return the final order details\n    return {'subtotal': subtotal, 'tax': tax, 'total': total}\n```\n\n### Reasoning:\n\n1. **Separation of Concerns**: Each function now has a single responsibility:\n   - `validate_quantity` checks if the quantity is valid.\n   - `calculate_subtotal` computes the order's cost, applying any coupon discounts.\n   - `compute_tax` calculates tax based on the subtotal.\n   - `compute_total` sums the subtotal and tax to get the total amount.\n   - `send_receipt` handles sending an email receipt if an email address is provided.\n\n2. **Improved Readability**: By naming functions descriptively, it becomes easier for someone reading the code to understand what each part of the process does without needing to delve into the details of each function.\n\n3. **Enhanced Maintainability**: If business rules change (e.g., tax rate changes or new coupons are introduced), only the relevant function needs updating. This minimizes the risk of introducing bugs in unrelated parts of the code.\n\n4. **Facilitates Testing**: Each small function can be independently tested, ensuring that each part of the order processing logic behaves as expected. This modular approach supports unit testing and integration testing more effectively.\n\n5. **Scalability**: Should new features be added (e.g., handling different types of discounts or integrating with a payment gateway), additional functions can be introduced without complicating the existing `process_order` function, keeping it clean and focused on orchestrating the workflow.\n\nThis refactoring not only makes the code cleaner but also aligns well with software engineering best practices such as single responsibility principle (SRP) and separation of concerns."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 140,
+        "prompt_eval_duration": 57711700,
+        "eval_count": 745,
+        "eval_duration": 8096504600,
+        "total_duration": 8594933000,
+        "load_duration": 33685600,
+        "tokens_per_second": 92.01501596133225,
+        "time_to_first_token_ms": 57.7117,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "review-code-pr",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "code-review",
+        "python",
+        "quality"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Review this Python code as if it were a pull request.\nPoint out bugs, style issues, and suggest improvements:\n\ndef get_user_data(user_id):\n    import requests\n    resp = requests.get(f\"http://api.example.com/users/{user_id}\")\n    data = resp.json()\n    name = data['name']\n    email = data['email']\n    age = data['age']\n    if age < 0:\n        age = 0\n    return {\"name\": name, \"email\": email, \"age\": age, \"is_adult\": age >= 18}\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "**Pull Request Review for `get_user_data` Function**\n\n### Overview\nThe function `get_user_data(user_id)` fetches user information from an external API and returns a dictionary containing the user's name, email, age, and whether they are considered an adult (age ≥ 18). Below is a detailed review covering potential bugs, style issues, and suggestions for improvement.\n\n---\n\n### Bug Identification\n\n1. **API Endpoint Hardcoding**:  \n   The URL `http://api.example.com/users/{user_id}` is hardcoded. This may not be suitable for production environments where the base URL might change or require configuration (e.g., environment variables, configuration files).\n\n2. **Error Handling**:  \n   The function does not handle potential exceptions that could arise during the HTTP request:\n   - `requests.get()` can raise a `requests.exceptions.RequestException` if there is a network problem.\n   - The API response might be invalid JSON (`resp.json()` can raise `ValueError`).\n   - The expected keys (`'name'`, `'email'`, `'age'`) may not exist in the response, leading to a `KeyError`.\n\n3. **Age Validation**:  \n   The check `if age < 0: age = 0;` assumes that an invalid (negative) age should be clamped to zero. While this is reasonable for some use cases, it might mask deeper issues with data validation or API contract violations.\n\n---\n\n### Style Issues\n\n1. **Imports**:  \n   Importing `requests` inside the function is not a major issue but is generally discouraged if the module is used elsewhere in the file. It's better to place imports at the top of the module for clarity and reusability.\n\n2. **Variable Naming**:  \n   The variable names are clear (`resp`, `data`, `name`, `email`, `age`). However, consider using more descriptive names if the function grows or is part of a larger codebase.\n\n3. **Return Statement**:  \n   The return statement constructs a dictionary inline. While this is concise, adding comments or docstrings could improve readability for future maintainers.\n\n---\n\n### Suggestions for Improvement\n\n1. **Move Imports to Top**:\n   ```python\n   import requests\n   ```\n\n2. **Add Error Handling**:\n   ```python\n   try:\n       resp = requests.get(f\"http://api.example.com/users/{user_id}\")\n       resp.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)\n       data = resp.json()\n   except requests.exceptions.RequestException as e:\n       # Handle network errors, timeouts, etc.\n       raise SystemExit(e) from e\n   except ValueError:\n       # Handle JSON decoding errors\n       raise ValueError(\"Invalid JSON response\") from e\n\n   name = data.get('name')\n   email = data.get('email')\n   age = data.get('age', 0)\n\n   if not isinstance(age, int):\n       raise ValueError(\"Age must be an integer\")\n   if age < 0:\n       age = 0\n   ```\n\n3. **Use `.get()` for Dictionary Access**:\n   Instead of directly accessing dictionary keys (`data['name']`), use `.get()` to provide default values and avoid `KeyError`. This makes the function more robust.\n\n4. **Add Docstring**:\n   ```python\n   def get_user_data(user_id):\n       \"\"\"\n       Fetches user data from an API and returns a dictionary with name, email, age,\n       and whether the user is considered an adult (age >= 18).\n\n       Args:\n           user_id (int): The ID of the user to fetch.\n\n       Returns:\n           dict: A dictionary containing 'name', 'email', 'age', and 'is_adult'.\n       \"\"\"\n   ```\n\n5. **Consider Using a Configuration for Base URL**:\n   If the base URL might change, consider using an environment variable or configuration setting:\n   ```python\n   import os\n   BASE_URL = os.getenv('API_BASE_URL', 'http://api.example.com')\n   resp = requests.get(f\"{BASE_URL}/users/{user_id}\")\n   ```\n\n6. **Validate Age More Robustly**:\n   Instead of simply clamping negative ages to zero, consider logging or raising an error if the age is invalid, depending on how strictly you want to enforce data integrity.\n\n---\n\n### Conclusion\nThe function works for basic scenarios but lacks robustness in terms of error handling and configuration flexibility. By addressing these areas, the code will be more maintainable, reliable, and adaptable to different environments. Implementing the suggested improvements will enhance the overall quality of the pull request."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 125,
+        "prompt_eval_duration": 54824900,
+        "eval_count": 954,
+        "eval_duration": 10384314800,
+        "total_duration": 11004178500,
+        "load_duration": 31816200,
+        "tokens_per_second": 91.86932584131598,
+        "time_to_first_token_ms": 54.8249,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "tradeoff-sql-nosql",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "databases",
+        "architecture",
+        "tradeoffs"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "You're building a social media platform. The core data includes\nuser profiles, posts, comments, and follower relationships.\nWould you use a relational database, a document store, or both?\nJustify your choice with specific tradeoffs for each data type.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "When designing the data storage architecture for a social media platform that encompasses user profiles, posts, comments, and follower relationships, it is often beneficial to employ a combination of a relational database and a document store. Each data type has distinct characteristics that influence the choice of storage mechanism.\n\n### Relational Database (e.g., PostgreSQL, MySQL)\n\n**Advantages:**\n1. **Structured Data Handling:** Relational databases excel at managing structured data with well-defined schemas. User profiles, posts, and comments can be effectively represented using tables with clear relationships.\n2. **Complex Queries & Joins:** The ability to perform complex queries involving multiple tables (joins) is a strong suit of relational databases. For instance, retrieving all comments on a specific post along with the author's profile information requires joining several tables, which is straightforward in a relational setup.\n3. **ACID Compliance:** Relational databases ensure Atomicity, Consistency, Isolation, and Durability (ACID) properties, crucial for maintaining data integrity during transactions, such as adding followers or updating user profiles.\n\n**Tradeoffs:**\n1. **Scalability Limitations:** Horizontal scaling can be challenging in relational databases due to their schema rigidity and the overhead of maintaining referential integrity across distributed nodes.\n2. **Performance Overhead for Nested Data:** While efficient for flat data structures, relational databases may incur performance overhead when dealing with deeply nested or semi-structured data, such as complex comment threads.\n\n### Document Store (e.g., MongoDB, Couchbase)\n\n**Advantages:**\n1. **Flexible Schema Design:** Document stores are schema-less or loosely typed, allowing for easy evolution of data models without the need for costly migrations. This flexibility is advantageous for rapidly changing social media features.\n2. **Nested Data Representation:** They naturally support nested documents, making them ideal for representing hierarchical relationships like comments within posts and sub-comments within those comments.\n3. **Horizontal Scalability:** Document stores are designed to scale out horizontally across multiple servers, which is beneficial for handling large volumes of read/write operations typical in social media platforms.\n\n**Tradeoffs:**\n1. **Limited Query Capabilities:** While document stores offer powerful querying capabilities, they may lack the depth and flexibility of SQL-based joins found in relational databases, potentially complicating complex cross-document queries.\n2. **Eventual Consistency:** Many document stores prioritize availability and partition tolerance over immediate consistency (CAP theorem), which might be a concern for certain operations requiring strong consistency guarantees.\n\n### Hybrid Approach\n\n**Justification:**\n- **User Profiles & Posts:** Store in a relational database to leverage structured data handling, complex querying capabilities, and ACID compliance. This ensures reliable management of user information and content metadata.\n- **Comments & Follower Relationships:** Utilize a document store for these components due to their hierarchical nature and the need for flexible schema adjustments as the platform evolves. Document stores also provide efficient storage and retrieval of nested comment threads and follower lists.\n\n**Implementation Strategy:**\n1. **Data Modeling:** Design schemas in the relational database for user profiles, posts, and any other flat data structures requiring complex joins. Model comments and followers as documents within a document store.\n2. **API Layer:** Develop an API layer that abstracts the underlying storage mechanisms, allowing application logic to interact with both databases seamlessly. This abstraction facilitates future scalability adjustments or technology migrations.\n3. **Data Synchronization:** Implement synchronization processes (e.g., change data capture) to keep follower counts and related metadata consistent across both systems if necessary.\n\nBy leveraging a relational database for structured, query-intensive operations and a document store for flexible, nested data handling, the social media platform can achieve a balanced approach that supports scalability, performance, and adaptability. This hybrid strategy accommodates the diverse requirements of user profiles, posts, comments, and follower relationships effectively."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 59,
+        "prompt_eval_duration": 35791000,
+        "eval_count": 774,
+        "eval_duration": 8406430600,
+        "total_duration": 8880867400,
+        "load_duration": 32340000,
+        "tokens_per_second": 92.07237135818382,
+        "time_to_first_token_ms": 35.791,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "tradeoff-mono-micro",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "tradeoffs",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "A startup has a monolithic Python application that's becoming\nhard to maintain. The CTO wants to move to microservices.\nPresent a balanced argument: what are the real benefits,\nwhat are the hidden costs, and what would you recommend\nfor a team of 5 engineers?\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### Balanced Argument for Transitioning from a Monolithic Python Application to Microservices\n\n#### Real Benefits\n\n1. **Scalability**: Microservices allow individual components to be scaled independently based on demand. This means that if one service experiences a spike in traffic, it can be scaled without affecting the entire application.\n\n2. **Technology Flexibility**: Each microservice can be developed using the most appropriate technology stack for its specific function. For example, a real-time data processing service might use Go or Rust, while another service could continue to use Python if it's best suited for that task.\n\n3. **Resilience and Fault Isolation**: If one microservice fails, it is less likely to bring down the entire application. This isolation can lead to more stable overall system performance and easier troubleshooting.\n\n4. **Faster Deployment Cycles**: Smaller codebases are generally easier to understand and deploy. Teams can push updates to individual services without needing to redeploy the entire monolith, leading to quicker iteration cycles.\n\n5. **Team Autonomy**: With a microservices architecture, smaller teams can own end-to-end responsibilities for specific services. This autonomy can lead to faster decision-making and more focused development efforts.\n\n#### Hidden Costs\n\n1. **Increased Complexity in Deployment and Management**: Managing multiple services introduces operational complexity. You need robust orchestration tools (e.g., Kubernetes), monitoring solutions, and CI/CD pipelines that support a distributed system.\n\n2. **Higher Infrastructure Costs**: Running numerous microservices often requires more resources than a single monolithic application due to the overhead of managing many instances, load balancers, and network traffic.\n\n3. **Data Management Challenges**: Microservices typically require their own databases or data stores, leading to issues with data consistency, transactions across services, and eventual consistency models that need careful handling.\n\n4. **Network Latency and Overhead**: Communication between microservices over a network can introduce latency and overhead compared to in-process calls within a monolith. This requires thoughtful API design and possibly the use of synchronous vs. asynchronous communication patterns.\n\n5. **Learning Curve and Skill Requirements**: Teams must become proficient with distributed systems concepts, containerization (e.g., Docker), orchestration platforms, and potentially new programming languages or frameworks for certain services.\n\n#### Recommendation for a Team of 5 Engineers\n\nGiven the team size of five engineers, a gradual migration strategy is advisable to balance benefits against hidden costs:\n\n1. **Identify Candidates for Decoupling**: Start by identifying parts of the monolith that are most logical candidates for separation—typically those with distinct business capabilities or high traffic patterns.\n\n2. **Adopt Incremental Refactoring**: Begin with one or two services, focusing on areas where the team can gain quick wins without overwhelming complexity. Use feature flags to gradually shift traffic from the monolith to the new service.\n\n3. **Invest in Tooling Early**: Allocate time upfront to set up robust CI/CD pipelines, containerization (Docker), and orchestration (Kubernetes or a managed service like AWS ECS/EKS). This investment pays off as more services are added.\n\n4. **Prioritize Observability**: Implement comprehensive logging, monitoring, and tracing from the outset. Tools like Prometheus, Grafana, ELK stack, or OpenTelemetry can provide insights into performance and issues across services.\n\n5. **Maintain a Shared Codebase for Common Utilities**: To avoid duplication of effort in areas like authentication, configuration management, and error handling, maintain shared libraries or modules that can be reused across services.\n\n6. **Evaluate the Need for Microservices Regularly**: Periodically reassess whether each service continues to justify its existence. Some components may not require full microservice treatment if they do not scale independently or add significant operational overhead.\n\n7. **Consider Hybrid Approaches**: For teams with limited resources, a hybrid approach—where some services are microservices and others remain part of the monolith—can provide benefits without overwhelming complexity.\n\nIn summary, while transitioning to microservices offers substantial long-term advantages in scalability, flexibility, and resilience, it also introduces significant upfront costs in terms of operational complexity, infrastructure requirements, and skill development. For a team of five engineers, an incremental, tooling-focused approach that prioritizes observability and gradually refactors high-value components is recommended to maximize benefits while managing hidden costs effectively."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 65,
+        "prompt_eval_duration": 35795300,
+        "eval_count": 876,
+        "eval_duration": 9535438100,
+        "total_duration": 10078222600,
+        "load_duration": 33160100,
+        "tokens_per_second": 91.86782933444871,
+        "time_to_first_token_ms": 35.7953,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    }
+  ],
+  "summary": {
+    "total_prompts": 28,
+    "completed": 28,
+    "failed": 0,
+    "total_duration_s": 255.45,
+    "avg_tokens_per_second": 91.89
+  }
+}

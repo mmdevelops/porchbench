@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-05-06T01:01:32.165311Z",
+  "gpu": "AMD Radeon RX 9070 XT",
+  "vram_total_gb": 15.8,
+  "ollama_version": "0.22.1",
+  "models": {
+    "ministral-3:8b": {
+      "vram_bytes": 7523952256,
+      "vram_gb": 7.01,
+      "load_time_s": 4.95,
+      "tokens_per_second": 94.5
+    },
+    "granite4.1:8b": {
+      "vram_bytes": 6231616170,
+      "vram_gb": 5.8,
+      "load_time_s": 4.43,
+      "tokens_per_second": 92.0
+    }
+  },
+  "swap_times": [
+    {
+      "from_model": "ministral-3:8b",
+      "to_model": "granite4.1:8b",
+      "swap_time_s": 4.93
+    },
+    {
+      "from_model": "granite4.1:8b",
+      "to_model": "ministral-3:8b",
+      "swap_time_s": 0.08
+    }
+  ],
+  "coexistence": [
+    {
+      "models": [
+        "ministral-3:8b",
+        "granite4.1:8b"
+      ],
+      "fits": true,
+      "combined_vram_gb": 12.81,
+      "headroom_gb": 2.99
+    }
+  ],
+  "recommended_hot_tier": [
+    "granite4.1:8b",
+    "ministral-3:8b"
+  ],
+  "cold_tier": []
+}

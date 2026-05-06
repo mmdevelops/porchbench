@@ -1,0 +1,778 @@
+{
+  "evaluation": {
+    "run_id": "6ed19f81-12ac-448c-9e33-b98b686bae84",
+    "evaluator": "ollama/devstral-small-2:24b",
+    "rubric": "category-aware (Coding Rubric, Reasoning Rubric, Cross-Domain Rubric, Default Coding Rubric)",
+    "timestamp": "2026-05-06T01:47:24.204005Z",
+    "model_name": "granite4.1:8b",
+    "suite_name": "Coding Basics"
+  },
+  "scores": [
+    {
+      "prompt_id": "code-fizzbuzz",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements the FizzBuzz logic, checks divisibility by 15 (both 3 and 5) first, and produces the correct output for all numbers from 1 to 100."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including handling multiples of 3, 5, and both, and covers the full range from 1 to 100."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and follows Pythonic style with clear conditional logic and appropriate use of range."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and thorough, though it could briefly acknowledge the importance of checking divisibility by 15 first for correctness."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates strong understanding of Python loops, conditionals, and modular arithmetic."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "An excellent response that fully meets the requirements with high correctness, completeness, and code quality."
+    },
+    {
+      "prompt_id": "code-word-count",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly handles case insensitivity and punctuation removal, producing the expected output for standard inputs and edge cases."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including handling punctuation and case insensitivity, and works for empty strings."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured, using appropriate data structures and Pythonic style."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and thorough, though it could briefly acknowledge tradeoffs like time vs space complexity."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates strong understanding of relevant language features, libraries, and patterns."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "An excellent response that meets all requirements with high correctness, completeness, and code quality."
+    },
+    {
+      "prompt_id": "code-validate-email",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements the validation logic for email addresses, handling standard cases and edge cases like missing '@', empty parts, and invalid characters."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including checking for exactly one '@', non-empty local and domain parts, at least one dot in the domain, and no spaces."
+        },
+        "code_quality": {
+          "score": 4,
+          "rationale": "The code is clean and well-structured, with good naming and appropriate data structures. It is Pythonic and would likely be approved in a code review, though the use of sets for character validation could be slightly optimized."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The response clearly explains the design choices and tradeoffs, such as the use of sets for character validation and the handling of dots in the local part. The reasoning is thorough but not overly verbose."
+        },
+        "domain_knowledge": {
+          "score": 4,
+          "rationale": "The response demonstrates a strong understanding of email validation rules and Python features, though it acknowledges limitations like not covering internationalized email addresses."
+        }
+      },
+      "weighted_score": 4.6,
+      "summary": "The response is highly correct, complete, and well-reasoned, with excellent code quality and domain knowledge, making it a strong solution."
+    },
+    {
+      "prompt_id": "code-list-comprehension",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The list comprehension correctly implements the logic to filter even numbers and square them, producing the same output as the original function for all inputs."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The response addresses all parts of the prompt, including the rewrite, explanation, and discussion of tradeoffs, with no obvious gaps."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured, using Pythonic list comprehension effectively. The explanation is clear and well-organized."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The response provides a thorough explanation of why the comprehension version is better or not, acknowledging tradeoffs and context appropriately."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of Python list comprehensions, functional programming paradigms, and performance considerations."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an excellent response that fully meets the prompt's requirements with high correctness, completeness, code quality, reasoning, and domain knowledge."
+    },
+    {
+      "prompt_id": "code-binary-search",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements binary search with proper handling of edge cases, including empty lists and missing elements. The logic is sound, and the implementation matches the theoretical description."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The response fully addresses the prompt by explaining the algorithm step-by-step, providing a correct Python implementation, and analyzing time and space complexity. No obvious gaps are present."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured. It uses appropriate variable names, avoids unnecessary complexity, and follows Pythonic style. The implementation is efficient and easy to understand."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The response clearly explains the algorithm's design choices, such as the use of `mid = low + (high - low) // 2` to avoid overflow. It also acknowledges the requirement for a sorted input array and discusses tradeoffs in complexity analysis."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of binary search, including its time and space complexity, and correctly applies Pythonic practices in the implementation."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an exemplary response that fully meets the prompt's requirements with high correctness, completeness, code quality, reasoning, and domain knowledge."
+    },
+    {
+      "prompt_id": "code-rate-limiter",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements a sliding window rate limiter, handling standard inputs and edge cases like requests outside the window. The logic for removing outdated requests and checking the limit is accurate."
+        },
+        "completeness": {
+          "score": 4,
+          "rationale": "The solution addresses the core requirements but could explicitly mention handling of concurrent requests or thread safety, which is a common edge case in rate limiting."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured with good naming (e.g., `request_queue`, `is_allowed`). The use of `deque` for efficient operations is appropriate, and the example usage is clear."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The explanation of design choices is thorough, covering tradeoffs (e.g., sliding window vs. fixed window), efficiency (O(1) operations), and extensibility. It also acknowledges real-world considerations like blocking behavior."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates strong understanding of rate limiting patterns, Python data structures (`deque`), and time-based operations (`time.time()`). The use of appropriate tools for the job is evident."
+        }
+      },
+      "weighted_score": 4.8,
+      "summary": "An excellent response with high correctness, code quality, reasoning, and domain knowledge, though slightly incomplete in addressing concurrency."
+    },
+    {
+      "prompt_id": "code-csv-parser",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly parses CSV strings into a list of dictionaries, handles quoted fields with commas, and processes escaped quotes within quoted fields. It also correctly uses the first row as headers."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including handling quoted fields with commas and escaped quotes, and using the first row as headers. Edge cases like empty input are handled."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and uses idiomatic Python. The helper function `_parse_line` is appropriately separated, and the code is easy to read and understand."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and covers the design choices, such as the use of a state variable for tracking quoted fields. However, it could briefly mention tradeoffs or alternative approaches."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of CSV parsing, string manipulation, and Pythonic practices, such as using state variables for parsing logic."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent response that meets all requirements with high correctness, completeness, and code quality."
+    },
+    {
+      "prompt_id": "code-retry-decorator",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements the retry logic with exponential backoff, handles exceptions properly, and re-raises the last exception after exhausting retries. It works for standard inputs and edge cases."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including the decorator parameters, exponential backoff, and example usage. No obvious gaps are present."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and follows Pythonic idioms. It uses functools.wraps to preserve function metadata and has good naming and organization."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and thorough, covering the design choices and logic behind the implementation. It could have briefly mentioned potential tradeoffs, such as the impact of exponential backoff on performance."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of Python decorators, exception handling, and the use of functools.wraps. The implementation is appropriate for the task."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent response that meets all requirements with high correctness, completeness, and code quality, along with clear reasoning and strong domain knowledge."
+    },
+    {
+      "prompt_id": "code-linked-list",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements all required methods (append, prepend, delete_by_value) and handles edge cases such as empty lists and missing values. The __repr__ method accurately represents the linked list structure."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including the implementation of the Node class, the SinglyLinkedList class with the required methods, and a clear explanation of when to use a singly linked list over a Python list."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and follows Pythonic idioms. It includes docstrings for methods, appropriate variable names, and a clear example usage."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation of when to use a singly linked list over a Python list is clear and well-justified, covering key scenarios like dynamic size and frequent insertions/deletions at the beginning."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of linked lists, their implementation, and their use cases compared to Python lists."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent implementation of a singly linked list with clear reasoning and high code quality."
+    },
+    {
+      "prompt_id": "code-cache-decorator",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements memoization by caching results based on function arguments, handles both positional and keyword arguments, and produces the correct output for standard inputs."
+        },
+        "completeness": {
+          "score": 4,
+          "rationale": "The solution addresses the prompt requirements and handles edge cases like unhashable arguments and mutable defaults. However, it could explicitly mention handling non-pure functions or side effects."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and uses Pythonic idioms. The naming is clear, and the implementation is straightforward and easy to understand."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The response explains the design choices clearly and acknowledges tradeoffs, such as the limitations of the approach. The reasoning is solid but could delve deeper into performance implications."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of Python features, memoization patterns, and the limitations of the approach, including cache management and function purity."
+        }
+      },
+      "weighted_score": 4.7,
+      "summary": "This is a strong response with excellent correctness, code quality, and domain knowledge, though it could slightly improve in completeness and reasoning depth."
+    },
+    {
+      "prompt_id": "code-iterator",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements the iterator protocol, yields Fibonacci numbers up to the specified maximum value, and raises StopIteration when the limit is exceeded. It handles the sequence correctly, including edge cases like max_value=0."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including the iterator protocol implementation and usage in a for loop. Edge cases are handled, and the example usage demonstrates the functionality clearly."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured. It uses appropriate variable names, follows Pythonic style, and is easy to understand. The example usage is well-integrated and demonstrates the class effectively."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and thorough, covering the initialization, iterator protocol, and next value logic. It acknowledges the use of StopIteration and provides a step-by-step breakdown of the Fibonacci sequence generation."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of Python's iterator protocol, including the correct use of __iter__ and __next__, as well as the Fibonacci sequence logic. The example usage further reinforces this knowledge."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent response that fully meets the requirements with high correctness, completeness, and code quality."
+    },
+    {
+      "prompt_id": "code-context-manager",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements both the class-based and contextlib-based Timer context managers, producing accurate execution time measurements for standard inputs and edge cases."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The response addresses all parts of the prompt, including implementations, usage examples, and a detailed explanation of trade-offs between the two approaches."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, idiomatic, and well-structured, with appropriate use of Python features and clear, concise implementations."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The response provides a thorough and clear explanation of design choices and trade-offs, demonstrating strong reasoning skills."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a deep understanding of Python context managers, the contextlib module, and relevant language features."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an excellent response that fully meets the requirements with high-quality code and reasoning."
+    },
+    {
+      "prompt_id": "code-thread-pool",
+      "criteria": {
+        "correctness": {
+          "score": 4,
+          "rationale": "The code works correctly for standard inputs and handles task submission and completion as required. However, it relies on `concurrent.futures`, which may not fully meet the prompt's requirement of implementing a thread pool from scratch using a task queue and worker threads."
+        },
+        "completeness": {
+          "score": 3,
+          "rationale": "The solution addresses the core requirements but does not implement a custom thread pool with a task queue and worker threads as explicitly requested. It also lacks detailed edge-case handling (e.g., task cancellation or thread pool shutdown under load)."
+        },
+        "code_quality": {
+          "score": 4,
+          "rationale": "The code is clean, idiomatic, and well-structured. It uses appropriate Python constructs and follows good practices, though the reliance on `concurrent.futures` may not fully align with the prompt's intent."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and discusses design choices, including the GIL implications. It acknowledges tradeoffs and provides context for when threading is appropriate, though it could delve deeper into the implementation details of a custom thread pool."
+        },
+        "domain_knowledge": {
+          "score": 4,
+          "rationale": "The response demonstrates strong understanding of threading, the GIL, and Python's concurrency tools. It correctly identifies the limitations of threading for CPU-bound tasks and suggests alternatives like multiprocessing."
+        }
+      },
+      "weighted_score": 3.8,
+      "summary": "A strong response with minor gaps in completeness due to not implementing a custom thread pool from scratch."
+    },
+    {
+      "prompt_id": "code-event-emitter",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly implements the EventEmitter class with all required methods (on, emit, off), handles exceptions in callbacks, and uses thread-safe operations with a lock."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including error handling and thread safety, with no obvious gaps."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and follows Pythonic idioms, with appropriate use of data structures and clear method documentation."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The response explains design choices clearly, acknowledges tradeoffs (e.g., lock contention), and provides a thoughtful discussion on thread safety and potential extensions."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of Python's threading mechanisms, callback patterns, and error handling, using appropriate tools for the job."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent implementation of the EventEmitter class, meeting all requirements with high correctness, completeness, and code quality."
+    },
+    {
+      "prompt_id": "code-json-differ",
+      "criteria": {
+        "correctness": {
+          "score": 5,
+          "rationale": "The code correctly identifies added keys, removed keys, and changed values, including nested dictionaries, and handles standard inputs and edge cases effectively."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The solution addresses all parts of the prompt, including recursive comparison of nested dictionaries and clear reporting of differences, with no obvious gaps."
+        },
+        "code_quality": {
+          "score": 5,
+          "rationale": "The code is clean, well-structured, and idiomatic, with good naming and appropriate use of recursion and data structures, making it easy to understand and maintain."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The explanation is clear and thorough, covering design choices and the recursive approach, though it could delve slightly deeper into tradeoffs like performance implications."
+        },
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates strong understanding of Python dictionaries, recursion, and comparison logic, using appropriate tools and patterns for the task."
+        }
+      },
+      "weighted_score": 4.9,
+      "summary": "This is an excellent response that meets all requirements with high correctness, completeness, and code quality, along with clear reasoning and strong domain knowledge."
+    },
+    {
+      "prompt_id": "explain-big-o",
+      "criteria": {
+        "accuracy": {
+          "score": 5,
+          "rationale": "The explanations of Big O notation and examples for O(1), O(n), O(n²), and O(log n) are technically correct and verifiable."
+        },
+        "clarity": {
+          "score": 5,
+          "rationale": "The response is well-organized, easy to follow, and uses apt analogies (e.g., snacks) to build concepts progressively."
+        },
+        "depth": {
+          "score": 4,
+          "rationale": "The response goes beyond surface-level definitions by explaining why Big O matters in practice, but it could delve slightly deeper into tradeoffs or common misconceptions."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the question are addressed, including concrete examples for each complexity and an explanation of practical importance."
+        }
+      },
+      "weighted_score": 4.8,
+      "summary": "This is an excellent response that accurately, clearly, and comprehensively explains Big O notation with practical examples and relevance."
+    },
+    {
+      "prompt_id": "explain-rest-principles",
+      "criteria": {
+        "accuracy": {
+          "score": 5,
+          "rationale": "The response correctly defines and explains each of the five core REST principles with precise and verifiable technical details."
+        },
+        "clarity": {
+          "score": 5,
+          "rationale": "The explanation is well-organized, progressively builds concepts, and uses clear examples to illustrate each principle."
+        },
+        "depth": {
+          "score": 4,
+          "rationale": "The response goes beyond surface-level definitions by addressing nuances and common misconceptions, though it could delve slightly deeper into tradeoffs."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the question are addressed, with each principle explained and accompanied by a relevant example of a violation."
+        }
+      },
+      "weighted_score": 4.8,
+      "summary": "This is an excellent response that accurately, clearly, and comprehensively explains the core REST principles with insightful examples."
+    },
+    {
+      "prompt_id": "explain-git-rebase",
+      "criteria": {
+        "accuracy": {
+          "score": 5,
+          "rationale": "The response correctly explains the differences between git merge and git rebase, their use cases, and the dangers of rebasing. All technical claims are accurate and verifiable."
+        },
+        "clarity": {
+          "score": 5,
+          "rationale": "The explanation is well-organized, easy to follow, and builds concepts progressively. Analogies and examples are apt, making it accessible to a mid-level developer."
+        },
+        "depth": {
+          "score": 5,
+          "rationale": "The response goes beyond surface-level definitions, addressing nuances, tradeoffs, and common misconceptions. It distinguishes when different approaches apply."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the question are addressed with appropriate attention, covering definitions, use cases, and dangers of rebasing."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an excellent response that is accurate, clear, deep, and complete, earning top scores across all criteria."
+    },
+    {
+      "prompt_id": "explain-solid",
+      "criteria": {
+        "accuracy": {
+          "score": 5,
+          "rationale": "The explanations and code examples for each SOLID principle are correct and verifiable. The violations and refactored versions accurately demonstrate the principles."
+        },
+        "clarity": {
+          "score": 5,
+          "rationale": "The response is well-organized, easy to follow, and builds concepts progressively. The use of concrete Python examples enhances clarity."
+        },
+        "depth": {
+          "score": 4,
+          "rationale": "The response goes beyond surface-level definitions by showing violations and refactored versions, but it could delve deeper into tradeoffs or common misconceptions for some principles."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the question are addressed, with each SOLID principle covered in detail using both violating and compliant examples."
+        }
+      },
+      "weighted_score": 4.8,
+      "summary": "This is an excellent response that accurately, clearly, and comprehensively explains the SOLID principles with concrete Python examples."
+    },
+    {
+      "prompt_id": "explain-concurrency",
+      "criteria": {
+        "accuracy": {
+          "score": 5,
+          "rationale": "The definitions and explanations of concurrency, parallelism, threads, processes, and async/await are correct and verifiable. The response accurately addresses the differences and use cases."
+        },
+        "clarity": {
+          "score": 5,
+          "rationale": "The explanation is well-organized, easy to follow, and builds concepts progressively. Analogies and examples are apt, making it accessible to a mid-level developer."
+        },
+        "depth": {
+          "score": 5,
+          "rationale": "The response goes beyond surface-level definitions, addressing nuances, tradeoffs, and common misconceptions. It distinguishes when different approaches apply, such as I/O-bound vs. CPU-bound tasks."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the question are addressed, including the comparison between concurrency and parallelism, and the explanations of threads, processes, and async/await in Python, along with their appropriate use cases."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "The response is highly accurate, clear, deep, and complete, providing a thorough and well-structured explanation of the concepts."
+    },
+    {
+      "prompt_id": "design-rest-api",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of library management systems, REST API design, and data modeling, using domain-specific concepts correctly and providing specialized knowledge."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The proposed design is structurally sound, with well-chosen components and proper connections. The API follows RESTful conventions and includes thoughtful features like soft deletes and detailed error handling."
+        },
+        "reasoning": {
+          "score": 4,
+          "rationale": "The response provides clear explanations for design choices, but it could have included more tradeoff analysis or justification for certain decisions, such as why UUIDs were chosen over sequential IDs."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The response addresses all parts of the prompt, including endpoints, data models, error handling strategy, and explanations for choices, with appropriate coverage for each part."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "The technical specifics, such as HTTP status codes and error response formats, are correct and align with standard practices."
+        }
+      },
+      "weighted_score": 4.75,
+      "summary": "This is an excellent response that demonstrates strong domain knowledge, high design quality, and completeness, with minor room for improvement in reasoning depth."
+    },
+    {
+      "prompt_id": "design-auth-system",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates deep understanding of authentication and authorization in multi-tenant SaaS, covering tenant isolation, RBAC, and security best practices with accurate domain-specific concepts."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The design is structurally sound, with well-chosen components (JWTs, RBAC, rate limiting) and clear connections between registration, login, session management, and access control."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The response provides balanced tradeoff analysis (e.g., MFA vs. usability, least privilege vs. operational overhead) and arrives at justified recommendations."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All prompt requirements are addressed: user registration, login, session management, RBAC, and three security considerations (encryption, audits, compliance)."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "Technical specifics (bcrypt, JWTs, HTTPS, CSRF tokens) are correctly implemented and free of hallucinations or insecure practices."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "A comprehensive, expert-level response demonstrating deep domain knowledge, sound design, and thorough completeness."
+    },
+    {
+      "prompt_id": "design-queue-system",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates deep understanding of message queue systems, correctly using domain-specific concepts like write-ahead logs, dead letter queues, and delivery guarantees."
+        },
+        "design_quality": {
+          "score": 4,
+          "rationale": "The proposed design is structurally sound with well-chosen components (e.g., WAL for persistence, DLQ for failures), though some implementation details (e.g., transaction IDs for exactly-once) could be more explicit."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The tradeoff analysis is balanced and honest, clearly presenting pros/cons of each delivery guarantee and arriving at a justified recommendation."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All requirements from the prompt are addressed: API design, persistence strategy, delivery guarantees, consumer failure handling, and comparison of delivery semantics."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "No technical inaccuracies or hallucinations; all concepts and mechanisms described are correct and feasible."
+        }
+      },
+      "weighted_score": 4.75,
+      "summary": "A highly knowledgeable and well-reasoned response that thoroughly addresses all aspects of message queue design with minimal gaps."
+    },
+    {
+      "prompt_id": "debug-race-condition",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a deep understanding of race conditions in multithreading, correctly identifying the non-atomic nature of the increment operation and explaining the shared resource issue."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The proposed solution using a Lock is structurally sound and correctly addresses the race condition, ensuring atomic increments to the shared counter."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The explanation of why the race condition is dangerous and the reasoning behind the fix are clear, balanced, and justified, showing a strong grasp of the underlying concepts."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "The response fully addresses all parts of the prompt: identifying the race condition, explaining its danger, and providing a correct fix with an explanation."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "The code provided is correct and would work as intended, with no hallucinations or errors in the implementation."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an exemplary response, demonstrating strong domain knowledge, excellent design quality, sound reasoning, full completeness, and perfect correctness."
+    },
+    {
+      "prompt_id": "refactor-god-function",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates a strong understanding of software engineering principles, particularly the Single Responsibility Principle and separation of concerns, which are correctly applied to the refactoring task."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The proposed design is structurally sound, with well-chosen and properly connected components. The refactored code is coherent, modular, and would work effectively in practice."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The reasoning is balanced, honest, and well-justified. It clearly explains the benefits of the refactoring, such as improved readability, maintainability, and testability, without overstating or understating the advantages."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All requirements from the prompt are addressed, including the refactoring of the function into smaller, well-named functions and a detailed explanation of the reasoning behind the changes."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "The code provided is correct and functional. The refactored functions accurately perform their intended tasks, and the overall structure adheres to Python best practices."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This response is exceptional, demonstrating deep domain knowledge, excellent design quality, sound reasoning, full completeness, and perfect correctness."
+    },
+    {
+      "prompt_id": "review-code-pr",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates deep understanding of Python, HTTP requests, error handling, and API design, with specific and accurate domain knowledge."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The proposed improvements are structurally sound, well-justified, and would work in practice, showing strong design quality."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The response provides balanced and honest tradeoff analysis, with clear justifications for each recommendation."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All aspects of the prompt are addressed thoroughly, including bugs, style issues, and suggestions for improvement."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "The technical specifics, including code snippets and error handling, are accurate and correct."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an exemplary response with strong domain knowledge, excellent design quality, balanced reasoning, thorough completeness, and high correctness."
+    },
+    {
+      "prompt_id": "tradeoff-sql-nosql",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates deep understanding of database systems, correctly applying concepts like ACID compliance, CAP theorem, and schema flexibility to social media data types."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The hybrid architecture is well-justified and structurally sound, with clear separation of concerns between relational and document stores for different data types."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The tradeoff analysis is balanced and honest, presenting both advantages and limitations of each approach before arriving at a justified recommendation."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All requirements from the prompt are addressed, with specific coverage of user profiles, posts, comments, and follower relationships."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "No technical inaccuracies or hallucinations are present; the response provides sound technical guidance."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an exemplary response demonstrating comprehensive domain knowledge, excellent design quality, balanced reasoning, complete coverage, and technical correctness."
+    },
+    {
+      "prompt_id": "tradeoff-mono-micro",
+      "criteria": {
+        "domain_knowledge": {
+          "score": 5,
+          "rationale": "The response demonstrates deep understanding of microservices architecture, covering scalability, technology flexibility, resilience, deployment cycles, and team autonomy with precise domain-specific concepts."
+        },
+        "design_quality": {
+          "score": 5,
+          "rationale": "The proposed incremental migration strategy is structurally sound, with well-chosen components (CI/CD, Kubernetes, observability tools) and practical recommendations tailored to a small team."
+        },
+        "reasoning": {
+          "score": 5,
+          "rationale": "The tradeoff analysis is balanced and honest, presenting both benefits and hidden costs clearly, and arriving at a justified recommendation for a gradual, tooling-focused approach."
+        },
+        "completeness": {
+          "score": 5,
+          "rationale": "All parts of the prompt are addressed thoroughly, including real benefits, hidden costs, and a specific recommendation for a team of five engineers."
+        },
+        "correctness": {
+          "score": 5,
+          "rationale": "Technical specifics (e.g., Kubernetes, Docker, Prometheus) are accurate and correctly applied in the context of microservices migration."
+        }
+      },
+      "weighted_score": 5.0,
+      "summary": "This is an exemplary response with strong domain knowledge, sound design, balanced reasoning, completeness, and correctness."
+    }
+  ],
+  "aggregate": {
+    "overall_weighted": 4.86,
+    "by_category": {
+      "coding": 4.81,
+      "reasoning": 4.88,
+      "cross-domain": 4.94
+    },
+    "by_difficulty": {
+      "easy": 4.85,
+      "medium": 4.91,
+      "hard": 4.79
+    },
+    "overall_normalized": 96.23,
+    "by_difficulty_normalized": {
+      "easy": 96.25,
+      "medium": 97.68,
+      "hard": 94.75
+    },
+    "overall_weighted_clean": 4.84,
+    "by_category_clean": {
+      "coding": 4.78,
+      "reasoning": 5.0,
+      "cross-domain": 4.95
+    },
+    "by_difficulty_clean": {
+      "easy": 4.83,
+      "medium": 4.9,
+      "hard": 4.76
+    }
+  }
+}

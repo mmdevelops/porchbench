@@ -1,0 +1,1492 @@
+{
+  "run": {
+    "id": "b83b9110-94d2-48cd-b039-8dc48d87cdd4",
+    "timestamp": "2026-05-06T01:03:05.321276Z",
+    "suite": {
+      "name": "Coding Basics",
+      "version": "2.0",
+      "file": "<bundled>/coding-basics.yaml",
+      "sha256": "30e288639c1a71a04fff37b0df5d83690de1a989a386bea224055db8a3b75136",
+      "rubric": "coding"
+    },
+    "model": {
+      "name": "ministral-3:8b",
+      "digest": "1922accd5827ebe6829e536369195db25eaf664528dc66206d646ea3bb386b71",
+      "details": {
+        "format": "gguf",
+        "family": "mistral3",
+        "parameter_size": "8.9B",
+        "quantization_level": "Q4_K_M"
+      }
+    },
+    "system": {
+      "ollama_version": "Ollama v0.22.1",
+      "gpu": "AMD Radeon RX 9070 XT",
+      "vram_gb": 15.8,
+      "os": "Windows 11",
+      "kv_cache_type": null
+    },
+    "repeat_index": null,
+    "total_repeats": null,
+    "porchbench_version": "0.1.0"
+  },
+  "results": [
+    {
+      "prompt_id": "code-fizzbuzz",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "loops",
+        "conditionals"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that prints numbers 1 to 100.\nFor multiples of 3 print \"Fizz\", for multiples of 5 print \"Buzz\",\nfor multiples of both print \"FizzBuzz\".\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that prints numbers 1 to 100 with the \"FizzBuzz\" rules:\n\n```python\ndef fizzbuzz():\n    for number in range(1, 101):\n        if number % 15 == 0:  # Check for multiples of both 3 and 5 first\n            print(\"FizzBuzz\")\n        elif number % 3 == 0:\n            print(\"Fizz\")\n        elif number % 5 == 0:\n            print(\"Buzz\")\n        else:\n            print(number)\n\n# Call the function\nfizzbuzz()\n```\n\nThis function:\n1. Iterates through numbers 1 to 100\n2. First checks for multiples of both 3 and 5 (divisible by 15)\n3. Then checks for multiples of 3\n4. Then checks for multiples of 5\n5. Prints the number itself if none of the above conditions are met\n\nThe order of checks is important - we check for \"FizzBuzz\" first because it's the combination of both conditions."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 599,
+        "prompt_eval_duration": 174050300,
+        "eval_count": 232,
+        "eval_duration": 2461628900,
+        "total_duration": 8485411600,
+        "load_duration": 5812810700,
+        "tokens_per_second": 94.24653732331466,
+        "time_to_first_token_ms": 174.0503,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must check divisibility by 15 (or both 3 and 5) before checking 3 or 5 individually. Should use range(1, 101). Output must include FizzBuzz for 15, 30, 45, etc.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-word-count",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "strings",
+        "dicts"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that takes a string of text and returns\na dictionary mapping each word to the number of times it appears.\nHandle punctuation and case-insensitivity.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that takes a string of text and returns a dictionary mapping each word to its count, handling punctuation and case-insensitivity:\n\n```python\nimport re\nfrom collections import defaultdict\n\ndef word_count(text):\n    # Convert to lowercase and remove punctuation using regex\n    words = re.findall(r'\\b\\w+\\b', text.lower())\n\n    # Count occurrences of each word\n    word_counts = defaultdict(int)\n    for word in words:\n        word_counts[word] += 1\n\n    return dict(word_counts)\n```\n\n### Explanation:\n1. **`re.findall(r'\\b\\w+\\b', text.lower())`**:\n   - `text.lower()` converts the entire text to lowercase to ensure case-insensitivity.\n   - `r'\\b\\w+\\b'` is a regex pattern that matches word boundaries (`\\b`) and sequences of word characters (`\\w+`), effectively splitting the text into words while ignoring punctuation.\n\n2. **`defaultdict(int)`**:\n   - A `defaultdict` is used to automatically initialize missing keys with a default value of `0`, simplifying the counting logic.\n\n3. **Return as a regular dictionary**:\n   - The `defaultdict` is converted to a standard dictionary before returning.\n\n### Example Usage:\n```python\ntext = \"Hello, world! Hello everyone. World of Python.\"\nprint(word_count(text))\n```\n\n### Output:\n```python\n{'hello': 2, 'world': 2, 'everyone': 1, 'of': 1, 'python': 1}\n```\n\n### Alternative (without `defaultdict`):\nIf you prefer not to use `defaultdict`, here's an equivalent version:\n```python\nimport re\n\ndef word_count(text):\n    words = re.findall(r'\\b\\w+\\b', text.lower())\n    word_counts = {}\n    for word in words:\n        word_counts[word] = word_counts.get(word, 0) + 1\n    return word_counts\n```\n\nBoth versions handle punctuation and case-insensitivity correctly."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 587,
+        "prompt_eval_duration": 25529800,
+        "eval_count": 426,
+        "eval_duration": 4556839100,
+        "total_duration": 4663863700,
+        "load_duration": 63689900,
+        "tokens_per_second": 93.48585514024403,
+        "time_to_first_token_ms": 25.5298,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must lowercase input and strip punctuation before counting. Should handle empty strings. A correct solution for \"Hello hello, world!\" produces {\"hello\": 2, \"world\": 1}.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-validate-email",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "validation",
+        "regex"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that validates an email address.\nIt should check for basic structure (user@domain.tld) without\nusing a regex library. Explain your validation choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that validates an email address without using a regex library. The function checks for basic structure and common patterns while avoiding overly strict or overly permissive rules. I'll explain the validation choices afterward.\n\n```python\ndef is_valid_email(email):\n    \"\"\"\n    Validates an email address based on basic structural rules.\n    Returns True if the email appears valid, False otherwise.\n\n    Rules checked:\n    1. Must contain exactly one '@' symbol\n    2. Must have a non-empty local part (before '@')\n    3. Must have a non-empty domain part (after '@')\n    4. Domain must contain at least one '.' (dot)\n    5. Dot must not be the first or last character in domain\n    6. No consecutive dots in domain\n    7. No spaces anywhere in the email\n    8. Basic length checks (local part < 64 chars, domain < 255 chars)\n    \"\"\"\n\n    # Check for spaces (invalid in email addresses)\n    if ' ' in email:\n        return False\n\n    # Split into local and domain parts\n    parts = email.split('@')\n    if len(parts) != 2:\n        return False\n\n    local_part, domain_part = parts\n\n    # Check local part length (RFC 5321 allows up to 64 chars)\n    if len(local_part) > 64:\n        return False\n\n    # Check domain part length (RFC 1034 allows up to 255 chars)\n    if len(domain_part) > 255:\n        return False\n\n    # Check domain structure\n    domain_parts = domain_part.split('.')\n    if len(domain_parts) < 2:\n        return False  # Must have at least one dot\n\n    # Check each domain part\n    for part in domain_parts:\n        if not part:  # Empty part (e.g., \"user@.com\")\n            return False\n        if len(part) > 63:  # Each label must be < 63 chars\n            return False\n        if not part[0].isalpha():  # First char must be alphanumeric\n            return False\n        if not part[-1].isalnum():  # Last char must be alphanumeric\n            return False\n        if '..' in part:  # No consecutive dots\n            return False\n        if not all(c.isalnum() or c in '-.' for c in part):  # Only alphanumeric, -, .\n            return False\n\n    return True\n```\n\n### Validation Choices Explained:\n\n1. **Single '@' symbol**: The email must have exactly one '@' character separating the local part and domain.\n\n2. **Non-empty parts**: Both the local part (before '@') and domain part (after '@') must be non-empty.\n\n3. **Domain structure**:\n   - Must contain at least one dot ('.') to separate the domain name from the TLD\n   - Dot cannot be the first or last character in the domain\n   - No consecutive dots in the domain\n\n4. **Length restrictions**:\n   - Local part: Max 64 characters (RFC 5321 standard)\n   - Domain part: Max 255 characters (RFC 1034 standard)\n   - Each domain label (between dots): Max 63 characters\n\n5. **Character restrictions**:\n   - Domain labels must start and end with alphanumeric characters\n   - Only alphanumeric characters, hyphens ('-'), and dots ('.') are allowed in domain labels\n   - No spaces anywhere in the email\n\n6. **Basic validation without regex**:\n   - Instead of using regex, we use string operations and simple checks\n   - This makes the validation more transparent and easier to modify\n   - We avoid complex patterns that might be too strict or too permissive\n\n### Limitations:\nThis is a basic validator that doesn't check for:\n- All valid international characters\n- All valid special characters in the local part\n- All valid TLD formats\n- Quoted strings in the local part\n- Comments in email addresses\n\nFor production use, you might want to:\n1. Add more comprehensive character checks\n2. Implement more strict length validation\n3. Consider using a proper email validation library for production systems\n4. Add DNS verification for the domain (though this is more about deliverability than syntax)\n\nWould you like me to modify any specific part of this validation logic?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 588,
+        "prompt_eval_duration": 25923200,
+        "eval_count": 947,
+        "eval_duration": 10164997300,
+        "total_duration": 10336465100,
+        "load_duration": 66053100,
+        "tokens_per_second": 93.16283832165898,
+        "time_to_first_token_ms": 25.9232,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must check for exactly one @, non-empty local part and domain, at least one dot in domain portion, no spaces. Should not accept \"user@\" or \"@domain.com\" or \"user@domain\".\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-list-comprehension",
+      "category": "coding",
+      "difficulty": "easy",
+      "tags": [
+        "python",
+        "idioms"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Rewrite this function using Python list comprehensions and explain\nwhy the comprehension version is (or isn't) better:\n\ndef get_even_squares(numbers):\n    result = []\n    for n in numbers:\n        if n % 2 == 0:\n            result.append(n ** 2)\n    return result\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's the rewritten function using a list comprehension:\n\n```python\ndef get_even_squares(numbers):\n    return [n ** 2 for n in numbers if n % 2 == 0]\n```\n\n### Why the comprehension version is better:\n\n1. **Conciseness**: The list comprehension version is more compact and readable for simple transformations like this. It clearly expresses the intent in one line.\n\n2. **Performance**: List comprehensions are generally faster than equivalent for-loops with append operations because they're optimized at the Python interpreter level.\n\n3. **Functional Style**: The comprehension version aligns better with Python's functional programming style, which is often preferred for data transformations.\n\n4. **Less Boilerplate**: No need to initialize an empty list or use append() - the comprehension handles everything in one expression.\n\n5. **Same Readability**: For simple cases like this, the comprehension is actually more readable because it clearly shows:\n   - What to create (`n ** 2`)\n   - What to iterate over (`for n in numbers`)\n   - What condition to apply (`if n % 2 == 0`)\n\nThe only potential downside might be if the logic becomes more complex (with nested conditions or multiple operations), at which point a traditional for-loop might become clearer. But for this simple case, the comprehension is definitely superior.\n\nBoth versions produce identical results, but the comprehension version is the Pythonic way to write this function."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 617,
+        "prompt_eval_duration": 38844300,
+        "eval_count": 296,
+        "eval_duration": 3153576100,
+        "total_duration": 3274546500,
+        "load_duration": 60841500,
+        "tokens_per_second": 93.8616956159707,
+        "time_to_first_token_ms": 38.8443,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Correct comprehension: [n ** 2 for n in numbers if n % 2 == 0]. Should note that comprehension is more readable and slightly faster for simple transformations but less suitable for complex multi-step logic.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-binary-search",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "algorithms",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain how binary search works step by step,\nthen implement it in Python.\nAnalyze its time and space complexity.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### **Binary Search: Step-by-Step Explanation**\nBinary search is an efficient algorithm for finding an element in a **sorted** array. It works by repeatedly dividing the search interval in half. If the value of the search key is less than the item in the middle of the interval, narrow the interval to the lower half. Otherwise, narrow it to the upper half. Repeatedly check until the value is found or the interval is empty.\n\n---\n\n### **Key Steps:**\n1. **Input:** A sorted array `arr` and a target value `target`.\n2. **Initialize:**\n   - `left = 0` (start of the array)\n   - `right = len(arr) - 1` (end of the array)\n3. **Loop while `left <= right`:**\n   - Calculate `mid = left + (right - left) // 2` (avoids overflow).\n   - If `arr[mid] == target`, return `mid` (found the target).\n   - If `arr[mid] < target`, search the **right half**: `left = mid + 1`.\n   - If `arr[mid] > target`, search the **left half**: `right = mid - 1`.\n4. **If loop ends without finding the target**, return `-1` (not found).\n\n---\n\n### **Python Implementation**\n```python\ndef binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n\n    while left <= right:\n        mid = left + (right - left) // 2  # Prevents integer overflow\n\n        if arr[mid] == target:\n            return mid  # Target found\n        elif arr[mid] < target:\n            left = mid + 1  # Search right half\n        else:\n            right = mid - 1  # Search left half\n\n    return -1  # Target not found\n\n# Example usage:\nsorted_array = [1, 3, 5, 7, 9, 11, 13]\ntarget = 7\nresult = binary_search(sorted_array, target)\nprint(f\"Element found at index: {result}\" if result != -1 else \"Element not found\")\n```\n\n---\n\n### **Time Complexity**\n- **Best Case:** \\(O(1)\\) (target is the middle element).\n- **Average/Worst Case:** \\(O(\\log n)\\) (halving the search space each time).\n\n**Why?** Each iteration reduces the problem size by half, leading to logarithmic time.\n\n---\n\n### **Space Complexity**\n- **Iterative Approach (above):** \\(O(1)\\) (constant space, no recursion stack).\n- **Recursive Approach:** \\(O(\\log n)\\) (due to recursion stack).\n\n---\n### **Key Notes**\n1. **Requires a sorted array** (ascending or descending).\n2. **Not suitable for unsorted data** (use linear search instead).\n3. **Efficiency:** Much faster than linear search (\\(O(n)\\)) for large datasets."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 577,
+        "prompt_eval_duration": 25634300,
+        "eval_count": 626,
+        "eval_duration": 6691127200,
+        "total_duration": 6826989500,
+        "load_duration": 60635500,
+        "tokens_per_second": 93.55673286258853,
+        "time_to_first_token_ms": 25.6343,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use low/high pointers and mid = (low + high) // 2. Time O(log n), space O(1) for iterative. Common bug: using mid = (low + high) / 2 (float division). Must handle empty list and missing element.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-rate-limiter",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "algorithms",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a simple rate limiter class in Python that allows\nat most N requests per time window of W seconds.\nExplain your design choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a simple yet effective rate limiter implementation in Python that allows at most `N` requests per `W` seconds. I'll use a sliding window algorithm with a deque (double-ended queue) to track request timestamps. This approach is efficient and commonly used in production systems.\n\n### Implementation:\n```python\nfrom collections import deque\nimport time\n\nclass RateLimiter:\n    def __init__(self, max_requests: int, time_window: float):\n        \"\"\"\n        Initialize the rate limiter.\n\n        Args:\n            max_requests: Maximum allowed requests in the time window.\n            time_window: Time window in seconds.\n        \"\"\"\n        self.max_requests = max_requests\n        self.time_window = time_window\n        self.request_times = deque()  # Stores timestamps of recent requests\n\n    def allow_request(self) -> bool:\n        \"\"\"\n        Check if a request is allowed.\n\n        Returns:\n            bool: True if the request is allowed, False otherwise.\n        \"\"\"\n        current_time = time.time()\n\n        # Remove timestamps outside the current time window\n        while self.request_times and current_time - self.request_times[0] > self.time_window:\n            self.request_times.popleft()\n\n        # Check if the number of requests exceeds the limit\n        if len(self.request_times) < self.max_requests:\n            self.request_times.append(current_time)\n            return True\n        return False\n\n    def get_remaining_requests(self) -> int:\n        \"\"\"\n        Get the number of remaining requests allowed in the current window.\n\n        Returns:\n            int: Remaining requests.\n        \"\"\"\n        current_time = time.time()\n        while self.request_times and current_time - self.request_times[0] > self.time_window:\n            self.request_times.popleft()\n        return self.max_requests - len(self.request_times)\n```\n\n---\n\n### Design Choices:\n1. **Sliding Window Algorithm**:\n   - Instead of a fixed window (e.g., counting requests in the last `W` seconds from the start), we track the timestamps of recent requests and remove old ones as they fall outside the current window.\n   - This ensures fairness and accuracy, as it reflects the actual requests made in the last `W` seconds.\n\n2. **Deque for Efficient Removal**:\n   - A `deque` (double-ended queue) is used to store request timestamps because it allows O(1) removal from the front (oldest timestamps) and O(1) appending (new timestamps).\n   - This avoids the O(n) time complexity of a list for popping from the front.\n\n3. **Dynamic Cleanup**:\n   - Before checking the request limit, we remove timestamps older than `current_time - time_window`. This ensures the deque only contains relevant timestamps for the current window.\n\n4. **Thread Safety Note**:\n   - This implementation is **not thread-safe**. If used in a multi-threaded environment, you would need to add locks (e.g., `threading.Lock`) around critical sections. Example:\n     ```python\n     from threading import Lock\n     self.lock = Lock()\n     ```\n     Then protect `allow_request` and `get_remaining_requests` with `with self.lock:`.\n\n5. **Simplicity**:\n   - The design is straightforward and avoids complex data structures (e.g., heaps) for this use case, as a deque suffices for tracking timestamps in order.\n\n6. **Time Precision**:\n   - Uses `time.time()` for simplicity, which provides seconds since the epoch with millisecond precision. For higher precision (e.g., microseconds), you could use `time.monotonic_ns()`.\n\n---\n\n### Example Usage:\n```python\nlimiter = RateLimiter(max_requests=5, time_window=10)  # 5 requests per 10 seconds\n\nfor _ in range(6):\n    if limiter.allow_request():\n        print(\"Request allowed\")\n    else:\n        print(\"Request denied (rate limit exceeded)\")\n    time.sleep(1)  # Simulate delay between requests\n```\n\n### Output (after 6 requests in <10 seconds):\n```\nRequest allowed\nRequest allowed\nRequest allowed\nRequest allowed\nRequest allowed\nRequest denied (rate limit exceeded)\n```\n\n---\n### Alternative Approaches:\n1. **Fixed Window**:\n   - Simpler but less accurate (e.g., allows bursts at window boundaries). Not recommended for strict limits.\n   - Example: Count requests in `[t-W, t]` and reset the counter at `t = W, 2W, ...`.\n\n2. **Token Bucket**:\n   - Allows requests at a steady rate with bursts. More complex but useful for variable-rate limits.\n\n3. **Leaky Bucket**:\n   - Similar to token bucket but drops excess requests instead of queuing them.\n\nThe sliding window approach here is a good balance for most use cases where you need strict enforcement of `N` requests per `W` seconds."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 582,
+        "prompt_eval_duration": 26111000,
+        "eval_count": 1010,
+        "eval_duration": 10856123000,
+        "total_duration": 11030719600,
+        "load_duration": 61732100,
+        "tokens_per_second": 93.03505496391298,
+        "time_to_first_token_ms": 26.111,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-csv-parser",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "parsing"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that parses a CSV string into a list\nof dictionaries, using the first row as headers. Handle quoted\nfields that may contain commas. Don't use the csv module.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that parses a CSV string into a list of dictionaries using the first row as headers, while properly handling quoted fields that may contain commas:\n\n```python\ndef csv_to_dicts(csv_string):\n    \"\"\"\n    Parse a CSV string into a list of dictionaries using the first row as headers.\n    Handles quoted fields that may contain commas.\n\n    Args:\n        csv_string (str): The CSV data as a string\n\n    Returns:\n        list: A list of dictionaries where each dictionary represents a row\n    \"\"\"\n    lines = csv_string.strip().split('\\n')\n    if not lines:\n        return []\n\n    headers = []\n    # Parse headers (first line)\n    current_field = []\n    in_quotes = False\n    for char in lines[0]:\n        if char == '\"':\n            in_quotes = not in_quotes\n        elif char == ',' and not in_quotes:\n            headers.append(''.join(current_field).strip('\"'))\n            current_field = []\n        else:\n            current_field.append(char)\n    headers.append(''.join(current_field).strip('\"'))\n\n    # Remove empty headers that might result from trailing comma\n    headers = [h for h in headers if h]\n\n    result = []\n    for line in lines[1:]:\n        if not line.strip():\n            continue\n\n        fields = []\n        current_field = []\n        in_quotes = False\n        for char in line:\n            if char == '\"':\n                in_quotes = not in_quotes\n            elif char == ',' and not in_quotes:\n                fields.append(''.join(current_field).strip('\"'))\n                current_field = []\n            else:\n                current_field.append(char)\n        fields.append(''.join(current_field).strip('\"'))\n\n        # Remove empty fields that might result from trailing comma\n        fields = [f for f in fields if f]\n\n        # Create dictionary for this row\n        row_dict = {}\n        for i, header in enumerate(headers):\n            if i < len(fields):\n                row_dict[header] = fields[i]\n            else:\n                row_dict[header] = ''  # Handle cases where fields are fewer than headers\n\n        result.append(row_dict)\n\n    return result\n```\n\n### Example Usage:\n```python\ncsv_data = \"\"\"name,age,city\n\"John, Doe\",30,\"New York\"\n\"Jane Smith\",25,\"Boston\"\n\"Alice O'Connor\",35,\"Chicago\"\"\"\"\n\nprint(csv_to_dicts(csv_data))\n```\n\n### Output:\n```python\n[\n    {'name': 'John, Doe', 'age': '30', 'city': 'New York'},\n    {'name': 'Jane Smith', 'age': '25', 'city': 'Boston'},\n    {'name': 'Alice O'Connor', 'age': '35', 'city': 'Chicago'}\n]\n```\n\n### Key Features:\n1. Handles quoted fields that contain commas\n2. Properly strips quotes from field values\n3. Handles empty fields and lines\n4. Uses the first row as headers\n5. Returns a list of dictionaries with header names as keys\n6. Preserves the structure even if some rows have fewer fields than headers\n\nThe function processes each character individually to properly handle quoted fields, which is necessary for correctly parsing CSV data without using the built-in `csv` module."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 594,
+        "prompt_eval_duration": 30106900,
+        "eval_count": 696,
+        "eval_duration": 7472876700,
+        "total_duration": 7614411500,
+        "load_duration": 62220400,
+        "tokens_per_second": 93.13682373482759,
+        "time_to_first_token_ms": 30.1069,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must handle quoted fields containing commas (e.g., \"Smith, Jr.\" stays as one field). Must use first row as header keys. Should handle escaped quotes within quoted fields.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-retry-decorator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "decorators",
+        "error-handling"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python decorator called `retry` that retries a function\nup to N times if it raises an exception, with exponential backoff.\nShow example usage.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python decorator called `retry` that retries a function up to `N` times with exponential backoff in case of exceptions:\n\n```python\nimport time\nimport functools\nfrom typing import Callable, Any\n\ndef retry(max_attempts: int = 3, initial_backoff: float = 1.0, backoff_factor: float = 2.0):\n    \"\"\"\n    Decorator that retries a function up to max_attempts times with exponential backoff.\n\n    Args:\n        max_attempts: Maximum number of retry attempts (total calls = max_attempts + 1)\n        initial_backoff: Initial delay in seconds before first retry\n        backoff_factor: Multiplier applied to backoff for each subsequent attempt\n    \"\"\"\n    def decorator(func: Callable) -> Callable:\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs) -> Any:\n            last_exception = None\n            for attempt in range(max_attempts):\n                try:\n                    return func(*args, **kwargs)\n                except Exception as e:\n                    last_exception = e\n                    if attempt < max_attempts - 1:  # If not the last attempt\n                        sleep_time = initial_backoff * (backoff_factor ** attempt)\n                        print(f\"Attempt {attempt + 1} failed. Retrying in {sleep_time:.2f} seconds...\")\n                        time.sleep(sleep_time)\n\n            # If we get here, all attempts failed\n            print(f\"All {max_attempts} attempts failed. Last error: {last_exception}\")\n            raise last_exception\n\n        return wrapper\n    return decorator\n```\n\n### Example Usage:\n\n```python\nimport random\n\n@retry(max_attempts=5, initial_backoff=0.5, backoff_factor=2)\ndef unreliable_function():\n    \"\"\"A function that might fail randomly\"\"\"\n    if random.random() < 0.7:  # 70% chance of failure\n        raise ValueError(\"Temporary failure - retrying...\")\n    return \"Success!\"\n\n# Test the decorated function\nprint(unreliable_function())  # Will retry up to 5 times with increasing delays\n```\n\n### Key Features:\n1. **Exponential Backoff**: The delay between retries grows exponentially (1s, 2s, 4s, etc.)\n2. **Configurable Parameters**:\n   - `max_attempts`: Total number of attempts (including the initial one)\n   - `initial_backoff`: Starting delay in seconds\n   - `backoff_factor`: Multiplier for each subsequent delay\n3. **Preserves Function Metadata**: Uses `functools.wraps` to maintain the original function's name and docstring\n4. **Raises Last Exception**: If all attempts fail, re-raises the last exception\n\n### Example Output:\n```\nAttempt 1 failed. Retrying in 0.50 seconds...\nAttempt 2 failed. Retrying in 1.00 seconds...\nSuccess!\n```\n\nThe decorator will keep retrying until either the function succeeds or all attempts are exhausted. The delays between retries increase exponentially to avoid overwhelming systems."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 587,
+        "prompt_eval_duration": 29431800,
+        "eval_count": 661,
+        "eval_duration": 7095296700,
+        "total_duration": 7233601400,
+        "load_duration": 62992500,
+        "tokens_per_second": 93.16030434639893,
+        "time_to_first_token_ms": 29.4318,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Decorator must accept max_retries parameter. Must implement exponential backoff (delay doubles each retry). Must re-raise the last exception after exhausting retries. Should use functools.wraps to preserve function metadata.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-linked-list",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "data-structures"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a singly linked list in Python with methods for\nappend, prepend, delete by value, and a __repr__ that shows\nthe list contents. Explain when you'd use this over a Python list.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python implementation of a singly linked list with the requested methods:\n\n```python\nclass Node:\n    def __init__(self, data):\n        self.data = data\n        self.next = None\n\nclass SinglyLinkedList:\n    def __init__(self):\n        self.head = None\n\n    def append(self, data):\n        \"\"\"Add a node with the given data to the end of the list.\"\"\"\n        new_node = Node(data)\n        if self.head is None:\n            self.head = new_node\n            return\n        last = self.head\n        while last.next:\n            last = last.next\n        last.next = new_node\n\n    def prepend(self, data):\n        \"\"\"Add a node with the given data to the beginning of the list.\"\"\"\n        new_node = Node(data)\n        new_node.next = self.head\n        self.head = new_node\n\n    def delete_by_value(self, data):\n        \"\"\"Delete the first node with the given data.\"\"\"\n        if self.head is None:\n            return False  # Empty list\n\n        if self.head.data == data:\n            self.head = self.head.next\n            return True\n\n        current = self.head\n        while current.next:\n            if current.next.data == data:\n                current.next = current.next.next\n                return True\n            current = current.next\n        return False  # Value not found\n\n    def __repr__(self):\n        \"\"\"Return a string representation of the linked list.\"\"\"\n        nodes = []\n        current = self.head\n        while current:\n            nodes.append(str(current.data))\n            current = current.next\n        return \" -> \".join(nodes) if nodes else \"Empty List\"\n\n# Example usage\nif __name__ == \"__main__\":\n    sll = SinglyLinkedList()\n    sll.append(1)\n    sll.append(2)\n    sll.prepend(0)\n    sll.append(3)\n    print(sll)  # Output: 0 -> 1 -> 2 -> 3\n\n    sll.delete_by_value(1)\n    print(sll)  # Output: 0 -> 2 -> 3\n\n    sll.delete_by_value(0)\n    print(sll)  # Output: 2 -> 3\n```\n\n### When to Use a Linked List Over a Python List:\n1. **Frequent Insertions/Deletions at the Beginning**: Linked lists have O(1) time complexity for prepend operations, while Python lists have O(n) for insertions/deletions at the beginning (due to shifting elements).\n\n2. **Dynamic Size**: Linked lists can grow/shrink easily without pre-allocation (unlike Python lists, which may need resizing).\n\n3. **Memory Efficiency for Large Sparse Data**: If you have a large dataset with many empty slots, a linked list avoids wasting memory.\n\n4. **Non-Contiguous Memory**: Linked lists don’t require contiguous memory allocation, which can be an advantage in some embedded systems or memory-constrained environments.\n\n5. **Implementing Other Data Structures**: Linked lists are fundamental for implementing stacks, queues, graphs, and hash tables.\n\n### When to Use a Python List Instead:\n- If you need **random access** (e.g., `list[5]`), Python lists are O(1) while linked lists are O(n).\n- If you need **memory locality** (better cache performance for sequential access).\n- If you don’t need frequent insertions/deletions in the middle (Python lists are optimized for this with `insert()` and `pop(i)`).\n\n### Key Trade-offs:\n| Operation       | Python List | Linked List |\n|-----------------|-------------|-------------|\n| Access by index | O(1)        | O(n)        |\n| Append          | O(1) amortized | O(1)       |\n| Prepend         | O(n)        | O(1)        |\n| Insert/Delete (middle) | O(n) | O(n)       |\n| Memory Overhead | Low         | High        |\n\nFor most general-purpose use in Python, built-in lists are preferred due to their simplicity and performance for common cases. Linked lists shine in niche scenarios like implementing custom data structures or when memory overhead is acceptable for flexibility."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 598,
+        "prompt_eval_duration": 30584500,
+        "eval_count": 882,
+        "eval_duration": 9502710500,
+        "total_duration": 9677042000,
+        "load_duration": 62305100,
+        "tokens_per_second": 92.81562350026343,
+        "time_to_first_token_ms": 30.5845,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must implement Node class with value/next. Append is O(n) without tail pointer, O(1) with. Delete must handle head deletion and missing values. __repr__ should show chain like \"1 -> 2 -> 3 -> None\".\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-cache-decorator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "decorators",
+        "performance"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a memoization decorator in Python from scratch (don't use\nfunctools.lru_cache). It should cache results based on function\narguments. Discuss the limitations of your approach.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a custom memoization decorator in Python that caches function results based on their arguments. This implementation does not rely on `functools.lru_cache` and uses a dictionary to store cached results.\n\n### Implementation:\n```python\ndef memoize(func):\n    cache = {}\n\n    def wrapper(*args):\n        # Use a tuple of arguments as the key (hashable)\n        key = args\n\n        # Check if the result is already in the cache\n        if key not in cache:\n            # Compute the result and store it in the cache\n            cache[key] = func(*args)\n\n        return cache[key]\n\n    return wrapper\n```\n\n### Example Usage:\n```python\n@memoize\ndef expensive_function(n):\n    print(f\"Computing for {n}\")  # This will only print once per unique argument\n    return n * n\n\nprint(expensive_function(5))  # Computes and caches\nprint(expensive_function(5))  # Returns cached result\nprint(expensive_function(3))  # Computes and caches\n```\n\n---\n\n### Key Features:\n1. **Caching Mechanism**: The decorator uses a dictionary (`cache`) to store results of function calls.\n2. **Key Generation**: The arguments (`*args`) are used as the key. Since tuples are hashable, they work well for caching.\n3. **Lazy Evaluation**: The function is only computed if the result is not already in the cache.\n\n---\n\n### Limitations of This Approach:\n1. **Mutable Arguments**:\n   - If the function arguments are mutable (e.g., lists or dictionaries), they cannot be used as dictionary keys because they are not hashable. For example:\n     ```python\n     @memoize\n     def bad_example(mutable_list):\n         return sum(mutable_list)\n\n     bad_example([1, 2, 3])  # Works\n     bad_example([1, 2, 3])  # Returns cached result (correct)\n     bad_example([1, 2, 3])[0] = 10  # Modifies the list in place\n     bad_example([1, 2, 3])  # Now returns the wrong cached result!\n     ```\n   - **Fix**: Convert mutable arguments to tuples or frozensets before hashing.\n\n2. **Memory Usage**:\n   - The cache grows indefinitely unless explicitly cleared. This can lead to high memory consumption for functions with many unique arguments.\n   - **Fix**: Add a size limit or eviction policy (e.g., LRU-like behavior).\n\n3. **No Automatic Cleanup**:\n   - The cache persists for the lifetime of the program. If the function is called with many unique arguments, memory usage can become problematic.\n   - **Fix**: Manually clear the cache or implement a size limit.\n\n4. **Thread Safety**:\n   - The decorator is not thread-safe. If multiple threads access the cached function simultaneously, race conditions can occur.\n   - **Fix**: Use a threading lock or a thread-safe cache (e.g., `defaultdict` with locks).\n\n5. **No Time-Based Expiration**:\n   - The cache does not expire results based on time. If the underlying data changes, stale results may be returned.\n   - **Fix**: Add a timestamp or TTL (time-to-live) to cached entries.\n\n6. **No Handling of Keyword Arguments**:\n   - The current implementation only handles positional arguments (`*args`). If the function uses keyword arguments (`**kwargs`), they are not included in the cache key.\n   - **Fix**: Modify the key to include `args + kwargs.items()` (but ensure `kwargs` is hashable).\n\n---\n\n### Improved Version (Handling Keyword Arguments):\nHere’s an updated version that handles both positional and keyword arguments (though keyword arguments must be hashable):\n```python\ndef memoize(func):\n    cache = {}\n\n    def wrapper(*args, **kwargs):\n        # Create a hashable key from args and kwargs\n        key = (args, frozenset(kwargs.items()))  # frozenset for unordered kwargs\n        if key not in cache:\n            cache[key] = func(*args, **kwargs)\n        return cache[key]\n\n    return wrapper\n```\n\n### Example with Keyword Arguments:\n```python\n@memoize\ndef example(a, b, c=10):\n    print(f\"Computing for a={a}, b={b}, c={c}\")\n    return a + b + c\n\nprint(example(1, 2))      # Computes\nprint(example(1, 2))      # Returns cached result\nprint(example(1, 2, c=20)) # Computes (different key)\n```\n\n---\n\n### Summary of Trade-offs:\n| Limitation               | Impact                          | Workaround                          |\n|--------------------------|---------------------------------|-------------------------------------|\n| Mutable arguments        | Incorrect caching               | Convert to tuples/frozensets        |\n| No size limit            | High memory usage               | Add cache size limits               |\n| No thread safety         | Race conditions                 | Use locks or thread-safe structures  |\n| No TTL/expiration        | Stale data                      | Add timestamps or TTL               |\n| No keyword arg support   | Missed cache hits               | Include `kwargs` in the key         |\n\nThis decorator is simple and works well for many cases, but real-world use may require additional features like size limits or thread safety. For production use, consider `functools.lru_cache` or libraries like `cachetools`."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 592,
+        "prompt_eval_duration": 29237300,
+        "eval_count": 1149,
+        "eval_duration": 12407653400,
+        "total_duration": 12607141000,
+        "load_duration": 60832000,
+        "tokens_per_second": 92.60413415481126,
+        "time_to_first_token_ms": 29.2373,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use a dict keyed by function arguments. Must handle unhashable arguments gracefully (either skip caching or raise clear error). Should mention limitation: unbounded cache growth without eviction.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-iterator",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "iterators",
+        "protocol"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python class that implements the iterator protocol\nto yield Fibonacci numbers up to a maximum value. Show how\nto use it in a for loop.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python class that implements the iterator protocol to generate Fibonacci numbers up to a specified maximum value. I'll also show how to use it in a `for` loop:\n\n```python\nclass FibonacciIterator:\n    \"\"\"An iterator that yields Fibonacci numbers up to a maximum value.\"\"\"\n\n    def __init__(self, max_value):\n        self.max_value = max_value\n        self.a, self.b = 0, 1  # Initialize first two Fibonacci numbers\n\n    def __iter__(self):\n        \"\"\"Return the iterator object itself.\"\"\"\n        return self\n\n    def __next__(self):\n        \"\"\"Return the next Fibonacci number, or raise StopIteration when done.\"\"\"\n        if self.a > self.max_value:\n            raise StopIteration\n        current = self.a\n        self.a, self.b = self.b, self.a + self.b  # Update Fibonacci sequence\n        return current\n\n# Example usage in a for loop\nif __name__ == \"__main__\":\n    max_fib = 100\n    print(f\"Fibonacci numbers up to {max_fib}:\")\n    for num in FibonacciIterator(max_fib):\n        print(num, end=\" \")\n```\n\nThis will output:\n```\nFibonacci numbers up to 100:\n0 1 1 2 3 5 8 13 21 34 55 89\n```\n\nKey points about the implementation:\n1. The class implements both `__iter__` and `__next__` methods to satisfy the iterator protocol\n2. It maintains the Fibonacci sequence state between calls using instance variables `a` and `b`\n3. The iteration stops when the next number would exceed `max_value`\n4. The `for` loop automatically handles the iteration and `StopIteration` exception\n\nYou can use this with any maximum value you want, like:\n```python\nfor num in FibonacciIterator(1000):\n    print(num)\n```"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 585,
+        "prompt_eval_duration": 26263700,
+        "eval_count": 413,
+        "eval_duration": 4410049100,
+        "total_duration": 4532934800,
+        "load_duration": 60701100,
+        "tokens_per_second": 93.64975097442792,
+        "time_to_first_token_ms": 26.2637,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must implement __iter__ returning self and __next__ raising StopIteration when value exceeds max. Sequence: 0, 1, 1, 2, 3, 5, 8... Must work in a for loop.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-context-manager",
+      "category": "coding",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "context-managers"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python context manager called Timer that measures\nand prints the execution time of a code block. Implement it\nboth as a class and using contextlib. Explain the tradeoffs.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's an implementation of a `Timer` context manager in Python, both as a class and using `contextlib`, along with an explanation of the tradeoffs:\n\n### 1. Class-based Implementation\n```python\nimport time\n\nclass Timer:\n    def __enter__(self):\n        self.start_time = time.perf_counter()\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        elapsed = time.perf_counter() - self.start_time\n        print(f\"Elapsed time: {elapsed:.4f} seconds\")\n        return False  # Propagate any exceptions\n```\n\n### 2. `contextlib`-based Implementation\n```python\nfrom contextlib import contextmanager\nimport time\n\n@contextmanager\ndef timer():\n    start_time = time.perf_counter()\n    try:\n        yield\n    finally:\n        elapsed = time.perf_counter() - start_time\n        print(f\"Elapsed time: {elapsed:.4f} seconds\")\n```\n\n### Example Usage\n```python\n# Class-based usage\nwith Timer():\n    time.sleep(1.5)\n\n# contextlib-based usage\nwith timer():\n    time.sleep(1.5)\n```\n\n---\n\n### Tradeoffs Between Approaches\n\n| Feature               | Class-based (`Timer`)                          | `contextlib`-based (`@contextmanager`)       |\n|-----------------------|-----------------------------------------------|---------------------------------------------|\n| **Readability**       | More explicit, object-oriented style          | More concise, functional style              |\n| **State Management**  | Can store additional state in `__enter__`     | Limited to what's passed via `yield`         |\n| **Flexibility**       | Can implement `__exit__` for exception handling | Less flexible for complex exception handling |\n| **Memory Usage**      | Slightly higher (instance creation)           | Lower (no instance created)                  |\n| **Reusability**       | Can be subclassed or extended                 | Harder to subclass/extend                    |\n| **Performance**       | Slightly slower (class instantiation)         | Slightly faster (no class overhead)          |\n| **Pythonic Style**    | Less Pythonic for simple cases                | More Pythonic for decorators/context managers |\n\n---\n\n### Key Differences\n1. **State Handling**:\n   - The class-based version can store state (e.g., `self.start_time`) and modify it later.\n   - The `contextlib` version is stateless (unless you pass data via `yield`).\n\n2. **Exception Handling**:\n   - The class-based `__exit__` method can fully control exception propagation.\n   - The `contextlib` version uses `try/finally` and yields control to the user.\n\n3. **Use Cases**:\n   - Use the **class** if you need to store additional data or customize behavior.\n   - Use `@contextmanager` for simple, lightweight timing or when you prefer a functional style.\n\n4. **Performance**:\n   - For most cases, the difference is negligible. The `contextlib` version is slightly faster due to no class instantiation.\n\n---\n### Which to Choose?\n- **Prefer `@contextmanager`** for simple timing or when you want minimal overhead.\n- **Use the class** if you need to extend functionality (e.g., logging, multiple timers, or storing results)."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 590,
+        "prompt_eval_duration": 29388900,
+        "eval_count": 694,
+        "eval_duration": 7461089500,
+        "total_duration": 7595901700,
+        "load_duration": 60449300,
+        "tokens_per_second": 93.01590605500712,
+        "time_to_first_token_ms": 29.3889,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Class version must implement __enter__ (start timer) and __exit__ (print elapsed). contextlib version uses @contextmanager with yield. Should note class version is reusable and supports attributes, contextlib is more concise.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-thread-pool",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "concurrency",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement a simple thread pool in Python that accepts callables,\nruns them across a fixed number of worker threads, and provides\na way to wait for all tasks to complete. Discuss the GIL implications.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a simple thread pool implementation in Python using the `threading` module. This implementation includes a fixed number of worker threads that execute callables, and a way to wait for all tasks to complete.\n\n### Thread Pool Implementation\n```python\nimport threading\nimport queue\nimport time\n\nclass ThreadPool:\n    def __init__(self, num_threads):\n        self.num_threads = num_threads\n        self.task_queue = queue.Queue()\n        self.threads = []\n        self.lock = threading.Lock()\n        self.active_tasks = 0\n\n        # Start worker threads\n        for _ in range(num_threads):\n            thread = threading.Thread(target=self._worker_loop)\n            thread.daemon = True  # Daemonize threads so they exit when the main program exits\n            thread.start()\n            self.threads.append(thread)\n\n    def _worker_loop(self):\n        while True:\n            # Get a task from the queue (blocks if queue is empty)\n            task = self.task_queue.get()\n            try:\n                # Execute the task\n                task()\n            finally:\n                # Mark task as completed\n                with self.lock:\n                    self.active_tasks -= 1\n                self.task_queue.task_done()\n\n    def submit(self, callable_obj):\n        \"\"\"Submit a callable to the thread pool.\"\"\"\n        with self.lock:\n            self.active_tasks += 1\n        self.task_queue.put(callable_obj)\n\n    def wait_completion(self):\n        \"\"\"Wait for all submitted tasks to complete.\"\"\"\n        # Wait for the queue to be empty (all tasks done)\n        self.task_queue.join()\n\n    def shutdown(self):\n        \"\"\"Gracefully shutdown the thread pool.\"\"\"\n        # Block the queue to prevent new tasks from being added\n        self.task_queue.join()  # Wait for all tasks to complete\n        # No need to explicitly kill threads since they're daemonized and will exit when the queue is empty\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        self.shutdown()\n\n# Example usage\nif __name__ == \"__main__\":\n    def task(n):\n        print(f\"Task {n} started\")\n        time.sleep(1)  # Simulate work\n        print(f\"Task {n} completed\")\n\n    # Create a thread pool with 3 threads\n    with ThreadPool(3) as pool:\n        # Submit tasks\n        for i in range(5):\n            pool.submit(lambda n=i: task(n))\n\n        # Wait for all tasks to complete (implicit in the context manager)\n        print(\"All tasks submitted. Waiting for completion...\")\n        pool.wait_completion()\n        print(\"All tasks completed.\")\n```\n\n---\n\n### GIL Implications\nThe **Global Interpreter Lock (GIL)** in Python has several implications for this thread pool implementation:\n\n1. **Thread Safety**:\n   - The GIL ensures that only one thread executes Python bytecode at a time, even on multi-core systems. This means that threads in this pool **cannot truly parallelize CPU-bound tasks** (e.g., heavy computations). The GIL is released during I/O operations (e.g., `time.sleep`), but not during CPU-bound work.\n   - For CPU-bound tasks, this thread pool will **not** provide speedup beyond a single thread (due to the GIL). It is only useful for I/O-bound tasks (e.g., network requests, file operations).\n\n2. **Performance for I/O-Bound Tasks**:\n   - For I/O-bound tasks (e.g., waiting for network responses), the GIL is released during the I/O operation, allowing other threads to run. Thus, the thread pool can improve performance by overlapping I/O waits with other tasks.\n\n3. **Alternatives for CPU-Bound Work**:\n   - For CPU-bound tasks, consider:\n     - Using `multiprocessing` instead of `threading` (bypasses the GIL).\n     - Using libraries like `concurrent.futures.ProcessPoolExecutor` or `multiprocessing.Pool`.\n     - Using C extensions or libraries like NumPy, which release the GIL during computations.\n\n4. **Overhead**:\n   - Thread creation and management have overhead. For small workloads, the overhead may outweigh the benefits.\n\n5. **Deadlocks and Race Conditions**:\n   - The GIL reduces some race condition risks, but shared resources (e.g., global variables) still require careful synchronization (e.g., using locks, as done in this example).\n\n---\n\n### Key Takeaways:\n- This thread pool is **I/O-bound friendly** but **not CPU-bound friendly** due to the GIL.\n- For CPU-bound work, use `multiprocessing` or libraries that release the GIL.\n- The GIL ensures thread safety for simple cases but requires explicit locks for shared resources."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 597,
+        "prompt_eval_duration": 30236800,
+        "eval_count": 1000,
+        "eval_duration": 10766520900,
+        "total_duration": 10954782200,
+        "load_duration": 62463800,
+        "tokens_per_second": 92.88051444733647,
+        "time_to_first_token_ms": 30.2368,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must use a task queue (Queue) with worker threads pulling from it. Must support shutdown/wait. Must mention GIL limits thread pool to I/O-bound tasks; CPU-bound needs multiprocessing.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-event-emitter",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "design-patterns"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Implement an EventEmitter class in Python that supports:\n- on(event, callback) to register handlers\n- emit(event, *args) to fire an event\n- off(event, callback) to unregister\nInclude error handling and discuss thread safety.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a thread-safe implementation of an `EventEmitter` class in Python using a `threading.Lock` to ensure safe concurrent access. The implementation includes error handling and supports the requested methods:\n\n```python\nimport threading\nfrom typing import Callable, Any, Dict, List, Optional\n\nclass EventEmitter:\n    \"\"\"\n    A thread-safe event emitter implementation.\n\n    Features:\n    - Register handlers with `on(event, callback)`\n    - Emit events with `emit(event, *args)`\n    - Remove handlers with `off(event, callback)`\n    - Thread-safe operations\n    - Error handling for invalid operations\n    \"\"\"\n\n    def __init__(self):\n        self._lock = threading.Lock()\n        self._events: Dict[str, List[Callable]] = {}\n\n    def on(self, event: str, callback: Callable) -> None:\n        \"\"\"\n        Register a callback for an event.\n\n        Args:\n            event: The event name/key\n            callback: The function to call when the event is emitted\n\n        Raises:\n            TypeError: If event is not a string or callback is not callable\n        \"\"\"\n        if not isinstance(event, str):\n            raise TypeError(\"Event must be a string\")\n        if not callable(callback):\n            raise TypeError(\"Callback must be callable\")\n\n        with self._lock:\n            if event not in self._events:\n                self._events[event] = []\n            if callback not in self._events[event]:\n                self._events[event].append(callback)\n\n    def emit(self, event: str, *args: Any) -> None:\n        \"\"\"\n        Emit an event, calling all registered callbacks.\n\n        Args:\n            event: The event name to emit\n            *args: Arguments to pass to the callbacks\n\n        Raises:\n            KeyError: If no handlers are registered for the event\n        \"\"\"\n        if event not in self._events or not self._events[event]:\n            raise KeyError(f\"No handlers registered for event '{event}'\")\n\n        with self._lock:\n            # Create a copy of the callbacks to avoid modification during iteration\n            callbacks = self._events[event].copy()\n\n        # Process callbacks outside the lock for better performance\n        for callback in callbacks:\n            try:\n                callback(*args)\n            except Exception as e:\n                # Log the error (in a real app, you might want to use proper logging)\n                print(f\"Error in callback for event '{event}': {e}\")\n\n    def off(self, event: str, callback: Optional[Callable] = None) -> None:\n        \"\"\"\n        Remove a callback from an event.\n\n        Args:\n            event: The event name\n            callback: The specific callback to remove (optional)\n                      If None, removes all callbacks for the event\n\n        Raises:\n            KeyError: If event doesn't exist\n        \"\"\"\n        if event not in self._events:\n            raise KeyError(f\"Event '{event}' not found\")\n\n        with self._lock:\n            if callback is None:\n                del self._events[event]\n            else:\n                if callback in self._events[event]:\n                    self._events[event].remove(callback)\n                if not self._events[event]:  # Clean up empty lists\n                    del self._events[event]\n\n    def __del__(self):\n        \"\"\"Clean up resources when the object is destroyed\"\"\"\n        with self._lock:\n            self._events.clear()\n```\n\n### Thread Safety Discussion\n\n1. **Locking Mechanism**:\n   - All operations that modify the internal state (`_events` dictionary) are protected by a `threading.Lock`\n   - The lock ensures that only one thread can modify the event handlers at a time\n   - This prevents race conditions when multiple threads try to register/remove handlers simultaneously\n\n2. **Performance Considerations**:\n   - The lock is held only during the critical sections (adding/removing callbacks)\n   - Callback execution happens outside the lock to minimize contention\n   - This makes the implementation efficient for high-frequency events\n\n3. **Thread-Safe Operations**:\n   - `on()`: Safe to call from multiple threads\n   - `off()`: Safe to call from multiple threads\n   - `emit()`: Safe to call from multiple threads (though callbacks themselves may not be thread-safe)\n\n### Error Handling\n\n1. **Type Checking**:\n   - Validates that events are strings and callbacks are callable\n   - Raises `TypeError` for invalid inputs\n\n2. **Event Existence**:\n   - Checks if events exist before operations\n   - Raises `KeyError` for non-existent events\n\n3. **Callback Execution**:\n   - Catches and handles errors in individual callbacks\n   - Prevents one failing callback from affecting others\n\n### Usage Example\n\n```python\ndef callback1(*args):\n    print(f\"Callback 1 received: {args}\")\n\ndef callback2(*args):\n    print(f\"Callback 2 received: {args}\")\n\nemitter = EventEmitter()\nemitter.on(\"test\", callback1)\nemitter.on(\"test\", callback2)\n\n# Emit the event\nemitter.emit(\"test\", \"hello\", 123)\n\n# Remove one callback\nemitter.off(\"test\", callback1)\nemitter.emit(\"test\", \"world\")  # Only callback2 will be called\n```\n\n### Additional Notes\n\n1. **Memory Management**:\n   - The implementation cleans up empty event lists\n   - The `__del__` method ensures resources are properly cleaned up\n\n2. **Extensibility**:\n   - Could be extended with `once()` for single-use callbacks\n   - Could add support for priority queues or named callbacks\n   - Could implement a more sophisticated error handling system\n\n3. **Python Version**:\n   - Uses Python 3.8+ type hints\n   - Works with Python 3.6+ (with minor adjustments to type hints)"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 604,
+        "prompt_eval_duration": 33958100,
+        "eval_count": 1221,
+        "eval_duration": 13156019500,
+        "total_duration": 13388636400,
+        "load_duration": 59843000,
+        "tokens_per_second": 92.80922698541151,
+        "time_to_first_token_ms": 33.9581,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must store callbacks in a dict[str, list[callable]]. on() appends, off() removes specific callback, emit() calls all registered handlers. Should handle exceptions in individual handlers without stopping other handlers. Thread safety requires a lock around the callback registry.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "code-json-differ",
+      "category": "coding",
+      "difficulty": "hard",
+      "tags": [
+        "python",
+        "algorithms",
+        "recursion"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a Python function that takes two JSON-like Python dicts\nand returns a description of the differences: added keys,\nremoved keys, and changed values (including nested dicts).\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a Python function that compares two JSON-like Python dictionaries and returns a detailed description of the differences, including added keys, removed keys, and changed values (including nested dictionaries):\n\n```python\ndef compare_dicts(dict1, dict2, path=\"\"):\n    \"\"\"\n    Compare two dictionaries and return a detailed description of differences.\n\n    Args:\n        dict1: First dictionary to compare\n        dict2: Second dictionary to compare\n        path: Current path in the nested structure (used internally)\n\n    Returns:\n        A dictionary containing:\n        - 'added': Keys present in dict2 but not in dict1\n        - 'removed': Keys present in dict1 but not in dict2\n        - 'changed': Keys with different values in both dicts\n        - 'nested_changes': Nested dictionary changes (for nested structures)\n    \"\"\"\n    result = {\n        'added': {},\n        'removed': {},\n        'changed': {},\n        'nested_changes': {}\n    }\n\n    # Get all unique keys from both dictionaries\n    all_keys = set(dict1.keys()).union(set(dict2.keys()))\n\n    for key in all_keys:\n        if key not in dict1:\n            # Key only in dict2 (added)\n            result['added'][key] = dict2[key]\n        elif key not in dict2:\n            # Key only in dict1 (removed)\n            result['removed'][key] = dict1[key]\n        else:\n            # Key in both dictionaries\n            val1 = dict1[key]\n            val2 = dict2[key]\n\n            if isinstance(val1, dict) and isinstance(val2, dict):\n                # Both values are dictionaries - recurse\n                nested_result = compare_dicts(val1, val2, f\"{path}.{key}\" if path else key)\n                if any(nested_result.values()):\n                    result['nested_changes'][key] = nested_result\n            elif val1 != val2:\n                # Values are different\n                result['changed'][key] = {\n                    'old': val1,\n                    'new': val2,\n                    'path': path + f\".{key}\" if path else key\n                }\n\n    return result\n\ndef format_difference_report(diff):\n    \"\"\"\n    Format the difference report in a human-readable way.\n\n    Args:\n        diff: The difference dictionary returned by compare_dicts\n\n    Returns:\n        A formatted string with the differences\n    \"\"\"\n    report = []\n\n    # Added keys\n    if diff['added']:\n        report.append(\"\\n=== ADDED KEYS ===\")\n        for key, value in diff['added'].items():\n            report.append(f\"- {key}: {value}\")\n\n    # Removed keys\n    if diff['removed']:\n        report.append(\"\\n=== REMOVED KEYS ===\")\n        for key, value in diff['removed'].items():\n            report.append(f\"- {key}: {value}\")\n\n    # Changed values\n    if diff['changed']:\n        report.append(\"\\n=== CHANGED VALUES ===\")\n        for key, info in diff['changed'].items():\n            report.append(f\"- {key}: {info['old']} → {info['new']}\")\n\n    # Nested changes\n    if diff['nested_changes']:\n        report.append(\"\\n=== NESTED CHANGES ===\")\n        for key, nested_diff in diff['nested_changes'].items():\n            report.append(f\"\\nKey: {key}\")\n            report.append(format_difference_report(nested_diff))\n\n    return \"\\n\".join(report)\n\ndef get_differences(dict1, dict2):\n    \"\"\"\n    Public function to get differences between two dictionaries.\n\n    Args:\n        dict1: First dictionary\n        dict2: Second dictionary\n\n    Returns:\n        A formatted string with all differences\n    \"\"\"\n    differences = compare_dicts(dict1, dict2)\n    return format_difference_report(differences)\n```\n\n### Example Usage:\n\n```python\ndict1 = {\n    \"name\": \"John\",\n    \"age\": 30,\n    \"address\": {\n        \"street\": \"123 Main St\",\n        \"city\": \"New York\"\n    },\n    \"hobbies\": [\"reading\", \"swimming\"]\n}\n\ndict2 = {\n    \"name\": \"John\",\n    \"age\": 31,\n    \"address\": {\n        \"street\": \"123 Main St\",\n        \"city\": \"Boston\",\n        \"zip\": \"10001\"\n    },\n    \"hobbies\": [\"reading\", \"swimming\", \"hiking\"],\n    \"job\": \"Engineer\"\n}\n\nprint(get_differences(dict1, dict2))\n```\n\n### Example Output:\n\n```\n=== ADDED KEYS ===\n- job: Engineer\n\n=== REMOVED KEYS ===\n\n=== CHANGED VALUES ===\n- age: 30 → 31\n\n=== NESTED CHANGES ===\n\nKey: address\n=== ADDED KEYS ===\n- zip: 10001\n=== CHANGED VALUES ===\n- city: New York → Boston\n```\n\n### Features:\n1. Detects added keys (present in dict2 but not dict1)\n2. Detects removed keys (present in dict1 but not dict2)\n3. Detects changed values (including nested dictionaries)\n4. Handles nested dictionary structures recursively\n5. Provides clear path information for nested changes\n6. Returns a human-readable formatted report\n\nThe function works with any JSON-like Python dictionaries, including those with nested structures."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 589,
+        "prompt_eval_duration": 29069600,
+        "eval_count": 1152,
+        "eval_duration": 12424704000,
+        "total_duration": 12643794100,
+        "load_duration": 60203300,
+        "tokens_per_second": 92.71850661392014,
+        "time_to_first_token_ms": 29.0696,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": "Must recursively compare nested dicts. Must report added keys, removed keys, and changed values separately. Must handle type changes (e.g., value was string, now dict). Lists can be compared by equality or element-wise.\n",
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-big-o",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "cs",
+        "algorithms",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain Big O notation to someone who understands basic programming\nbut has no formal CS education. Use concrete examples for O(1),\nO(n), O(n^2), and O(log n). Explain why it matters in practice.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Sure! Let's break down **Big O notation** in a simple way, using examples you can relate to as a programmer. Big O describes how the **runtime** (or time taken) of an algorithm grows as the **input size** grows. It’s about the **worst-case** performance, ignoring constants and small details.\n\n---\n\n### **Key Idea**\nBig O tells you how an algorithm scales with bigger data. For example:\n- If something is **O(n)**, it might take twice as long if you double the input size.\n- If something is **O(n²)**, doubling the input size makes it **four times slower** (because n² grows faster).\n\n---\n\n### **1. O(1) – Constant Time**\n**What it means:** The runtime doesn’t change no matter how big the input is.\n**Example:** Accessing an item in an array by index.\n\n```python\ndef get_first_element(arr):\n    return arr[0]  # Always takes the same time, no matter how big `arr` is.\n```\n- Whether `arr` has 10 or 1 million items, `arr[0]` is found instantly.\n- **Real-world analogy:** Looking up a phone number in a phonebook by the first page (index 0).\n\n**Why it matters:** Fast operations like this are the building blocks of efficient code.\n\n---\n\n### **2. O(n) – Linear Time**\n**What it means:** Runtime grows **linearly** with input size. If input doubles, runtime doubles.\n**Example:** Looping through an array to find the max value.\n\n```python\ndef find_max(arr):\n    max_val = arr[0]\n    for num in arr:  # Runs once per element\n        if num > max_val:\n            max_val = num\n    return max_val\n```\n- For `n = 10` items: ~10 operations.\n- For `n = 100` items: ~100 operations.\n- **Real-world analogy:** Walking through a line of people to find the tallest (each person is one check).\n\n**Why it matters:** Simple but can get slow with huge datasets. Optimizing O(n) to O(1) (e.g., using a sorted array) is a big win.\n\n---\n\n### **3. O(n²) – Quadratic Time**\n**What it means:** Runtime grows **quadratically** (like a square). If input doubles, runtime becomes **4x**.\n**Example:** Nested loops (e.g., comparing every pair in an array).\n\n```python\ndef count_pairs(arr):\n    count = 0\n    for i in range(len(arr)):          # Outer loop: n times\n        for j in range(len(arr)):      # Inner loop: n times\n            if arr[i] < arr[j]:\n                count += 1\n    return count\n```\n- For `n = 10`: ~100 operations (10 × 10).\n- For `n = 100`: ~10,000 operations (100 × 100).\n- **Real-world analogy:** Checking every possible handshake in a room (everyone shakes hands with everyone else).\n\n**Why it matters:** This is often **too slow** for large inputs. Algorithms like sorting (e.g., bubble sort) are O(n²), but better ones (like merge sort) are O(n log n).\n\n---\n\n### **4. O(log n) – Logarithmic Time**\n**What it means:** Runtime grows **very slowly** (like a tree halving at each step). If input doubles, runtime increases by ~1 step.\n**Example:** Binary search (finding a number in a sorted array).\n\n```python\ndef binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1\n```\n- For `n = 8` items: ~3 checks (since 2³ = 8).\n- For `n = 1024` items: ~10 checks (since 2¹⁰ ≈ 1024).\n- **Real-world analogy:** Finding a name in a phonebook by flipping pages in half (like a book’s index).\n\n**Why it matters:** This is **blazing fast** for large datasets. Binary search is 100x faster than linear search (O(n)) for big arrays.\n\n---\n\n### **Why Big O Matters in Practice**\n1. **Performance at Scale:**\n   - O(n²) code might work for 100 items but **crash** for 10,000 items.\n   - O(log n) or O(n) code stays fast even with huge data.\n\n2. **Real-World Examples:**\n   - **Search Engines:** Google uses O(log n) algorithms to find results in milliseconds.\n   - **Databases:** SQL queries often use indexes (O(log n)) instead of scanning all rows (O(n)).\n   - **Games:** Collision detection in 3D games uses spatial partitioning (O(log n)) to avoid O(n²) checks.\n\n3. **Choosing the Right Tool:**\n   - Use O(1) for lookups (e.g., dictionaries/hashes).\n   - Use O(n) for simple loops (e.g., filtering a list).\n   - Avoid O(n²) for big data (e.g., don’t use bubble sort for 1M items).\n\n---\n\n### **Summary Table**\n| Notation | Name          | Example                          | Growth Rate       |\n|----------|---------------|----------------------------------|-------------------|\n| O(1)     | Constant      | `arr[0]`                         | Flat (no change)  |\n| O(n)     | Linear        | Loop through an array            | Linear (n × 2)    |\n| O(n²)    | Quadratic     | Nested loops (e.g., bubble sort) | Square (n² × 4)   |\n| O(log n) | Logarithmic   | Binary search                    | Very slow growth  |\n\n---\n### **Key Takeaways**\n1. **Big O ignores constants:** `O(2n)` is still O(n).\n2. **Focus on the worst case:** Even if an algorithm is fast on small data, it might explode with big data.\n3. **Optimize the right parts:** Profile your code to find bottlenecks (e.g., a slow O(n²) loop).\n\nThink of Big O as a **traffic sign** for your code’s speed limits—knowing it helps you write code that scales!"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 600,
+        "prompt_eval_duration": 34175200,
+        "eval_count": 1448,
+        "eval_duration": 15662730700,
+        "total_duration": 15922804400,
+        "load_duration": 62914800,
+        "tokens_per_second": 92.44875799339384,
+        "time_to_first_token_ms": 34.1752,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-rest-principles",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "architecture",
+        "http",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What are the core principles of REST? Explain each one and give\nan example of a common API design mistake that violates it.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "REST (Representational State Transfer) is an architectural style for designing networked applications, primarily used in web services. It was introduced by **Roy Fielding** in his doctoral dissertation. REST relies on six core constraints (or principles), though not all are strictly mandatory—some are guidelines. Below are the **five key principles** (often summarized as **CLARA** or **REPRESENTATIONS**), along with explanations and examples of violations:\n\n---\n\n### **1. Client-Server Architecture**\n**Principle**: Separates the client (e.g., a web browser or mobile app) from the server (e.g., a backend service). The server manages data storage, business logic, and security, while the client handles user interface and presentation.\n\n**Why it matters**:\n- Decouples components, improving scalability and maintainability.\n- Clients and servers can evolve independently.\n\n**Example of a violation**:\nA poorly designed API mixes client-side logic (e.g., validation) with server-side logic (e.g., business rules). For instance, the server sends raw JSON without proper error handling, forcing the client to validate data before sending it to the server. This violates separation by offloading server responsibilities to the client.\n\n---\n\n### **2. Statelessness**\n**Principle**: Each request from the client to the server must contain all the information needed to understand and process the request. The server does not store session data between requests (though it may use tokens like JWT for authentication).\n\n**Why it matters**:\n- Simplifies server design (no need to track client state).\n- Enables horizontal scaling (servers can handle requests independently).\n\n**Example of a violation**:\nAn API requires the client to send the same session ID in every request, but the server internally tracks user state (e.g., \"last 5 items viewed\") in a database. This creates a dependency on server-side state, violating statelessness. A better approach is to include all necessary context (e.g., user ID, filters) in each request.\n\n---\n\n### **3. Cacheability**\n**Principle**: Responses must define themselves as cacheable or non-cacheable (using HTTP headers like `Cache-Control`, `ETag`, or `Last-Modified`). This improves performance by allowing clients to reuse responses.\n\n**Why it matters**:\n- Reduces server load and latency.\n- Enables offline functionality.\n\n**Example of a violation**:\nAn API returns dynamic, user-specific data (e.g., a personalized dashboard) without cache headers, forcing clients to fetch the same data repeatedly. Even worse, the API ignores `If-None-Match` headers for `ETag` validation, causing unnecessary re-fetching. A fix would be to use `ETag` for immutable resources (e.g., product catalogs) or `Cache-Control: max-age=3600` for semi-static data.\n\n---\n\n### **4. Uniform Interface**\n**Principle**: The API must use a consistent set of building blocks (resources, methods, representations) to simplify client design. This includes:\n   - **Resource Identification in Requests (URIs)**: Useful, uniform URIs (e.g., `/users/123`).\n   - **Resource Manipulation through Representations**: Clients interact with resources via their representations (e.g., JSON/XML).\n   - **Self-descriptive Messages**: Responses include metadata (e.g., `Content-Type`, `Link` headers).\n   - **Hypermedia as the Engine of Application State (HATEOAS)**: Clients discover actions via embedded links (optional but powerful).\n\n**Why it matters**:\n- Clients don’t need to know server implementation details.\n- Easier to extend and maintain.\n\n**Example of a violation**:\nAn API uses inconsistent URIs for similar operations:\n- `GET /users` → Returns all users.\n- `GET /api/v1/users` → Returns all users (duplicate endpoint).\n- `GET /users?filter=active` → Returns filtered users.\nThis violates the uniform interface by not standardizing resource naming. A better design would use `/users?active=true` or `/users/active`.\n\n---\n**HATEOAS Violation Example**:\nAn API returns a list of users but doesn’t include links to related resources (e.g., `/users/123/orders`). The client must hardcode endpoints like `/orders` instead of discovering them dynamically. A RESTful approach would embed links in the response:\n```json\n{\n  \"id\": 123,\n  \"name\": \"Alice\",\n  \"_links\": {\n    \"orders\": \"/users/123/orders\"\n  }\n}\n```\n\n---\n\n### **5. Layered System**\n**Principle**: The architecture can include intermediate layers (e.g., load balancers, API gateways, proxies) without the client knowing. This enables security (e.g., firewalls), caching, and scalability.\n\n**Why it matters**:\n- Improves flexibility and security.\n- Hides backend complexity.\n\n**Example of a violation**:\nAn API exposes a direct endpoint to a database (e.g., `GET /db/users`), bypassing any middleware. This violates layered architecture by exposing internal components. Instead, use a dedicated `/users` endpoint that routes through security layers.\n\n---\n\n### **6. Code-on-Demand (Optional)**\n**Principle**: Servers can extend client functionality by sending executable code (e.g., JavaScript). Rarely used in modern REST APIs but historically relevant.\n\n**Why it matters**:\n- Enables dynamic client behavior (e.g., plugins).\n- Not commonly violated today.\n\n---\n\n### **Common API Design Mistakes Violating REST**\nHere are **three frequent violations** with fixes:\n\n| **Mistake**                          | **Violation**               | **Fix**                                                                 |\n|--------------------------------------|-----------------------------|-------------------------------------------------------------------------|\n| Using `GET` for side effects (e.g., `GET /users?delete=true`) | Violates **Statelessness** + **Uniform Interface** | Use `DELETE /users/123` with proper HTTP methods.                     |\n| Returning HTML instead of JSON/XML   | Violates **Representation** | Always return machine-readable formats (e.g., `Content-Type: application/json`). |\n| Mixing data and actions in URIs     | Violates **Uniform Interface** | Separate resources and actions: `/orders` (resource) vs. `/orders/123/cancel` (action). |\n| Ignoring HTTP methods (e.g., using `POST` for `GET` operations) | Violates **Uniform Interface** | Use `GET` for retrieval, `POST`/`PUT`/`DELETE` for CRUD operations.     |\n| No proper error handling (e.g., 500 errors with no details) | Violates **Self-descriptive Messages** | Return standardized errors with `Content-Type: application/problem+json`. |\n\n---\n\n### **Key Takeaways**\n- **REST is about constraints**, not just \"use HTTP.\" Violations often stem from treating REST as a protocol (e.g., \"it’s just HTTP + JSON\").\n- **Focus on resources, not actions**: Design around nouns (`/users`) not verbs (`/deleteUser`).\n- **Leverage HTTP properly**: Use methods (`GET`, `POST`, etc.), status codes (`200`, `404`), and headers (`Cache-Control`).\n\nWould you like a deeper dive into any specific principle or real-world API examples?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 580,
+        "prompt_eval_duration": 24774500,
+        "eval_count": 1543,
+        "eval_duration": 16685420200,
+        "total_duration": 16957561600,
+        "load_duration": 61182500,
+        "tokens_per_second": 92.47594495702302,
+        "time_to_first_token_ms": 24.7745,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-git-rebase",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "tags": [
+        "tools",
+        "git",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the difference between git merge and git rebase.\nWhen would you use each? What are the dangers of rebasing?\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "**Git Merge vs. Git Rebase: Key Differences, Use Cases, and Risks**\n\n### **1. Git Merge**\n**What it does:**\n- Creates a **new commit** that ties together the histories of two branches.\n- Preserves the **original commit history** of both branches.\n- The merge commit acts as a \"bridge\" between the two branches.\n\n**How it works:**\nWhen you merge branch `feature` into `main`:\n```bash\ngit checkout main\ngit merge feature\n```\nGit creates a **merge commit** with:\n- The latest commit from `main`.\n- The latest commit from `feature`.\n- A **merge message** (e.g., \"Merge branch 'feature' into 'main'\").\n\n**Visual Example:**\n```\nmain: A --- B --- C\nfeature: A --- D --- E\nAfter merge:\nmain: A --- B --- C --- M (merge commit)\n```\n\n**When to use `git merge`:**\n✅ **Collaborative workflows** (e.g., GitHub, GitLab, Bitbucket).\n✅ **When working with others** (avoids rewriting shared history).\n✅ **For long-lived branches** (keeps a clear record of when branches were merged).\n✅ **When you need to preserve exact commit history** (e.g., for auditing or legal reasons).\n\n---\n\n### **2. Git Rebase**\n**What it does:**\n- **Rewrites history** by moving the entire `feature` branch to the tip of `main`.\n- **Replays** commits from `feature` on top of `main`, creating **new commits** with updated hashes.\n- **Linearizes history** (avoids unnecessary merge commits).\n\n**How it works:**\n```bash\ngit checkout feature\ngit rebase main\n```\nGit:\n1. Takes the latest commit of `main`.\n2. Replays each commit from `feature` on top of `main` (creating new commits).\n3. Updates the `feature` branch to point to the new commits.\n\n**Visual Example:**\n```\nBefore rebase:\nmain: A --- B --- C\nfeature: A --- D --- E\n\nAfter rebase:\nmain: A --- B --- C\nfeature: A --- B --- D' --- E' (rewritten commits)\n```\n\n**When to use `git rebase`:**\n✅ **Local branches** (before sharing with others).\n✅ **Clean, linear history** (e.g., for public repositories).\n✅ **When you want to incorporate upstream changes** (e.g., `git pull --rebase`).\n✅ **Before submitting a PR** (to avoid merge commits in the final history).\n\n---\n\n### **3. Key Differences**\n| Feature          | `git merge`                          | `git rebase`                          |\n|------------------|--------------------------------------|---------------------------------------|\n| **History**      | Preserves original branch history.   | Rewrites history (linearizes it).     |\n| **Commit Hashes**| Keeps old hashes.                    | Creates new commit hashes.            |\n| **Collaboration**| Safe for shared branches.            | **Dangerous** if already shared.      |\n| **Output**       | Adds a merge commit.                 | No merge commit (cleaner history).    |\n| **Use Case**     | Public branches, team workflows.     | Local branches, PRs before merging.   |\n\n---\n\n### **4. Dangers of Rebasing**\nRebasing is **powerful but risky** if misused:\n\n#### **⚠️ Risks:**\n1. **Rewrites Shared History**\n   - If you rebase a branch that others have already pulled, their local commits will **conflict** with the new history.\n   - Example: If `main` was updated while you were working on `feature`, rebasing could **lose changes** or require force-pushing (`git push -f`), which can **break others' work**.\n\n2. **Lost Context**\n   - Merge commits provide a **clear record** of when branches were merged.\n   - Rebasing removes these, making it harder to track **why** changes were made.\n\n3. **Conflict Hell**\n   - If rebasing a large branch, conflicts may **reappear** multiple times (once per commit).\n   - Requires manual resolution for each conflicting commit.\n\n4. **Force-Pushing (`-f`)**\n   - Rebasing often requires `git push -f`, which **overwrites remote history**.\n   - Can **corrupt** others' local repositories if they already pulled the old commits.\n\n#### **✅ When Rebasing is Safe:**\n- **Only on local branches** before sharing.\n- **After pulling latest changes** (`git pull --rebase`).\n- **For feature branches** before creating a PR.\n\n#### **❌ When to Avoid Rebasing:**\n- **Already-pushed branches** (unless you coordinate with the team).\n- **Public repositories** (use `merge` instead).\n- **If others depend on your branch** (e.g., a shared `dev` branch).\n\n---\n\n### **5. Best Practices**\n| Scenario                     | Recommended Tool       |\n|------------------------------|------------------------|\n| Merging a PR into `main`     | `git merge` (safer)    |\n| Cleaning up local commits    | `git rebase -i`        |\n| Incorporating upstream changes | `git pull --rebase`   |\n| Long-lived branches          | `git merge`            |\n| Feature branches before PR   | `git rebase` (then merge) |\n\n---\n### **6. Example Workflow (Safe Rebase)**\n```bash\n# 1. Fetch latest changes\ngit fetch origin\n\n# 2. Rebase your feature branch on top of main (locally)\ngit checkout feature\ngit rebase main\n\n# 3. Resolve conflicts (if any), then test\ngit add .\ngit rebase --continue\n\n# 4. Force-push ONLY if the branch is yours (not shared)\ngit push origin feature --force-with-lease\n\n# 5. Create a PR (now with clean history)\n```\n\n---\n### **7. Summary**\n- **Use `git merge`** for **public/shared branches** (preserves history).\n- **Use `git rebase`** for **local cleanup** before sharing (linearizes history).\n- **Never rebase shared branches** unless you **must** and **warn your team**.\n- **Rebasing is like editing history**—use it carefully!\n\nWould you like a deeper dive into conflict resolution during rebasing?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 579,
+        "prompt_eval_duration": 25934000,
+        "eval_count": 1385,
+        "eval_duration": 14935121400,
+        "total_duration": 15186971800,
+        "load_duration": 62277200,
+        "tokens_per_second": 92.73443200803176,
+        "time_to_first_token_ms": 25.934,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-solid",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": [
+        "cs",
+        "design-principles",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 8192,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the SOLID principles with a concrete Python example\nfor each. Don't just define them — show code that violates\neach principle, then refactor it to comply.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "The **SOLID** principles are five design principles in object-oriented programming (OOP) that help create maintainable, scalable, and flexible software. Below, I'll explain each principle with a **bad example** (violating the principle) followed by a **refactored version** (complying with the principle) in Python.\n\n---\n\n## **1. Single Responsibility Principle (SRP)**\n**Definition:** A class should have only one reason to change, i.e., it should have only one job.\n\n### ❌ **Violation (Bad Example)**\n```python\nclass User:\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\n    def save_to_database(self):\n        # Saves user to DB (one responsibility)\n        print(f\"Saving {self.name} to database...\")\n\n    def send_welcome_email(self):\n        # Sends email (another responsibility)\n        print(f\"Sending welcome email to {self.email}...\")\n```\n\n**Problem:** `User` handles both database operations and email sending—two unrelated responsibilities.\n\n---\n\n### ✅ **Refactored (Good Example)**\n```python\nclass User:\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\nclass UserDatabase:\n    @staticmethod\n    def save(user):\n        print(f\"Saving {user.name} to database...\")\n\nclass EmailService:\n    @staticmethod\n    def send_welcome_email(user):\n        print(f\"Sending welcome email to {user.email}...\")\n```\n\n**Improvement:**\n- `User` only stores data.\n- `UserDatabase` handles persistence.\n- `EmailService` handles email logic.\n\n---\n\n---\n\n## **2. Open/Closed Principle (OCP)**\n**Definition:** Software entities (classes, modules, functions) should be **open for extension but closed for modification**.\n\n### ❌ **Violation (Bad Example)**\n```python\nclass Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def make_sound(self):\n        print(\"Some generic sound\")\n\nclass Dog(Animal):\n    def make_sound(self):\n        print(\"Bark!\")\n\nclass Cat(Animal):\n    def make_sound(self):\n        print(\"Meow!\")\n\ndef animal_sound(animal):\n    animal.make_sound()  # Works for Dog & Cat, but adding a new animal requires modifying this function\n```\n\n**Problem:** If we add a new animal (e.g., `Cow`), we must modify `animal_sound()`.\n\n---\n\n### ✅ **Refactored (Good Example)**\n```python\nclass Animal:\n    def __init__(self, name):\n        self.name = name\n\n    def make_sound(self):\n        raise NotImplementedError(\"Subclasses must implement this\")\n\nclass Dog(Animal):\n    def make_sound(self):\n        print(\"Bark!\")\n\nclass Cat(Animal):\n    def make_sound(self):\n        print(\"Meow!\")\n\nclass Cow(Animal):\n    def make_sound(self):\n        print(\"Moo!\")\n\ndef animal_sound(animal):\n    animal.make_sound()  # Now works for any new animal without modifying this function\n```\n\n**Improvement:**\n- `Animal` defines an abstract method (`make_sound()`).\n- New animals (e.g., `Cow`) can be added **without changing** `animal_sound()`.\n\n---\n\n---\n\n## **3. Liskov Substitution Principle (LSP)**\n**Definition:** Subtypes must be substitutable for their base types without breaking functionality.\n\n### ❌ **Violation (Bad Example)**\n```python\nclass Bird:\n    def fly(self):\n        print(\"Flying\")\n\nclass Penguin(Bird):\n    def fly(self):\n        raise Exception(\"Penguins can't fly!\")\n\ndef make_bird_fly(bird):\n    bird.fly()  # Fails if bird is a Penguin\n```\n\n**Problem:** `Penguin` breaks the expectation that all `Bird`s can fly.\n\n---\n\n### ✅ **Refactored (Good Example)**\n```python\nclass Bird:\n    pass  # No fly() method\n\nclass FlyingBird(Bird):\n    def fly(self):\n        print(\"Flying\")\n\nclass Penguin(Bird):\n    pass  # Doesn't inherit fly()\n\ndef make_bird_fly(bird):\n    if hasattr(bird, 'fly'):\n        bird.fly()  # Only works if bird can fly\n```\n\n**Improvement:**\n- `Bird` is a generic class.\n- `FlyingBird` inherits `fly()`.\n- `Penguin` doesn’t break the contract.\n\n---\n\n---\n\n## **4. Interface Segregation Principle (ISP)**\n**Definition:** Clients should not be forced to depend on interfaces they don’t use.\n\n### ❌ **Violation (Bad Example)**\n```python\nfrom abc import ABC, abstractmethod\n\nclass Worker(ABC):\n    @abstractmethod\n    def work(self):\n        pass\n\n    @abstractmethod\n    def eat(self):\n        pass\n\nclass Machine(Worker):\n    def work(self):\n        print(\"Machine is working\")\n\n    def eat(self):  # Machines don't eat!\n        raise NotImplementedError(\"Machines don't eat\")\n```\n\n**Problem:** `Machine` is forced to implement `eat()`, even though it doesn’t make sense.\n\n---\n\n### ✅ **Refactored (Good Example)**\n```python\nfrom abc import ABC, abstractmethod\n\nclass Workable(ABC):\n    @abstractmethod\n    def work(self):\n        pass\n\nclass Eatable(ABC):\n    @abstractmethod\n    def eat(self):\n        pass\n\nclass Human(Workable, Eatable):\n    def work(self):\n        print(\"Human is working\")\n\n    def eat(self):\n        print(\"Human is eating\")\n\nclass Robot(Workable):\n    def work(self):\n        print(\"Robot is working\")\n```\n\n**Improvement:**\n- `Workable` and `Eatable` are separate interfaces.\n- `Robot` only implements `Workable`.\n\n---\n\n---\n\n## **5. Dependency Inversion Principle (DIP)**\n**Definition:** High-level modules should not depend on low-level modules. Both should depend on abstractions.\n\n### ❌ **Violation (Bad Example)**\n```python\nclass LightBulb:\n    def turn_on(self):\n        print(\"Light is on\")\n\nclass Switch:\n    def __init__(self, light):\n        self.light = light\n\n    def operate(self):\n        self.light.turn_on()  # Direct dependency on LightBulb\n```\n\n**Problem:** `Switch` is tightly coupled to `LightBulb`.\n\n---\n\n### ✅ **Refactored (Good Example)**\n```python\nfrom abc import ABC, abstractmethod\n\nclass Switchable(ABC):\n    @abstractmethod\n    def turn_on(self):\n        pass\n\nclass LightBulb(Switchable):\n    def turn_on(self):\n        print(\"Light is on\")\n\nclass Fan(Switchable):\n    def turn_on(self):\n        print(\"Fan is on\")\n\nclass Switch:\n    def __init__(self, device: Switchable):\n        self.device = device\n\n    def operate(self):\n        self.device.turn_on()  # Depends on abstraction (Switchable)\n```\n\n**Improvement:**\n- `Switch` depends on `Switchable` (abstraction), not concrete classes.\n- Can now work with `LightBulb`, `Fan`, or any other `Switchable` device.\n\n---\n\n### **Summary Table**\n| Principle | Violation Example | Refactored Example |\n|-----------|------------------|-------------------|\n| **SRP** | `User` handles DB + email | Separate `User`, `UserDatabase`, `EmailService` |\n| **OCP** | Modifying `animal_sound()` for new animals | Abstract `make_sound()` in `Animal` |\n| **LSP** | `Penguin` breaks `Bird.fly()` | `FlyingBird` vs. `Penguin` |\n| **ISP** | `Machine` forced to implement `eat()` | Separate `Workable` and `Eatable` |\n| **DIP** | `Switch` depends on `LightBulb` | `Switch` depends on `Switchable` |\n\nThese refactorings make the code **more maintainable, flexible, and scalable**! 🚀"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 590,
+        "prompt_eval_duration": 29292100,
+        "eval_count": 1743,
+        "eval_duration": 18872012200,
+        "total_duration": 19217792400,
+        "load_duration": 61157000,
+        "tokens_per_second": 92.35899073867704,
+        "time_to_first_token_ms": 29.2921,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "explain-concurrency",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "tags": [
+        "cs",
+        "concurrency",
+        "explanation"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain the difference between concurrency and parallelism.\nThen explain threads vs processes vs async/await in Python,\nincluding when each is appropriate and why.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### **Concurrency vs. Parallelism**\n\n#### **1. Concurrency**\n- **Definition**: Concurrency refers to the **composition of independently executing processes** that **share the same resources** (e.g., CPU, memory) but do not necessarily run **simultaneously**.\n- **Key Characteristics**:\n  - **Overlapping execution**: Tasks are interleaved (e.g., waiting for I/O while another task runs).\n  - **Single-threaded concurrency** (e.g., Python’s `asyncio`) can handle multiple tasks by switching between them (cooperative multitasking).\n  - **Shared state**: Threads/processes may share memory, requiring synchronization (locks, semaphores).\n  - **Not necessarily faster**: Concurrency improves **responsiveness** (e.g., a UI that doesn’t freeze while waiting for a network request) but doesn’t always speed up CPU-bound work.\n- **Example**:\n  - A web server handling multiple client requests concurrently (switching between them while waiting for I/O).\n  - A game where multiple NPCs move independently (simulated in turns).\n\n#### **2. Parallelism**\n- **Definition**: Parallelism involves **true simultaneous execution** of multiple tasks on **multiple CPUs/core** to **increase throughput**.\n- **Key Characteristics**:\n  - **Hardware-dependent**: Requires multiple cores (or multi-processor systems).\n  - **True speedup**: CPU-bound tasks (e.g., scientific computing, image processing) benefit from parallel execution.\n  - **No shared state** (in pure parallelism): Each task runs in its own memory space (e.g., separate processes).\n  - **Overhead**: Communication between parallel tasks can introduce latency.\n- **Example**:\n  - Rendering a 3D scene across multiple GPU cores.\n  - Distributed computing (e.g., SETI@home, MapReduce).\n\n---\n### **Key Difference**\n| Feature          | Concurrency                          | Parallelism                          |\n|------------------|--------------------------------------|--------------------------------------|\n| **Execution**    | Overlapped (time-sliced)             | Simultaneous (true multi-core)       |\n| **Speedup**      | Improves responsiveness              | Increases raw performance            |\n| **Shared State** | Often shared (threads)               | Usually isolated (processes)         |\n| **Hardware**     | Single-core (or multi-core with overhead) | Multi-core/GPU required          |\n| **Example**      | Async I/O, GUI event loops           | Matrix multiplication, batch processing |\n\n---\n---\n\n### **Threads vs. Processes vs. Async/Await in Python**\n\n#### **1. Processes (Multiprocessing)**\n- **Definition**: Independent OS-level entities with their own memory space.\n- **When to Use**:\n  - **CPU-bound tasks** (e.g., heavy computations, data processing).\n  - When you need **true parallelism** (e.g., leveraging multiple cores).\n  - When **shared memory is unsafe** (e.g., no global variables, no locks needed).\n- **Pros**:\n  - No GIL (Global Interpreter Lock) issues (Python’s CPython has a GIL, but multiprocessing bypasses it).\n  - True parallel execution on multi-core systems.\n- **Cons**:\n  - High overhead (process creation, IPC communication).\n  - Less efficient for I/O-bound tasks (context switching is expensive).\n- **Python Module**: `multiprocessing`\n- **Example**:\n  ```python\n  from multiprocessing import Process\n\n  def cpu_intensive_task():\n      # Simulate work\n      pass\n\n  if __name__ == \"__main__\":\n      p = Process(target=cpu_intensive_task)\n      p.start()\n      p.join()\n  ```\n\n#### **2. Threads (Threading)**\n- **Definition**: Lightweight OS-level entities that **share memory** (but are managed by the Python interpreter).\n- **When to Use**:\n  - **I/O-bound tasks** (e.g., network requests, file operations, database queries).\n  - When tasks **block for long periods** (e.g., waiting for HTTP responses).\n  - When you need **low overhead** compared to processes.\n- **Pros**:\n  - Faster to create than processes.\n  - Shared memory allows easy communication.\n- **Cons**:\n  - **GIL limits CPU-bound tasks** (only one thread runs Python bytecode at a time).\n  - Risk of **race conditions** (shared state requires locks).\n  - Not truly parallel for CPU work (due to GIL).\n- **Python Module**: `threading`\n- **Example**:\n  ```python\n  import threading\n\n  def io_bound_task():\n      # Simulate waiting for I/O\n      pass\n\n  t = threading.Thread(target=io_bound_task)\n  t.start()\n  t.join()\n  ```\n\n#### **3. Async/Await (Asynchronous I/O)**\n- **Definition**: Cooperative multitasking using **coroutines** (via `async/await`). The Python event loop schedules tasks and yields control when waiting for I/O.\n- **When to Use**:\n  - **Highly I/O-bound applications** (e.g., web servers, APIs, real-time systems).\n  - When you need **scalability** (thousands of connections with low overhead).\n  - When tasks **block for long periods** (e.g., network calls, DB queries).\n- **Pros**:\n  - **No GIL issues** (since it’s cooperative, not preemptive).\n  - **Low overhead** (no process/thread creation).\n  - **Non-blocking** (tasks yield control while waiting).\n- **Cons**:\n  - **Not for CPU-bound tasks** (async won’t speed up computations).\n  - Complex error handling (e.g., `asyncio` requires `try/except` in coroutines).\n  - Limited to I/O operations (no true parallelism for CPU).\n- **Python Module**: `asyncio`\n- **Example**:\n  ```python\n  import asyncio\n\n  async def fetch_data():\n      await asyncio.sleep(2)  # Simulate I/O\n      return \"Data\"\n\n  async def main():\n      task = asyncio.create_task(fetch_data())\n      print(await task)\n\n  asyncio.run(main())\n  ```\n\n---\n### **When to Choose Which?**\n| Scenario                     | Best Choice          | Why                                  |\n|------------------------------|----------------------|--------------------------------------|\n| **CPU-bound work**           | `multiprocessing`    | Bypasses GIL, uses multiple cores.   |\n| **I/O-bound work**           | `asyncio` (async/await) | Low overhead, scalable.          |\n| **Mixed I/O + CPU**          | `multiprocessing` + `asyncio` | Offload CPU work to processes, use async for I/O. |\n| **Legacy code or simple tasks** | `threading`       | Easy to use, but avoid for CPU work. |\n| **High-performance I/O**     | `asyncio`            | Handles thousands of connections.   |\n| **True parallelism needed**  | `multiprocessing`    | No GIL, no shared state.            |\n\n---\n### **Key Takeaways**\n1. **Parallelism (Processes)** = True speedup for CPU work (multi-core).\n2. **Concurrency (Threads/Async)** = Responsiveness for I/O-bound tasks.\n3. **Async/Await** = Best for I/O-heavy apps (scalable, low overhead).\n4. **Threads** = Simple but risky (GIL + shared state).\n5. **Processes** = Safe for CPU work but heavier.\n\n---\n### **Example Workflow**\n- **Web Server (I/O-bound)** → Use `asyncio` (handles 10K+ connections).\n- **Data Processing (CPU-bound)** → Use `multiprocessing` (split work across cores).\n- **Hybrid App** → Use `multiprocessing` for CPU tasks + `asyncio` for I/O."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 584,
+        "prompt_eval_duration": 26070800,
+        "eval_count": 1694,
+        "eval_duration": 18337147300,
+        "total_duration": 18653843600,
+        "load_duration": 62043500,
+        "tokens_per_second": 92.38078160608984,
+        "time_to_first_token_ms": 26.0708,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-rest-api",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "http",
+        "databases"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design a REST API for a library management system.\nInclude endpoints, data models, error handling strategy,\nand explain your choices.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "# **Library Management System REST API Design**\nBelow is a comprehensive design for a **RESTful API** for a **Library Management System**, covering endpoints, data models, error handling, and design choices.\n\n---\n\n## **1. Core API Design Principles**\n- **RESTful**: Stateless, resource-based, HTTP methods (GET, POST, PUT, DELETE).\n- **Versioning**: `/v1/` prefix (e.g., `/v1/books`).\n- **Authentication**: JWT (Bearer Token) for secure access.\n- **Pagination**: For list endpoints (e.g., `/books?page=1&limit=10`).\n- **Filtering/Sorting**: Query params for advanced search (e.g., `/books?author=Stephen%20King&sort=-published_date`).\n\n---\n\n## **2. Data Models (JSON Schema)**\n### **2.1. User Model**\n```json\n{\n  \"id\": \"string (UUID)\",\n  \"username\": \"string (unique)\",\n  \"email\": \"string (unique, email format)\",\n  \"password\": \"string (hashed)\",\n  \"role\": \"enum (LIBRARIAN, MEMBER, ADMIN)\",\n  \"created_at\": \"datetime\",\n  \"updated_at\": \"datetime\"\n}\n```\n\n### **2.2. Book Model**\n```json\n{\n  \"id\": \"string (UUID)\",\n  \"title\": \"string (required)\",\n  \"author\": \"string\",\n  \"isbn\": \"string (unique)\",\n  \"genre\": \"string (e.g., 'Fiction', 'Non-Fiction')\",\n  \"published_date\": \"date\",\n  \"publisher\": \"string\",\n  \"copies_available\": \"integer\",\n  \"total_copies\": \"integer\",\n  \"created_at\": \"datetime\",\n  \"updated_at\": \"datetime\"\n}\n```\n\n### **2.3. Loan Model**\n```json\n{\n  \"id\": \"string (UUID)\",\n  \"book_id\": \"string (UUID, ref: Book.id)\",\n  \"user_id\": \"string (UUID, ref: User.id)\",\n  \"loan_date\": \"datetime\",\n  \"due_date\": \"datetime\",\n  \"return_date\": \"datetime (nullable)\",\n  \"status\": \"enum (ACTIVE, RETURNED, OVERDUE)\",\n  \"fine_amount\": \"float (nullable)\"\n}\n```\n\n### **2.4. Reservation Model**\n```json\n{\n  \"id\": \"string (UUID)\",\n  \"book_id\": \"string (UUID, ref: Book.id)\",\n  \"user_id\": \"string (UUID, ref: User.id)\",\n  \"reservation_date\": \"datetime\",\n  \"expiry_date\": \"datetime\",\n  \"status\": \"enum (PENDING, CONFIRMED, CANCELLED)\"\n}\n```\n\n---\n\n## **3. Endpoints**\n### **3.1. Authentication**\n| Method | Endpoint | Description | Request Body | Response |\n|--------|----------|-------------|--------------|----------|\n| `POST` | `/v1/auth/register` | Register a new user | `{ \"username\", \"email\", \"password\" }` | `201 Created` (User) |\n| `POST` | `/v1/auth/login` | Login & get JWT token | `{ \"email\", \"password\" }` | `200 OK` (Token) |\n\n### **3.2. Books**\n| Method | Endpoint | Description | Request Body | Response |\n|--------|----------|-------------|--------------|----------|\n| `GET` | `/v1/books` | List all books (with pagination) | `?page=1&limit=10&sort=-title` | `200 OK` (Array of Books) |\n| `GET` | `/v1/books/{id}` | Get a single book | - | `200 OK` (Book) |\n| `POST` | `/v1/books` | Add a new book | `{ \"title\", \"author\", \"isbn\", ... }` | `201 Created` (Book) |\n| `PUT` | `/v1/books/{id}` | Update a book | Partial updates allowed | `200 OK` (Book) |\n| `DELETE` | `/v1/books/{id}` | Delete a book | - | `204 No Content` |\n\n### **3.3. Loans**\n| Method | Endpoint | Description | Request Body | Response |\n|--------|----------|-------------|--------------|----------|\n| `GET` | `/v1/loans` | List user loans | - | `200 OK` (Array of Loans) |\n| `POST` | `/v1/loans` | Issue a new loan | `{ \"book_id\", \"user_id\" }` | `201 Created` (Loan) |\n| `PUT` | `/v1/loans/{id}/return` | Mark a loan as returned | `{ \"return_date\" }` | `200 OK` (Loan) |\n| `GET` | `/v1/loans/{id}` | Get loan details | - | `200 OK` (Loan) |\n\n### **3.4. Reservations**\n| Method | Endpoint | Description | Request Body | Response |\n|--------|----------|-------------|--------------|----------|\n| `GET` | `/v1/reservations` | List user reservations | - | `200 OK` (Array of Reservations) |\n| `POST` | `/v1/reservations` | Create a reservation | `{ \"book_id\", \"user_id\" }` | `201 Created` (Reservation) |\n| `DELETE` | `/v1/reservations/{id}` | Cancel a reservation | - | `204 No Content` |\n\n---\n\n## **4. Error Handling Strategy**\n### **4.1. HTTP Status Codes**\n| Code | Meaning | Example Scenario |\n|------|---------|------------------|\n| `200 OK` | Success (GET/GET) | Returning a book |\n| `201 Created` | Resource created | Adding a new book |\n| `204 No Content` | Success (DELETE) | Deleting a loan |\n| `400 Bad Request` | Invalid input | Missing `title` in book creation |\n| `401 Unauthorized` | Missing/invalid token | Missing `Authorization` header |\n| `403 Forbidden` | No permissions | Non-admin trying to delete a book |\n| `404 Not Found` | Resource not found | Book with `id=123` doesn’t exist |\n| `409 Conflict` | Duplicate entry | ISBN already exists |\n| `500 Internal Server Error` | Server-side failure | Database connection issue |\n\n### **4.2. Error Response Format**\n```json\n{\n  \"error\": {\n    \"code\": \"404\",\n    \"message\": \"Book not found\",\n    \"details\": {\n      \"field\": \"id\",\n      \"value\": \"123\"\n    }\n  }\n}\n```\n\n---\n\n## **5. Design Choices & Justifications**\n### **5.1. Why REST?**\n- **Stateless**: Each request contains all needed info (JWT token).\n- **Scalable**: Stateless design allows horizontal scaling.\n- **Cacheable**: `GET` endpoints can be cached (e.g., `/v1/books`).\n\n### **5.2. Pagination & Filtering**\n- **Pagination**: Prevents overloading with large datasets (e.g., `/books?page=2&limit=5`).\n- **Filtering**: Supports queries like `/books?author=J.K.%20Rowling`.\n\n### **5.3. Separate Loans & Reservations**\n- **Loans** track checked-out books.\n- **Reservations** allow users to pre-book unavailable books.\n\n### **5.4. JWT Authentication**\n- Secure access control (e.g., `Authorization: Bearer <token>`).\n- Roles (`LIBRARIAN`, `MEMBER`, `ADMIN`) enforce permissions.\n\n### **5.5. UUIDs for IDs**\n- Prevents ID guessing attacks.\n- Works well with distributed systems.\n\n### **5.6. Partial Updates (PUT)**\n- Allows updating only specific fields (e.g., `PUT /books/123` with `{ \"title\": \"New Title\" }`).\n\n---\n\n## **6. Example Workflow**\n### **6.1. User Registers & Logs In**\n```bash\n# Register\nPOST /v1/auth/register\nBody: { \"username\": \"john_doe\", \"email\": \"john@example.com\", \"password\": \"secure123\" }\n→ 201 Created (User)\n\n# Login\nPOST /v1/auth/login\nBody: { \"email\": \"john@example.com\", \"password\": \"secure123\" }\n→ 200 OK (Token: \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\")\n```\n\n### **6.2. Borrow a Book**\n```bash\n# Issue Loan\nPOST /v1/loans\nHeaders: Authorization: Bearer <token>\nBody: { \"book_id\": \"abc123\", \"user_id\": \"user456\" }\n→ 201 Created (Loan)\n```\n\n### **6.3. Return a Book**\n```bash\n# Mark as Returned\nPUT /v1/loans/loan789/return\nHeaders: Authorization: Bearer <token>\nBody: { \"return_date\": \"2026-05-05T12:00:00Z\" }\n→ 200 OK (Loan)\n```\n\n---\n\n## **7. Future Extensions**\n- **Webhooks**: Notify users when a reserved book is available.\n- **GraphQL**: For flexible querying (alternative to REST).\n- **Rate Limiting**: Prevent abuse (e.g., 100 requests/minute).\n- **Search API**: Elasticsearch for advanced book searches.\n\n---\nThis design ensures a **scalable, secure, and maintainable** library management system. Would you like any modifications or additional features?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 578,
+        "prompt_eval_duration": 25527800,
+        "eval_count": 2200,
+        "eval_duration": 23913767600,
+        "total_duration": 24324313700,
+        "load_duration": 63455700,
+        "tokens_per_second": 91.99721419054018,
+        "time_to_first_token_ms": 25.5278,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-auth-system",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "security",
+        "architecture",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design an authentication and authorization system for a\nmulti-tenant SaaS application. Cover user registration,\nlogin, session management, role-based access, and at least\nthree security considerations.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "# **Authentication & Authorization System for a Multi-Tenant SaaS Application**\nBelow is a comprehensive design for a secure, scalable, and flexible authentication and authorization system for a multi-tenant SaaS application.\n\n---\n\n## **1. System Overview**\nThe system must:\n- Support **multiple tenants** (e.g., different organizations with isolated data).\n- Enforce **role-based access control (RBAC)**.\n- Ensure **secure session management**.\n- Comply with **security best practices** (e.g., OAuth, JWT, rate limiting).\n\n---\n\n## **2. Authentication Flow**\n### **2.1 User Registration**\n1. **Frontend Form Submission**\n   - User submits email, password, and tenant-specific details (if applicable).\n   - Optional: Social login (Google, Microsoft, etc.) via OAuth.\n\n2. **Validation & Hashing**\n   - Frontend validates basic fields (e.g., email format).\n   - Backend:\n     - Checks if email is already registered.\n     - Hashes password using **bcrypt** (or Argon2).\n     - Generates a **unique user ID** (UUID or auto-incremented).\n\n3. **Tenant Assignment**\n   - If the tenant is pre-registered, assign the user to the correct tenant.\n   - If not, prompt the user to select a tenant (or create a new one if admin).\n\n4. **Email Verification (Optional but Recommended)**\n   - Send a verification link with a **time-limited JWT** (expires in 24h).\n   - Store verification status in the database.\n\n5. **User Creation in Database**\n   - Store hashed password, email, tenant ID, and verification status.\n   - Example schema:\n     ```sql\n     CREATE TABLE users (\n         id UUID PRIMARY KEY,\n         email VARCHAR(255) UNIQUE NOT NULL,\n         password_hash VARCHAR(255) NOT NULL,\n         tenant_id UUID NOT NULL,\n         is_verified BOOLEAN DEFAULT FALSE,\n         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n     );\n     ```\n\n---\n\n### **2.2 Login Flow**\n1. **Frontend Submission**\n   - User enters email/password or OAuth credentials.\n\n2. **Backend Authentication**\n   - **Password Login:**\n     - Retrieve user from DB.\n     - Verify tenant association.\n     - Compare hashed password.\n     - If verified, issue a **JWT (JSON Web Token)** with:\n       - `user_id`, `tenant_id`, `roles`, `expires_in` (e.g., 1h).\n     - Store a **refresh token** (long-lived, encrypted) in the DB.\n   - **OAuth Login:**\n     - Redirect to OAuth provider, exchange code for tokens.\n     - Map OAuth ID to a user (or create a new one if first-time login).\n     - Issue JWT with tenant-specific permissions.\n\n3. **Session Management**\n   - **Access Token (JWT):** Short-lived (e.g., 1h), used for API requests.\n   - **Refresh Token:** Long-lived (e.g., 7 days), stored securely (HTTP-only cookies or encrypted DB).\n   - **Session Expiry:** Automatically refresh tokens via a background service.\n\n---\n\n## **3. Authorization (Role-Based Access Control - RBAC)**\n### **3.1 Role Hierarchy**\nDefine roles per tenant (e.g., `Admin`, `Editor`, `Viewer`).\nExample schema:\n```sql\nCREATE TABLE roles (\n    id UUID PRIMARY KEY,\n    name VARCHAR(50) UNIQUE NOT NULL,  -- e.g., \"admin\", \"user\"\n    description TEXT,\n    permissions JSONB  -- e.g., {\"create\": true, \"delete\": false}\n);\n\nCREATE TABLE user_roles (\n    user_id UUID REFERENCES users(id),\n    role_id UUID REFERENCES roles(id),\n    PRIMARY KEY (user_id, role_id)\n);\n```\n\n### **3.2 Permission Checks**\n- **Middleware/Interceptor:** Validate JWT claims (`tenant_id`, `roles`).\n- **API Gateway:** Enforce tenant isolation (e.g., `/api/tenant1/data`).\n- **Database-Level:** Use row-level security (PostgreSQL) or application logic to restrict data access.\n\nExample (Pseudocode):\n```python\ndef check_permission(user, action):\n    if user.role == \"admin\":\n        return True\n    if action in user.role.permissions:\n        return True\n    return False\n```\n\n---\n\n## **4. Security Considerations**\n### **4.1 Tenant Isolation**\n- **Database:** Use **schema-per-tenant** or **row-level security** (PostgreSQL).\n- **API:** Route requests to tenant-specific endpoints (e.g., `/tenants/{id}/api`).\n- **Data Encryption:** Encrypt sensitive fields (e.g., PII) at rest.\n\n### **4.2 Rate Limiting & Brute-Force Protection**\n- **API Gateway:** Limit login attempts (e.g., 5 tries/15 mins).\n- **Fail2Ban:** Block IPs after repeated failed logins.\n- **JWT Expiry:** Short-lived tokens reduce window for attacks.\n\n### **4.3 Secure Token Handling**\n- **JWT Best Practices:**\n  - Use **HS256** (symmetric) or **RS256** (asymmetric) signing.\n  - Store secrets securely (AWS KMS, HashiCorp Vault).\n  - Avoid storing sensitive data in JWT (use short-lived tokens).\n- **Refresh Tokens:**\n  - Encrypt with AES-256.\n  - Revoke immediately if compromised.\n\n### **4.4 Additional Security Layers**\n| **Layer**               | **Implementation**                          |\n|--------------------------|---------------------------------------------|\n| **DDoS Protection**      | Cloudflare/WAF, rate limiting.              |\n| **Logging & Monitoring** | Track failed logins, suspicious activity.   |\n| **Compliance**           | GDPR, SOC2, HIPAA (if applicable).           |\n| **Multi-Factor Auth (MFA)** | Optional TOTP/HOTP for admins.              |\n\n---\n\n## **5. Architecture Diagram (Simplified)**\n```\n┌─────────────┐    ┌─────────────┐    ┌─────────────┐\n│             │    │             │    │             │\n│  User       │───▶│  Auth       │───▶│  API        │\n│             │    │  Service    │    │  Gateway    │\n└─────────────┘    └─────────────┘    └─────────────┘\n       ▲                  ▲                  ▲\n       │                  │                  │\n       ▼                  ▼                  ▼\n┌─────────────┐    ┌─────────────┐    ┌─────────────┐\n│  Database   │    │  Tenant     │    │  RBAC       │\n│  (Users)    │    │  Isolation  │    │  Middleware │\n└─────────────┘    └─────────────┘    └─────────────┘\n```\n\n---\n\n## **6. Example Workflow (Login + API Call)**\n1. **User logs in** → JWT issued (`tenant_id: \"abc123\"`, `roles: [\"user\"]`).\n2. **API Request:** `GET /api/data`\n   - Gateway checks JWT `tenant_id` → routes to `tenant_abc123`.\n   - Middleware verifies `roles` → allows if `user` has permission.\n3. **Database Query:** Filters data by `tenant_id`.\n\n---\n\n## **7. Tools & Technologies**\n| **Component**       | **Recommended Tech**                          |\n|---------------------|-----------------------------------------------|\n| **Auth**            | Passport.js (Node), Django Allauth (Python)   |\n| **JWT**             | `jsonwebtoken` (Node), `PyJWT` (Python)       |\n| **Database**        | PostgreSQL (row-level security)               |\n| **OAuth**           | Auth0, Okta, or custom OAuth2 implementation  |\n| **Rate Limiting**   | Redis + NGINX/Express rate-limiter           |\n| **Monitoring**      | Sentry, Datadog, or ELK Stack                 |\n\n---\n## **8. Future Enhancements**\n- **Attribute-Based Access Control (ABAC):** Fine-grained permissions.\n- **Federated Identity:** SSO with SAML/OpenID Connect.\n- **Zero Trust:** Continuous authentication (e.g., behavioral biometrics).\n\n---\nThis design balances **security**, **scalability**, and **usability** for a multi-tenant SaaS. Would you like a deeper dive into any specific component?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 591,
+        "prompt_eval_duration": 29109400,
+        "eval_count": 1863,
+        "eval_duration": 20223303600,
+        "total_duration": 20511609800,
+        "load_duration": 61057600,
+        "tokens_per_second": 92.12144745727893,
+        "time_to_first_token_ms": 29.1094,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "design-queue-system",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "distributed",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Design a simple message queue system. Cover the API,\npersistence strategy, delivery guarantees, and how you'd\nhandle consumer failures. Compare at-most-once vs\nat-least-once vs exactly-once delivery.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "# **Simple Message Queue System Design**\nBelow is a high-level design for a lightweight message queue system with key components, API, persistence, delivery guarantees, and failure handling.\n\n---\n\n## **1. Core Components**\n### **1.1 Producer API**\n- **Publish Message**\n  ```http\n  POST /queue/{queue_name}/publish\n  Headers: Authorization (optional)\n  Body: { \"message\": \"data\", \"priority\": \"high|normal|low\" }\n  ```\n  - **Response**: `202 Accepted` (async) or `200 OK` (sync).\n  - **Validation**: Check queue existence, message size limits, and payload format.\n\n### **1.2 Consumer API**\n- **Subscribe to Queue**\n  ```http\n  POST /queue/{queue_name}/subscribe\n  Headers: Authorization\n  Body: { \"consumer_id\": \"unique_id\", \"ack_deadline\": 30 }  # Optional ACK timeout\n  ```\n  - **Response**: `200 OK` (streaming messages).\n  - **Long-Polling**: Server holds request until a message arrives or timeout.\n\n- **Acknowledge Message**\n  ```http\n  POST /queue/{queue_name}/ack/{message_id}\n  Headers: Authorization\n  ```\n  - **Response**: `200 OK` (success) or `404 Not Found` (message expired).\n\n- **Nack (Negative ACK)**\n  ```http\n  POST /queue/{queue_name}/nack/{message_id}\n  Headers: Authorization\n  Body: { \"retry_after\": 5 }  # Optional delay before retry\n  ```\n  - **Response**: `200 OK` (message requeued or dropped).\n\n---\n\n## **2. Persistence Strategy**\n### **2.1 Storage Options**\n| **Option**       | **Pros**                          | **Cons**                          | **Use Case**                     |\n|------------------|-----------------------------------|-----------------------------------|----------------------------------|\n| **In-Memory (Redis)** | Fast, low-latency                 | No persistence, volatile         | Short-lived queues, dev/testing   |\n| **Disk-Based (LevelDB/RocksDB)** | Persistent, high throughput | Slower than in-memory            | Production workloads             |\n| **Distributed DB (Cassandra)** | Scalable, fault-tolerant         | Higher latency, complex setup    | Large-scale, multi-region queues |\n\n### **2.2 Data Model**\n- **Queue Table**:\n  ```sql\n  CREATE TABLE queues (\n    queue_name TEXT PRIMARY KEY,\n    messages_count INT DEFAULT 0,\n    retention_days INT DEFAULT 7\n  );\n  ```\n- **Message Table**:\n  ```sql\n  CREATE TABLE messages (\n    message_id UUID PRIMARY KEY,\n    queue_name TEXT NOT NULL,\n    payload TEXT NOT NULL,\n    priority TEXT,  -- \"high\", \"normal\", \"low\"\n    created_at TIMESTAMP DEFAULT NOW(),\n    ack_deadline TIMESTAMP,  -- When consumer must ACK\n    is_processed BOOLEAN DEFAULT FALSE\n  );\n  ```\n- **Consumer Subscriptions**:\n  ```sql\n  CREATE TABLE subscriptions (\n    consumer_id TEXT PRIMARY KEY,\n    queue_name TEXT NOT NULL,\n    last_ack TIMESTAMP DEFAULT NOW()\n  );\n  ```\n\n---\n\n## **3. Delivery Guarantees**\n| **Policy**       | **Definition**                                                                 | **Pros**                          | **Cons**                          | **Use Case**                     |\n|------------------|-------------------------------------------------------------------------------|-----------------------------------|-----------------------------------|----------------------------------|\n| **At-Most-Once** | Message may be lost but never duplicated.                                    | Simple, fast                      | No reliability                    | Non-critical notifications       |\n| **At-Least-Once**| Message delivered ≥1 time (may duplicate).                                   | Reliable                         | Duplicates handled by consumer    | Idempotent operations (e.g., logs)|\n| **Exactly-Once** | Message delivered exactly once (requires deduplication).                     | Guaranteed correctness            | Complex (requires transactional writes) | Financial transactions          |\n\n### **3.1 Implementation Notes**\n- **At-Most-Once**:\n  - No persistence (or discard on failure).\n  - Use case: Fire-and-forget events (e.g., analytics).\n- **At-Least-Once**:\n  - Persist messages until ACK.\n  - Consumers must handle duplicates (e.g., idempotent APIs).\n- **Exactly-Once**:\n  - **Option 1**: Transactional writes (e.g., DB transaction + message store).\n  - **Option 2**: Message deduplication (e.g., `message_id` + `consumer_id`).\n  - **Option 3**: Saga pattern (compensating transactions).\n\n---\n\n## **4. Handling Consumer Failures**\n### **4.1 Failure Scenarios & Mitigations**\n| **Scenario**               | **Detection**                          | **Recovery Mechanism**                     |\n|----------------------------|----------------------------------------|--------------------------------------------|\n| **Consumer crashes**       | ACK deadline expires                   | Requeue message (with backoff)             |\n| **Network failure**        | Timeout on ACK/NACK                     | Retry with exponential backoff            |\n| **Consumer stuck**         | No ACK for `retention_period`          | Move to DLQ (Dead Letter Queue)            |\n| **Duplicate processing**   | Idempotent consumer logic               | Use `message_id` + `consumer_id` for deduplication |\n\n### **4.2 Dead Letter Queue (DLQ)**\n- Messages failing `N` retries move to DLQ.\n- Admin can inspect/retry DLQ messages.\n- Example:\n  ```sql\n  CREATE TABLE dlq (\n    message_id UUID PRIMARY KEY,\n    queue_name TEXT NOT NULL,\n    payload TEXT NOT NULL,\n    error_reason TEXT,\n    failed_at TIMESTAMP DEFAULT NOW()\n  );\n  ```\n\n---\n\n## **5. Example Workflow**\n1. **Producer** publishes a message → stored in `messages` table.\n2. **Consumer** subscribes → server polls for new messages.\n3. **Consumer** processes message → sends ACK within `ack_deadline`.\n   - If ACK fails → message requeued (with backoff).\n   - If NACK → message retried or moved to DLQ.\n4. **Message expires** → deleted after `retention_days`.\n\n---\n\n## **6. Trade-offs Summary**\n| **Aspect**          | **At-Most-Once** | **At-Least-Once** | **Exactly-Once** |\n|---------------------|------------------|-------------------|------------------|\n| **Reliability**     | ❌ No guarantee  | ✅ At least once  | ✅ Exactly once  |\n| **Complexity**      | Low              | Medium            | High             |\n| **Performance**     | High             | Medium            | Low (due to deduplication) |\n| **Use Case**        | Non-critical logs| Idempotent ops    | Financial systems|\n\n---\n## **7. Extensions (Optional)**\n- **Priority Queues**: Use `priority` field + separate partitions.\n- **Rate Limiting**: Throttle producers/consumers.\n- **Monitoring**: Track `messages_in_flight`, `latency`, `errors`.\n- **Clustering**: Shard queues across nodes (e.g., consistent hashing).\n\n---\n### **Final Notes**\n- For **simplicity**, start with **At-Least-Once** + DLQ.\n- For **critical systems**, implement **Exactly-Once** via transactions or deduplication.\n- Always **monitor** queue metrics (e.g., backlog, processing time).\n\nWould you like a prototype implementation in a specific language (e.g., Go, Python)?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 598,
+        "prompt_eval_duration": 29938300,
+        "eval_count": 1656,
+        "eval_duration": 17931970800,
+        "total_duration": 18199096700,
+        "load_duration": 62325600,
+        "tokens_per_second": 92.34902390093119,
+        "time_to_first_token_ms": 29.9383,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "medium",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "debug-race-condition",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "debugging",
+        "concurrency"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "This Python code has a race condition. Identify it, explain\nwhy it's dangerous, and fix it:\n\nimport threading\n\ncounter = 0\n\ndef increment():\n    global counter\n    for _ in range(100000):\n        counter += 1\n\nthreads = [threading.Thread(target=increment) for _ in range(4)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(counter)\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "### **Race Condition Identification**\nThe race condition in this code occurs in the `increment()` function when multiple threads simultaneously access and modify the shared `counter` variable. Specifically, the line `counter += 1` is **not atomic**—it involves three steps:\n1. **Read** the current value of `counter`.\n2. **Increment** the value by 1.\n3. **Write** the new value back to `counter`.\n\nIf two threads execute these steps concurrently, they may overwrite each other's changes, leading to lost updates.\n\n---\n\n### **Why It's Dangerous**\n- **Incorrect Result**: The final value of `counter` will be **less than 400,000** (expected) because increments are lost due to overlapping writes.\n- **Non-Deterministic**: The exact final value depends on thread scheduling, making the program unreliable.\n- **Scalability**: The problem worsens with more threads or longer loops.\n\n---\n\n### **Fixed Version (Using a Lock)**\nTo fix this, we use a `threading.Lock` to ensure only one thread modifies `counter` at a time:\n\n```python\nimport threading\n\ncounter = 0\nlock = threading.Lock()  # Create a lock\n\ndef increment():\n    global counter\n    for _ in range(100000):\n        with lock:  # Acquire lock before modifying counter\n            counter += 1\n\nthreads = [threading.Thread(target=increment) for _ in range(4)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(counter)  # Now correctly outputs 400,000\n```\n\n#### **Key Improvements**:\n1. **Thread Safety**: The `with lock` block ensures atomicity for `counter += 1`.\n2. **No Deadlocks**: The lock is automatically released after the block (even if an exception occurs).\n3. **Performance**: Minimal overhead since locks are held only for the critical section.\n\n---\n### **Alternative Fixes**\n1. **Atomic Operations**: Use `threading.AtomicInteger` (Python lacks native atomic types, but libraries like `multiprocessing.Value` can help).\n2. **Thread-Local Storage**: Avoid shared state entirely (e.g., each thread increments its own counter and sums results at the end).\n3. **Global Interpreter Lock (GIL)**: Python’s GIL prevents true parallelism in CPython for CPU-bound tasks, but this is a workaround, not a fix for shared data races."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 646,
+        "prompt_eval_duration": 43813300,
+        "eval_count": 528,
+        "eval_duration": 5653081500,
+        "total_duration": 5801852200,
+        "load_duration": 61250100,
+        "tokens_per_second": 93.40038702785375,
+        "time_to_first_token_ms": 43.8133,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "refactor-god-function",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "python",
+        "refactoring",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "This function does too many things. Refactor it into smaller,\nwell-named functions and explain your reasoning:\n\ndef process_order(order):\n    if order['quantity'] <= 0:\n        return {'error': 'Invalid quantity'}\n    subtotal = order['price'] * order['quantity']\n    if order.get('coupon') == 'SAVE10':\n        subtotal *= 0.9\n    tax = subtotal * 0.08\n    total = subtotal + tax\n    if order.get('email'):\n        print(f\"Sending receipt to {order['email']}\")\n    return {'subtotal': subtotal, 'tax': tax, 'total': total}\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here's a refactored version of the `process_order` function with smaller, well-named functions and explanations for each:\n\n```python\ndef validate_quantity(order):\n    \"\"\"Check if the order quantity is valid (greater than 0).\"\"\"\n    if order['quantity'] <= 0:\n        return {'error': 'Invalid quantity'}\n    return None  # No error\n\ndef calculate_subtotal(order):\n    \"\"\"Calculate the subtotal based on price and quantity.\"\"\"\n    return order['price'] * order['quantity']\n\ndef apply_coupon(subtotal, coupon_code):\n    \"\"\"Apply discount if valid coupon is provided.\"\"\"\n    if coupon_code == 'SAVE10':\n        return subtotal * 0.9\n    return subtotal\n\ndef calculate_tax(subtotal):\n    \"\"\"Calculate tax based on subtotal (8% in this case).\"\"\"\n    return subtotal * 0.08\n\ndef calculate_total(subtotal, tax):\n    \"\"\"Calculate the final total by adding tax to subtotal.\"\"\"\n    return subtotal + tax\n\ndef send_receipt_email(order):\n    \"\"\"Simulate sending a receipt email if an email is provided.\"\"\"\n    if order.get('email'):\n        print(f\"Sending receipt to {order['email']}\")\n\ndef process_order(order):\n    \"\"\"Process an order by validating, calculating totals, and handling receipts.\"\"\"\n    # Validation\n    error = validate_quantity(order)\n    if error:\n        return error\n\n    # Calculations\n    subtotal = calculate_subtotal(order)\n    coupon_code = order.get('coupon', '')\n    discounted_subtotal = apply_coupon(subtotal, coupon_code)\n    tax = calculate_tax(discounted_subtotal)\n    total = calculate_total(discounted_subtotal, tax)\n\n    # Receipt handling\n    send_receipt_email(order)\n\n    return {\n        'subtotal': subtotal,\n        'discounted_subtotal': discounted_subtotal,\n        'tax': tax,\n        'total': total\n    }\n```\n\n### Key Improvements and Reasoning:\n\n1. **Single Responsibility Principle (SRP)**\n   - Each function now has one clear purpose (e.g., `validate_quantity` only checks quantity, `apply_coupon` only handles discounts).\n   - This makes the code easier to test, maintain, and modify.\n\n2. **Better Readability**\n   - The original function was a \"spaghetti\" of logic. The refactored version clearly separates steps (validation → calculations → side effects).\n   - Variable names like `discounted_subtotal` make the flow explicit.\n\n3. **Explicit Error Handling**\n   - `validate_quantity` returns an error dict early if invalid, avoiding nested conditions.\n\n4. **Side Effects Isolated**\n   - `send_receipt_email` is separate from calculations, making it easier to mock or disable (e.g., in tests).\n\n5. **Flexibility for Future Changes**\n   - If tax rates or coupon logic changes, only the relevant function needs updating.\n   - Example: `calculate_tax` could later support different tax rates per region.\n\n6. **More Detailed Output**\n   - The refactored version includes `discounted_subtotal` in the output, which was implicit in the original.\n\n7. **Default Handling for Coupon**\n   - `order.get('coupon', '')` ensures no KeyError if 'coupon' is missing.\n\n### Trade-offs:\n- The refactored version has slightly more functions, but this is a trade-off for clarity and maintainability.\n- If performance were critical (e.g., processing millions of orders), the original might be faster due to fewer function calls. However, Python’s function call overhead is negligible for most use cases.\n\nWould you like any adjustments to the function names or logic?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 696,
+        "prompt_eval_duration": 55778700,
+        "eval_count": 776,
+        "eval_duration": 8361323900,
+        "total_duration": 8543702100,
+        "load_duration": 60849900,
+        "tokens_per_second": 92.8082692741995,
+        "time_to_first_token_ms": 55.7787,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "review-code-pr",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "code-review",
+        "python",
+        "quality"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Review this Python code as if it were a pull request.\nPoint out bugs, style issues, and suggest improvements:\n\ndef get_user_data(user_id):\n    import requests\n    resp = requests.get(f\"http://api.example.com/users/{user_id}\")\n    data = resp.json()\n    name = data['name']\n    email = data['email']\n    age = data['age']\n    if age < 0:\n        age = 0\n    return {\"name\": name, \"email\": email, \"age\": age, \"is_adult\": age >= 18}\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Here’s a detailed review of the provided Python code as if it were a pull request, covering bugs, style issues, and suggested improvements:\n\n---\n\n### **1. Bugs & Critical Issues**\n#### **a) No Error Handling for HTTP Requests**\n- **Issue**: The code does not handle potential failures in the `requests.get()` call (e.g., network errors, invalid URLs, 404/500 responses, or JSON parsing errors).\n- **Impact**: If the API fails, the code will crash with an unhandled exception (e.g., `requests.exceptions.RequestException` or `KeyError` if the response is malformed).\n- **Fix**:\n  ```python\n  try:\n      resp = requests.get(f\"http://api.example.com/users/{user_id}\")\n      resp.raise_for_status()  # Raises HTTPError for bad responses (4xx/500)\n      data = resp.json()\n  except requests.exceptions.RequestException as e:\n      print(f\"Failed to fetch user data: {e}\")\n      return None  # or raise a custom exception\n  ```\n\n#### **b) No Input Validation for `user_id`**\n- **Issue**: The `user_id` could be invalid (e.g., non-integer, negative, or empty), leading to incorrect API calls or errors.\n- **Impact**: The API might return unexpected results or reject the request.\n- **Fix**:\n  ```python\n  if not isinstance(user_id, int) or user_id <= 0:\n      raise ValueError(\"user_id must be a positive integer\")\n  ```\n\n#### **c) Hardcoded API URL**\n- **Issue**: The API endpoint (`http://api.example.com/users/`) is hardcoded, making the function inflexible for different environments (e.g., staging/production).\n- **Impact**: Refactoring or testing in different environments requires code changes.\n- **Fix**: Pass the API base URL as a parameter or use a configuration variable.\n\n#### **d) No Handling for Missing/Invalid JSON Keys**\n- **Issue**: If the API response lacks `name`, `email`, or `age`, the code will raise a `KeyError`.\n- **Impact**: Crashes during runtime.\n- **Fix**: Use `.get()` with defaults or validate the response structure.\n  ```python\n  name = data.get('name', 'Unknown')\n  email = data.get('email', '')\n  age = data.get('age', 0)  # Default to 0 if missing\n  ```\n\n#### **e) Negative Age Handling is Incomplete**\n- **Issue**: The code sets `age = 0` if negative, but this might not align with business logic (e.g., invalid data should be rejected or logged).\n- **Impact**: Silent data corruption.\n- **Fix**: Raise an exception or log a warning:\n  ```python\n  if age < 0:\n      raise ValueError(\"Invalid age value\")\n  ```\n\n---\n\n### **2. Style & Readability Issues**\n#### **a) Unnecessary Imports Inside Function**\n- **Issue**: Importing `requests` inside the function is inefficient and violates Python’s \"import at the top\" convention.\n- **Fix**: Move it to the module’s top-level imports.\n\n#### **b) Magic Strings for API URL**\n- **Issue**: Hardcoded strings like `http://api.example.com` are unmaintainable.\n- **Fix**: Use a constant or environment variable:\n  ```python\n  API_BASE_URL = \"http://api.example.com\"  # or os.getenv(\"API_BASE_URL\")\n  ```\n\n#### **c) No Type Hints**\n- **Issue**: Missing type annotations make the function harder to maintain and IDE support (e.g., autocompletion).\n- **Fix**:\n  ```python\n  from typing import Dict, Optional, Union\n\n  def get_user_data(user_id: int) -> Optional[Dict[str, Union[str, int, bool]]]:\n  ```\n\n#### **d) Inconsistent Return Type**\n- **Issue**: The function returns `None` on failure but a dict on success. This is confusing.\n- **Fix**: Return a consistent type (e.g., `Optional[Dict]` or raise exceptions).\n\n#### **e) No Docstring**\n- **Issue**: Missing documentation for the function’s purpose, parameters, and return value.\n- **Fix**:\n  ```python\n  def get_user_data(user_id: int) -> Optional[Dict[str, Union[str, int, bool]]]:\n      \"\"\"Fetch user data from the API.\n\n      Args:\n          user_id: Unique identifier for the user.\n\n      Returns:\n          A dictionary with user data (name, email, age, is_adult) if successful,\n          or None if the request fails.\n      \"\"\"\n  ```\n\n---\n\n### **3. Security Issues**\n#### **a) No Rate Limiting or Retry Logic**\n- **Issue**: The API might throttle or fail temporarily (e.g., due to high traffic).\n- **Impact**: Unreliable behavior.\n- **Fix**: Add retries with exponential backoff (e.g., using `tenacity` library).\n\n#### **b) No Timeout for HTTP Requests**\n- **Issue**: The request could hang indefinitely if the API is slow or unresponsive.\n- **Fix**: Add a timeout:\n  ```python\n  resp = requests.get(url, timeout=5)  # 5-second timeout\n  ```\n\n#### **c) No Authentication**\n- **Issue**: The API endpoint is unprotected, which is unsafe in production.\n- **Impact**: Data leaks or unauthorized access.\n- **Fix**: Add API keys or OAuth tokens:\n  ```python\n  headers = {\"Authorization\": f\"Bearer {API_KEY}\"}\n  resp = requests.get(url, headers=headers)\n  ```\n\n---\n\n### **4. Suggested Refactored Code**\n```python\nimport requests\nfrom typing import Dict, Optional, Union\n\n# Constants\nAPI_BASE_URL = \"http://api.example.com\"\nDEFAULT_TIMEOUT = 5  # seconds\n\ndef get_user_data(user_id: int) -> Optional[Dict[str, Union[str, int, bool]]]:\n    \"\"\"Fetch user data from the API.\n\n    Args:\n        user_id: Unique identifier for the user.\n\n    Returns:\n        A dictionary with user data (name, email, age, is_adult) if successful,\n        or None if the request fails.\n    \"\"\"\n    if not isinstance(user_id, int) or user_id <= 0:\n        raise ValueError(\"user_id must be a positive integer\")\n\n    url = f\"{API_BASE_URL}/users/{user_id}\"\n    try:\n        resp = requests.get(url, timeout=DEFAULT_TIMEOUT)\n        resp.raise_for_status()\n        data = resp.json()\n\n        # Validate required fields\n        name = data.get('name', 'Unknown')\n        email = data.get('email', '')\n        age = data.get('age', 0)\n\n        if age < 0:\n            raise ValueError(\"Invalid age value\")\n\n        return {\n            \"name\": name,\n            \"email\": email,\n            \"age\": age,\n            \"is_adult\": age >= 18\n        }\n    except requests.exceptions.RequestException as e:\n        print(f\"Failed to fetch user data: {e}\")\n        return None\n```\n\n---\n\n### **5. Additional Recommendations**\n1. **Logging**: Replace `print` with Python’s `logging` module for production.\n2. **Configuration**: Use environment variables (e.g., `os.getenv`) for `API_BASE_URL`.\n3. **Testing**: Add unit tests for edge cases (e.g., invalid `user_id`, API failures).\n4. **Error Types**: Raise specific exceptions (e.g., `APIError` for HTTP issues).\n5. **Caching**: Cache responses to avoid redundant API calls (e.g., using `functools.lru_cache`).\n\n---\n### **Summary of Changes**\n| Category          | Issue                          | Suggested Fix                                  |\n|-------------------|--------------------------------|-----------------------------------------------|\n| **Bugs**          | No error handling              | Add try-catch blocks                          |\n|                   | No input validation            | Validate `user_id` and JSON keys              |\n| **Style**         | Hardcoded API URL              | Use constants/environment variables           |\n|                   | No type hints                  | Add `typing` annotations                     |\n| **Security**      | No timeout/timeout             | Add `timeout` and authentication              |\n| **Maintainability** | No docstring                  | Add function documentation                   |\n\nWould you like me to elaborate on any of these points?"
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 672,
+        "prompt_eval_duration": 52972400,
+        "eval_count": 1794,
+        "eval_duration": 19445361100,
+        "total_duration": 19793375500,
+        "load_duration": 60937100,
+        "tokens_per_second": 92.25850786591975,
+        "time_to_first_token_ms": 52.9724,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "low",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "tradeoff-sql-nosql",
+      "category": "cross-domain",
+      "difficulty": "medium",
+      "tags": [
+        "databases",
+        "architecture",
+        "tradeoffs"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "You're building a social media platform. The core data includes\nuser profiles, posts, comments, and follower relationships.\nWould you use a relational database, a document store, or both?\nJustify your choice with specific tradeoffs for each data type.\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "For a **social media platform** with **user profiles, posts, comments, and follower relationships**, the optimal database architecture likely involves **a hybrid approach**—combining a **relational database (RDBMS)** for structured, relationship-heavy data and a **document store (NoSQL)** for flexible, semi-structured content. Below is a breakdown of the tradeoffs for each option and why a hybrid might be best.\n\n---\n\n### **1. Relational Database (RDBMS) – Best for Relationships & Transactions**\n**Use Cases in Social Media:**\n- **Follower relationships** (many-to-many: users ↔ followers).\n- **User profiles** (structured data like name, email, birthdate, account status).\n- **Comments & replies** (hierarchical relationships, e.g., a comment can have nested replies).\n- **Likes/shares** (atomic transactions to avoid race conditions).\n- **Moderation logs** (audit trails requiring ACID compliance).\n\n**Tradeoffs:**\n| **Pros**                          | **Cons**                          |\n|-----------------------------------|-----------------------------------|\n| **Strong consistency** (ACID)     | **Less flexible schema** (rigid tables). |\n| **Optimized for joins** (e.g., fetching a user + their followers). | **Scalability challenges** (vertical scaling, sharding complexity). |\n| **Better for complex queries** (e.g., \"find users who follow X and Y\"). | **Higher latency** at scale (compared to NoSQL). |\n| **Built-in security** (row-level permissions, referential integrity). | **Not ideal for unstructured data** (e.g., rich-text posts with embedded media). |\n\n**Example Schema:**\n```sql\n-- Users (structured)\nCREATE TABLE users (\n    user_id SERIAL PRIMARY KEY,\n    username VARCHAR(50) UNIQUE NOT NULL,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    created_at TIMESTAMP DEFAULT NOW()\n);\n\n-- Follow relationships (many-to-many)\nCREATE TABLE follows (\n    follower_id INT REFERENCES users(user_id),\n    followee_id INT REFERENCES users(user_id),\n    followed_at TIMESTAMP DEFAULT NOW(),\n    PRIMARY KEY (follower_id, followee_id)\n);\n\n-- Posts (could also use NoSQL for flexibility)\nCREATE TABLE posts (\n    post_id SERIAL PRIMARY KEY,\n    user_id INT REFERENCES users(user_id),\n    content TEXT,\n    created_at TIMESTAMP DEFAULT NOW()\n);\n```\n\n---\n\n### **2. Document Store (NoSQL) – Best for Flexible, Semi-Structured Data**\n**Use Cases in Social Media:**\n- **Posts/comments** (unstructured or nested data: text, images, videos, reactions, metadata).\n- **User-generated content** (e.g., rich-text posts with embedded media URLs, geolocation).\n- **Activity feeds** (time-ordered streams of posts/comments).\n- **User preferences** (e.g., dark mode, notification settings stored as key-value pairs).\n\n**Tradeoffs:**\n| **Pros**                          | **Cons**                          |\n|-----------------------------------|-----------------------------------|\n| **Schema flexibility** (e.g., add new fields without migrations). | **No native joins** (denormalize or use application-side joins). |\n| **Horizontal scalability** (sharding, replication). | **Eventual consistency** (risk of stale data). |\n| **Fast reads/writes for simple queries** (e.g., \"get user X’s posts\"). | **No built-in ACID** (harder for financial transactions). |\n| **Native support for hierarchical data** (e.g., comments with replies). | **Query complexity** (e.g., aggregating across collections). |\n\n**Example Document (MongoDB-style):**\n```json\n// User profile (flexible schema)\n{\n  \"_id\": \"user123\",\n  \"username\": \"john_doe\",\n  \"email\": \"john@example.com\",\n  \"preferences\": {\n    \"theme\": \"dark\",\n    \"notifications\": { \"email\": true, \"push\": false }\n  },\n  \"created_at\": \"2023-01-15T10:00:00Z\"\n}\n\n// Post (nested comments)\n{\n  \"_id\": \"post456\",\n  \"user_id\": \"user123\",\n  \"content\": \"Check out this photo!\",\n  \"media\": [\"image1.jpg\", \"image2.jpg\"],\n  \"comments\": [\n    {\n      \"user_id\": \"user789\",\n      \"text\": \"Nice!\",\n      \"replies\": [\n        { \"user_id\": \"user101\", \"text\": \"Agreed!\" }\n      ]\n    }\n  ]\n}\n```\n\n---\n\n### **3. Hybrid Approach: Best of Both Worlds**\n**Why Combine Them?**\n- **Relational DB** handles **relationships** (followers, likes) and **transactions** (e.g., updating a user’s email).\n- **Document Store** handles **content** (posts, comments) and **flexible schemas** (e.g., adding a \"poll\" field to a post later).\n- **Separation of concerns**:\n  - **RDBMS** = \"Who follows whom?\" (structured).\n  - **NoSQL** = \"What’s in a post?\" (unstructured).\n\n**Architecture Example:**\n1. **Primary Key Lookup**:\n   - Use the **RDBMS** to fetch a user’s ID → then fetch their posts/comments from **NoSQL**.\n2. **Relationship Queries**:\n   - Use **RDBMS joins** for follower graphs (e.g., \"show me users who follow both A and B\").\n3. **Content Queries**:\n   - Use **NoSQL** for full-text search (e.g., \"find posts with #travel\") or nested data (e.g., comment threads).\n4. **Eventual Consistency**:\n   - Cache frequently accessed data (e.g., user profiles) in Redis to reduce DB load.\n\n**Tools to Consider:**\n- **RDBMS**: PostgreSQL (with JSONB for hybrid flexibility), MySQL.\n- **NoSQL**: MongoDB (document), Cassandra (wide-column for feeds), or Firebase/Firestore (serverless).\n- **Caching**: Redis (for hot data like trending posts).\n- **Search**: Elasticsearch (for full-text search on posts/comments).\n\n---\n\n### **When to Avoid a Hybrid?**\n- **Small-scale apps**: A single RDBMS (e.g., PostgreSQL) might suffice if relationships dominate.\n- **Read-heavy feeds**: If 90% of queries are \"show me my timeline,\" a **wide-column store** (e.g., Cassandra) or **time-series DB** (e.g., InfluxDB) could replace NoSQL.\n- **Strict compliance**: If you need **ACID for all operations** (e.g., banking-like transactions), stick with RDBMS.\n\n---\n### **Key Tradeoffs Summary**\n| **Database Type**       | **Best For**                          | **Worst For**                          | **Social Media Fit**               |\n|-------------------------|---------------------------------------|----------------------------------------|------------------------------------|\n| **Relational (RDBMS)**  | Relationships, transactions, joins    | Unstructured data, schema changes      | Followers, user data, likes        |\n| **Document Store**      | Flexible content, nested data         | Complex joins, strict consistency      | Posts, comments, activity feeds    |\n| **Hybrid**              | Balanced needs (relationships + content) | Complexity in integration          | **Recommended for most social apps** |\n\n---\n### **Final Recommendation**\nStart with a **hybrid design**:\n1. **PostgreSQL** (for users, follows, and simple posts) + **MongoDB** (for rich posts/comments).\n2. **Optimize for reads**: Cache hot data (e.g., user profiles) in Redis.\n3. **Scale horizontally**: Shard NoSQL collections by user ID; partition RDBMS tables (e.g., by region).\n4. **Monitor and adapt**: Use tools like **Prometheus** to track query performance and adjust.\n\nThis gives you **scalability**, **flexibility**, and **consistency** where it matters most."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 604,
+        "prompt_eval_duration": 34511800,
+        "eval_count": 1745,
+        "eval_duration": 18909687900,
+        "total_duration": 19202231100,
+        "load_duration": 61868400,
+        "tokens_per_second": 92.28074039233613,
+        "time_to_first_token_ms": 34.5118,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    },
+    {
+      "prompt_id": "tradeoff-mono-micro",
+      "category": "cross-domain",
+      "difficulty": "hard",
+      "tags": [
+        "architecture",
+        "tradeoffs",
+        "design"
+      ],
+      "options_used": {
+        "temperature": 0.0,
+        "seed": 42,
+        "top_p": 1.0,
+        "num_predict": 4096,
+        "num_ctx": 32768,
+        "think": null
+      },
+      "request": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "A startup has a monolithic Python application that's becoming\nhard to maintain. The CTO wants to move to microservices.\nPresent a balanced argument: what are the real benefits,\nwhat are the hidden costs, and what would you recommend\nfor a team of 5 engineers?\n"
+          }
+        ]
+      },
+      "response": {
+        "message": {
+          "role": "assistant",
+          "content": "Moving from a monolithic Python application to a microservices architecture is a significant architectural shift that can bring substantial benefits—but also introduces complexity, costs, and operational challenges. Below is a **balanced breakdown** of the pros, cons, and recommendations tailored to a team of **5 engineers**.\n\n---\n\n### **1. Real Benefits of Microservices**\n#### **A. Scalability & Flexibility**\n- **Independent Scaling**: Microservices allow scaling only the components that need it (e.g., a high-traffic API vs. a background job processor).\n- **Tech Stack Diversity**: Teams can choose the best tools for each service (e.g., Python for ML, Go for high-performance APIs).\n- **Easier Adoption of New Tech**: Experiment with new frameworks/languages without risking the entire system.\n\n#### **B. Fault Isolation**\n- A failure in one service (e.g., payment processing) doesn’t crash the entire app (e.g., user profiles remain available).\n- Easier debugging and rollback (fail one service, not the whole monolith).\n\n#### **C. Team Autonomy & Ownership**\n- Smaller teams can own end-to-end responsibilities for a service (dev → test → deploy → monitor).\n- Encourages **modular development** and **cross-functional collaboration**.\n\n#### **D. DevOps & CI/CD Benefits**\n- Independent deployments mean faster iterations (e.g., deploy a bug fix to the auth service without touching the UI).\n- Can use different deployment strategies per service (e.g., blue-green for critical services, canary for experimental ones).\n\n#### **E. Future-Proofing**\n- Easier to modularize new features (e.g., adding a blockchain service later).\n- Vendor lock-in is reduced (e.g., switch from AWS to GCP for a specific service).\n\n---\n\n### **2. Hidden Costs & Challenges**\n#### **A. Increased Complexity**\n- **Distributed Systems Problems**:\n  - **Network Latency**: Services must communicate (REST/gRPC), adding overhead.\n  - **Data Consistency**: Managing transactions across services (e.g., saga pattern, eventual consistency).\n  - **Service Discovery**: How do services find each other? (Consul, Eureka, Kubernetes DNS?)\n- **Debugging**: Traces (e.g., OpenTelemetry) and logging (ELK, Loki) become critical but harder to set up.\n\n#### **B. Operational Overhead**\n- **Infrastructure Management**:\n  - Need for **orchestration** (Kubernetes, Docker Swarm) or **serverless** (AWS Lambda, GCP Cloud Run).\n  - Monitoring (Prometheus, Grafana) and alerting (Alertmanager) become mandatory.\n- **Security**:\n  - More attack surfaces (API gateways, service mesh like Istio, OAuth2/OIDC per service).\n  - Secrets management (Vault, AWS Secrets Manager).\n- **Data Management**:\n  - Database per service? Shared DB? How to handle joins?\n  - Event sourcing/CQRS for complex transactions.\n\n#### **C. Development & Tooling Costs**\n- **Polyglot Persistence**: Different services may need different databases (PostgreSQL, MongoDB, Redis).\n- **Testing**:\n  - Unit tests are easier, but **integration tests** (mocking services) and **contract tests** (OpenAPI/Swagger) add complexity.\n- **CI/CD Pipeline**:\n  - Need separate pipelines for each service (or a unified one with gating).\n  - Canary deployments and feature flags become essential.\n\n#### **D. Team Dynamics**\n- **Smaller Teams = More Context Switching**:\n  - A team of 5 may struggle with **too many services** (rule of thumb: aim for **5–7 services max** for a small team).\n- **Knowledge Silos**:\n  - Each service’s tech stack must be well-documented (e.g., \"Why did we pick FastAPI over Flask for this service?\").\n- **Cultural Shift**:\n  - Requires **strong ownership culture** (no \"throw it over the wall\" to another team).\n\n#### **E. Performance & Cost**\n- **Cold Starts**: Serverless microservices may have latency spikes.\n- **Cloud Costs**: More services = more containers, more networking, more managed services (e.g., Redis, Kafka).\n- **Observability Costs**: Tools like Datadog or New Relic add to the bill.\n\n---\n\n### **3. Recommendations for a Team of 5 Engineers**\n#### **Step 1: Assess the Monolith’s Pain Points**\n- **Profile the app**: Use tools like **Py-Spy** or **cProfile** to identify bottlenecks.\n- **Ask**:\n  - Are deployments slow because of the entire app?\n  - Is the codebase too large (>100K lines) or too tightly coupled?\n  - Are you adding features slowly due to risk?\n\n#### **Step 2: Start Small (Strangler Pattern)**\n- **Don’t rip-and-replace**. Use the **Strangler Fig Pattern**:\n  1. **Identify a replaceable module** (e.g., user auth, payment processing).\n  2. **Build a microservice for it** (e.g., FastAPI + PostgreSQL).\n  3. **Gradually shift traffic** from the monolith to the new service.\n  4. **Decommission the old code** once the new service is stable.\n- **Example Roadmap**:\n  | Phase       | Action                                                                 |\n  |-------------|-------------------------------------------------------------------------|\n  | **Week 1-2** | Pick 1 service (e.g., auth) + containerize it (Docker).                |\n  | **Week 3-4** | Build a lightweight API gateway (e.g., Kong, Traefik).                 |\n  | **Week 5+**  | Add monitoring (Prometheus + Grafana) and CI/CD (GitHub Actions).      |\n\n#### **Step 3: Choose the Right Tools (Minimal Viable Microservices)**\n| Category          | Recommendation                                                                 |\n|-------------------|-------------------------------------------------------------------------------|\n| **Orchestration** | Start with **Docker + Docker Compose** (no Kubernetes yet).                  |\n| **API Gateway**   | **Traefik** (simple) or **Kong** (enterprise features).                     |\n| **Service Mesh**  | Skip initially; use **gRPC with HTTP/2** for inter-service calls.            |\n| **Database**      | Start with **PostgreSQL per service** (avoid shared DBs).                    |\n| **Monitoring**    | **Prometheus + Grafana** (metrics) + **Loki** (logs).                       |\n| **CI/CD**         | **GitHub Actions** or **GitLab CI** (avoid complex pipelines).               |\n| **Observability** | **OpenTelemetry** for distributed tracing (later).                          |\n\n#### **Step 4: Team Structure**\n- **Option 1: Shared Ownership (Best for Small Teams)**\n  - All 5 engineers work on all services but own **one service each** for end-to-end responsibility.\n  - Use **feature flags** to toggle services on/off.\n- **Option 2: Dedicated Teams (If Scaling Later)**\n  - Later, split into **frontend, auth, payments, etc.** teams (but not yet—too small).\n\n#### **Step 5: Avoid Common Pitfalls**\n- **Don’t Over-Engineer**:\n  - Avoid **service mesh** (Istio/Linkerd) unless you have **10+ services**.\n  - Avoid **eventual consistency** unless you need it (start with **synchronous calls**).\n- **Keep the Monolith for Shared Logic**:\n  - Shared libraries (e.g., logging, auth helpers) can stay in the monolith.\n- **Document Everything**:\n  - **Service contracts** (OpenAPI specs).\n  - **On-call rotations** (who owns which service?).\n\n#### **Step 6: Metrics for Success**\nTrack these **before/after** to justify the shift:\n| Metric               | Goal                                                                 |\n|----------------------|----------------------------------------------------------------------|\n| **Deployment Frequency** | Deploy services **daily** (vs. monolith deployments every 2 weeks). |\n| **Mean Time to Recovery (MTTR)** | Fail a service; recover in **<1 hour**.                          |\n| **Team Velocity**    | Add **2x features** in the same time (due to parallel work).       |\n| **Debugging Time**   | Fix a bug in **<1 hour** (vs. 4 hours in monolith).                |\n\n---\n\n### **4. When NOT to Move to Microservices**\n- **Your app is small** (<10K LoC, <5 engineers).\n- **You lack DevOps expertise** (no experience with Docker/K8s).\n- **Your team is already overloaded** (adding complexity will slow you down).\n- **You don’t have observability tools** (you can’t debug distributed systems without them).\n\n---\n### **5. Sample Timeline for 5 Engineers**\n| Phase               | Duration | Focus                                                                 |\n|---------------------|----------|----------------------------------------------------------------------|\n| **Discovery**       | 2 weeks  | Profile monolith, pick first service, set up Docker.                 |\n| **Build Service 1** | 4 weeks  | Containerize auth service, add API gateway, CI/CD.                   |\n| **Observability**   | 3 weeks  | Prometheus + Grafana, basic tracing.                                |\n| **Strangler**       | 6 weeks  | Shift traffic from monolith to new service.                         |\n| **Expand**          | Ongoing  | Add 1 service/month (e.g., payments, notifications).                 |\n\n---\n### **Final Verdict: Should You Do It?**\n✅ **Yes, if**:\n- Your monolith is **slow to deploy** or **hard to scale**.\n- You have **5+ engineers** who can handle complexity.\n- You’re okay with **short-term pain** for **long-term flexibility**.\n\n❌ **No, if**:\n- Your team is **smaller than 5** or **overloaded**.\n- You **lack DevOps/monitoring experience**.\n- The **business case isn’t clear** (e.g., no clear scalability needs).\n\n---\n### **Alternative: Hybrid Approach**\nIf full microservices feel risky, try:\n1. **Modular Monolith**: Split the codebase into **packages/modules** (e.g., `auth/`, `payments/`) but keep one deployment.\n2. **Serverless Microservices**: Use **AWS Lambda** or **Cloud Run** for stateless services (e.g., APIs).\n3. **Domain-Driven Design (DDD)**: Model services around **bounded contexts** (e.g., \"User Management\" vs. \"Order Processing\").\n\n---\n### **Key Takeaway**\nMicroservices **can** help, but **only if**:\n- You **start small** (Strangler Pattern).\n- You **invest in observability** (monitoring, tracing, logging).\n- You **accept short-term complexity** for long-term agility.\n\nFor 5 engineers, **start with 1–2 services**, keep the rest in the monolith, and **measure success** before scaling."
+        },
+        "done_reason": "stop"
+      },
+      "metrics": {
+        "prompt_eval_count": 610,
+        "prompt_eval_duration": 35392100,
+        "eval_count": 2398,
+        "eval_duration": 26135986600,
+        "total_duration": 26529441700,
+        "load_duration": 60913600,
+        "tokens_per_second": 91.75088879177801,
+        "time_to_first_token_ms": 35.3921,
+        "peak_vram_bytes": null
+      },
+      "contamination_risk": "high",
+      "strategy": null,
+      "correct": null,
+      "expected_answer": null,
+      "validation_passed": null,
+      "validation_reason": null,
+      "stopped_reason": null,
+      "tool_use_metrics": null
+    }
+  ],
+  "summary": {
+    "total_prompts": 28,
+    "completed": 28,
+    "failed": 0,
+    "total_duration_s": 359.78,
+    "avg_tokens_per_second": 92.84
+  }
+}
