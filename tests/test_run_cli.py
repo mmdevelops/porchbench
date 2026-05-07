@@ -151,14 +151,16 @@ class TestParseSetOverrides:
         assert out == {"custom": "a=b=c"}
 
     def test_missing_equals_raises(self):
-        from porchbench.cli import parse_set_overrides
         import typer
+
+        from porchbench.cli import parse_set_overrides
         with pytest.raises(typer.BadParameter):
             parse_set_overrides(["thinkfalse"])
 
     def test_empty_key_raises(self):
-        from porchbench.cli import parse_set_overrides
         import typer
+
+        from porchbench.cli import parse_set_overrides
         with pytest.raises(typer.BadParameter):
             parse_set_overrides(["=false"])
 

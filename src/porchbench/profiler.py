@@ -13,6 +13,7 @@ import json
 import platform
 import subprocess
 import time
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from itertools import combinations
 from pathlib import Path

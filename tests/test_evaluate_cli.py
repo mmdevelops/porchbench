@@ -9,22 +9,6 @@ import pytest
 from typer.testing import CliRunner
 
 from porchbench.cli import app
-
-
-@pytest.fixture(autouse=True)
-def _stub_evaluator_resolution():
-    """Skip the eval-model picker and ollama model preflight in CLI tests.
-
-    These tests exercise the evaluate command's orchestration around scoring,
-    not the model-resolution UX (which has its own dedicated tests). Without
-    this stub, every test invocation would hang in the interactive picker
-    because no Ollama server is running.
-    """
-    with (
-        patch("porchbench.cli.resolve_eval_model_or_exit", return_value="stub-judge"),
-        patch("porchbench.cli.check_models_or_exit"),
-    ):
-        yield
 from porchbench.schemas import (
     AggregateScores,
     Criterion,
@@ -45,6 +29,23 @@ from porchbench.schemas import (
     Scorecard,
     SuiteReference,
 )
+
+
+@pytest.fixture(autouse=True)
+def _stub_evaluator_resolution():
+    """Skip the eval-model picker and ollama model preflight in CLI tests.
+
+    These tests exercise the evaluate command's orchestration around scoring,
+    not the model-resolution UX (which has its own dedicated tests). Without
+    this stub, every test invocation would hang in the interactive picker
+    because no Ollama server is running.
+    """
+    with (
+        patch("porchbench.cli.resolve_eval_model_or_exit", return_value="stub-judge"),
+        patch("porchbench.cli.check_models_or_exit"),
+    ):
+        yield
+
 
 runner = CliRunner()
 

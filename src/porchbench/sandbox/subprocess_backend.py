@@ -159,14 +159,14 @@ class SubprocessSandbox(Sandbox):
                 stderr=stderr_bytes.decode("utf-8", errors="replace"),
                 exit_code=proc.returncode if proc.returncode is not None else -1,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Kill the child + drain (or short-window-wait if drain itself
             # hangs after the kill — rare but seen on Windows when the
             # child has spawned grandchildren that hold the pipe handles).
             proc.kill()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=2)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             return ExecutionResult(
                 stdout="",

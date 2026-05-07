@@ -25,7 +25,6 @@ from porchbench.sandbox.base import (
 )
 from porchbench.schemas import ModelOptions, PromptMetrics, compute_derived_metrics
 
-
 _TOOL_CALL_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```\s*$")
 _JSON_OPENER_RE = re.compile(r"[\{\[]")
 

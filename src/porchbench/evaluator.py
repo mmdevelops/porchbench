@@ -854,11 +854,11 @@ def write_scorecard(scorecard: Scorecard, output_dir: str | Path = "scorecards")
 
 async def batch_evaluate_results(
     result_paths: list[Path],
-    eval_backend: "EvalBackend",
+    eval_backend: EvalBackend,
     backend_label: str,
     output_dir: Path,
     explicit_rubric_path: Path | None = None,
-    rubrics_by_category: dict[str, "Rubric"] | None = None,
+    rubrics_by_category: dict[str, Rubric] | None = None,
     skip_scored: bool = False,
 ) -> list[tuple[str, str, float | None]]:
     """Score N result files sequentially with one evaluator backend instance.
@@ -973,11 +973,11 @@ async def batch_evaluate_results(
 
 def batch_evaluate_results_sync(
     result_paths: list[Path],
-    eval_backend: "EvalBackend",
+    eval_backend: EvalBackend,
     backend_label: str,
     output_dir: Path,
     explicit_rubric_path: Path | None = None,
-    rubrics_by_category: dict[str, "Rubric"] | None = None,
+    rubrics_by_category: dict[str, Rubric] | None = None,
     skip_scored: bool = False,
 ) -> list[tuple[str, str, float | None]]:
     """Synchronous wrapper around `batch_evaluate_results`.

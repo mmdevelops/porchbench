@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from porchbench.errors import UserError, translate_inference_error
 
 

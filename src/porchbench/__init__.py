@@ -19,8 +19,8 @@ from porchbench.evaluator import (
 )
 from porchbench.schemas import (
     PromptScore,
-    Rubric,
     RoutingAnalysis,
+    Rubric,
     RunResult,
     Scorecard,
     Suite,

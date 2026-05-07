@@ -16,7 +16,6 @@ import pytest
 from porchbench.sandbox.validator_dispatch import build_validator
 from porchbench.sandbox.validators import (
     CompositeValidator,
-    ContentContainsValidator,
     CsvRowCountValidator,
     FileExistsValidator,
 )

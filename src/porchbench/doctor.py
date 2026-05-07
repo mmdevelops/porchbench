@@ -12,7 +12,7 @@ import os
 import shutil
 import sys
 from dataclasses import asdict, dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 import httpx
 from rich.console import Console
@@ -26,7 +26,7 @@ from porchbench.profiler import (
 )
 
 
-class CheckStatus(str, Enum):
+class CheckStatus(StrEnum):
     OK = "ok"
     WARN = "warn"
     FAIL = "fail"

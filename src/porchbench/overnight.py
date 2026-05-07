@@ -27,7 +27,7 @@ from porchbench.profiler import detect_gpu
 from porchbench.routing import run_discovery
 from porchbench.runner import run_suite
 from porchbench.schemas import RunResult, Strategy, Suite, SuiteReference, slugify_suite_name
-from porchbench.suite import load_suite, make_suite_reference, suite_has_strategies
+from porchbench.suite import load_suite, make_suite_reference
 
 console = Console()
 

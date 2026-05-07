@@ -31,7 +31,6 @@ from porchbench.assets import (
     find_rubric,
     find_suite,
     resolve_rubric_dir,
-    resolve_suite_dir,
 )
 from porchbench.backend import InferenceBackend, OllamaBackend, OpenAICompatBackend
 from porchbench.display import format_validation_badge

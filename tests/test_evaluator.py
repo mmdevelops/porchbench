@@ -363,7 +363,7 @@ class TestEmptyContentHandling:
     @pytest.mark.asyncio
     async def test_length_truncated_empty_content_scores_zero(self):
         from porchbench.evaluator import evaluate_run
-        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+        from porchbench.schemas import ModelInfo, RunMetadata, RunResult, RunSummary, SuiteReference
 
         # Two prompts: one with real content, one truncated with empty content
         good = _make_prompt_result(
@@ -418,7 +418,7 @@ class TestEmptyContentHandling:
         """done_reason=stop + empty content = model returned nothing. Same zero
         treatment as length-truncation, but with a different rationale tag."""
         from porchbench.evaluator import evaluate_run
-        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+        from porchbench.schemas import ModelInfo, RunMetadata, RunResult, RunSummary, SuiteReference
 
         empty = _make_prompt_result(
             prompt_id="p-empty",
@@ -451,7 +451,7 @@ class TestEmptyContentHandling:
         indicate the inference itself failed, not a model producing a bad answer.
         Those stay filtered out."""
         from porchbench.evaluator import evaluate_run
-        from porchbench.schemas import RunMetadata, RunResult, RunSummary, SuiteReference, ModelInfo
+        from porchbench.schemas import ModelInfo, RunMetadata, RunResult, RunSummary, SuiteReference
 
         errored = _make_prompt_result(
             prompt_id="p-error",
@@ -822,7 +822,11 @@ class TestNoEligibleHarnessRun:
     async def test_evaluate_run_emits_empty_scorecard_for_harness_results(self, capsys):
         from porchbench.evaluator import evaluate_run
         from porchbench.schemas import (
-            ModelInfo, RunMetadata, RunResult, RunSummary, SuiteReference,
+            ModelInfo,
+            RunMetadata,
+            RunResult,
+            RunSummary,
+            SuiteReference,
         )
 
         # All results have harness-style done_reasons; none are eligible.

@@ -424,7 +424,6 @@ class TestCheckVramCofit:
     @pytest.mark.asyncio
     async def test_cofit_fits_in_vram(self):
         """qwen2.5:3b (2 GB) + gemma4:e2b (2 GB) + 1.5 GB headroom < 16 GB."""
-        import asyncio as _asyncio
         from porchbench.backend import OllamaBackend
         from porchbench.overnight import check_vram_cofit
 
@@ -504,8 +503,8 @@ class TestCheckVramCofit:
 
     @pytest.mark.asyncio
     async def test_skips_for_non_ollama_backend(self):
-        from porchbench.overnight import check_vram_cofit
         from porchbench.backend import OpenAICompatBackend
+        from porchbench.overnight import check_vram_cofit
 
         backend = MagicMock(spec=OpenAICompatBackend)
         ok, msg = await check_vram_cofit(backend, ["x"], "y")
