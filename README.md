@@ -1,12 +1,20 @@
 # porchbench
 
 [![PyPI version](https://img.shields.io/pypi/v/porchbench.svg)](https://pypi.org/project/porchbench/)
+[![CI](https://github.com/mmdevelops/porchbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mmdevelops/porchbench/actions/workflows/ci.yml)
 [![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/porchbench/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/mmdevelops/porchbench/blob/main/LICENSE)
 
 Rigorous quality benchmarking for local LLMs. Measures what actually matters when choosing between models, quantization levels, and prompt strategies on your own hardware — with real statistics, not vibes.
 
 Most local LLM benchmarks measure tokens/sec. Model cards report scores on standard academic benchmarks under ideal conditions. Neither tells you whether Qwen 14B Q4 or Qwen 8B Q8 is the better choice for *your* GPU and *your* workload. porchbench does.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mmdevelops/porchbench/main/docs/assets/compare-coding-basics-summary.svg"
+       alt="porchbench compare output: Model Summary and Paired Comparison tables for ministral-3:8b vs granite4.1:8b — average scores 4.94 vs 4.86, Wilcoxon p=0.0734, Cohen's dz 0.363 (small), 95% CI [0.0125, 0.1839]">
+</p>
+
+<p align="center"><sub><code>porchbench compare</code> on two 8B models — the 0.09-point score gap gets a significance test, a confidence interval, and an effect size, not just a leaderboard rank. <a href="https://github.com/mmdevelops/porchbench/blob/main/docs/assets/compare-coding-basics.svg">Full per-prompt comparison →</a></sub></p>
 
 ## What it does
 
@@ -39,6 +47,19 @@ results/<timestamp>_<suite>_<model>.json
 ```
 
 Every later step (`evaluate`, `compare`, `leaderboard`) reads these files. If you don't want to type the filename, pass no `--result` flag to any command and you'll get an interactive picker.
+
+**No GPU or Ollama handy?** The repo bundles real run artifacts, so you can exercise the analysis pipeline without running any inference:
+
+```bash
+git clone https://github.com/mmdevelops/porchbench && cd porchbench
+porchbench compare \
+  -r examples/run-result_coding-basics_ministral-3-8b.json \
+  -r examples/run-result_coding-basics_granite4.1-8b.json \
+  --scorecard examples/scorecard_coding-basics_ministral-3-8b.json \
+  --scorecard examples/scorecard_coding-basics_granite4.1-8b.json
+```
+
+This prints the comparison shown above — paired statistics included.
 
 ### Evaluate quality with an LLM judge
 
@@ -183,6 +204,7 @@ src/porchbench/        Python package
 
 - [METHODOLOGY.md](https://github.com/mmdevelops/porchbench/blob/main/docs/reference/METHODOLOGY.md) — statistical framework, evaluation methods, debiasing, reproducibility standards
 - [CHANGELOG.md](https://github.com/mmdevelops/porchbench/blob/main/CHANGELOG.md) — release notes and known limitations
+- [examples/](https://github.com/mmdevelops/porchbench/tree/main/examples) — real run artifacts (results, scorecards, routing analysis) covering every public schema; feed them to `compare`/`evaluate` or use them to test code that consumes porchbench output
 - [docs/skills/](https://github.com/mmdevelops/porchbench/tree/main/docs/skills) — Claude Code skill templates for using your subscription as an evaluation backend
 
 ## Configuration

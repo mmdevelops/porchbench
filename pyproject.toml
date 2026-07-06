@@ -76,6 +76,8 @@ packages = ["src/porchbench"]
 [tool.hatch.build.targets.sdist]
 exclude = [
     ".github/",
+    # README-only imagery; keeps the published sdist free of doc assets
+    "docs/assets/",
 ]
 
 [tool.ruff]
