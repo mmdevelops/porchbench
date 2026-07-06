@@ -410,7 +410,7 @@ class TestAnalyzeRoutesCli:
         assert "needs at least 2 distinct models" in res.output
         assert "only-model:7b" in res.output
 
-    def test_picker_filters_to_routing_discovery_files(self, tmp_path):
+    def test_picker_filters_to_routing_discovery_files(self, tmp_path, monkeypatch):
         """The interactive picker for `routes analyze` must hide non-routing
         result files so users can't accidentally pick a regular `run` output.
         Filter is a pure content check (`results[0].strategy` non-null) —
@@ -424,22 +424,22 @@ class TestAnalyzeRoutesCli:
 
         non_routing = _build_run("m1", strategy_assignments=[None])
 
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        # Non-routing filename — should be filtered by name
+        (results_dir / "2026-04-30T01-00-00_coding-basics_m1.json").write_text(
+            non_routing.model_dump_json(), encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
-            from pathlib import Path as _Path
-            iso_results = _Path(cwd) / "results"
-            iso_results.mkdir()
-            # Non-routing filename — should be filtered by name
-            (iso_results / "2026-04-30T01-00-00_coding-basics_m1.json").write_text(
-                non_routing.model_dump_json(), encoding="utf-8",
-            )
-            res = runner.invoke(app, ["analyze-routes"])
+        res = runner.invoke(app, ["analyze-routes"])
 
         assert res.exit_code == 1
         assert "No routing-discovery result files found" in res.output
         assert "AttributeError" not in res.output
 
-    def test_picker_excludes_filename_match_with_no_strategy_tags(self, tmp_path):
+    def test_picker_excludes_filename_match_with_no_strategy_tags(self, tmp_path, monkeypatch):
         """When a suite literally named `routing-discovery` got run via plain
         `porchbench run`, the resulting filename matches `_routing-discovery_`
         but the contents have no strategy tags. The picker filter must drop
@@ -454,15 +454,15 @@ class TestAnalyzeRoutesCli:
         # have NO strategy tags — produced by `porchbench run -s routing-discovery`
         non_routing_named_routing = _build_run("gemma4:e2b", strategy_assignments=[None])
 
+        results_dir = tmp_path / "results"
+        results_dir.mkdir()
+        (results_dir / "2026-04-28T16-49-00_routing-discovery_gemma4-e2b.json").write_text(
+            non_routing_named_routing.model_dump_json(), encoding="utf-8",
+        )
+        monkeypatch.chdir(tmp_path)
+
         runner = CliRunner()
-        with runner.isolated_filesystem(temp_dir=tmp_path) as cwd:
-            from pathlib import Path as _Path
-            iso_results = _Path(cwd) / "results"
-            iso_results.mkdir()
-            (iso_results / "2026-04-28T16-49-00_routing-discovery_gemma4-e2b.json").write_text(
-                non_routing_named_routing.model_dump_json(), encoding="utf-8",
-            )
-            res = runner.invoke(app, ["analyze-routes"])
+        res = runner.invoke(app, ["analyze-routes"])
 
         # The file was filtered out (content check rejected it), so no
         # routing-discovery results are available — friendly empty message
