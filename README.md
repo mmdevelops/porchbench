@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/porchbench.svg)](https://pypi.org/project/porchbench/)
 [![CI](https://github.com/mmdevelops/porchbench/actions/workflows/ci.yml/badge.svg)](https://github.com/mmdevelops/porchbench/actions/workflows/ci.yml)
-[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/porchbench/)
+[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://pypi.org/project/porchbench/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/mmdevelops/porchbench/blob/main/LICENSE)
 
 Rigorous quality benchmarking for local LLMs. Measures what actually matters when choosing between models, quantization levels, and prompt strategies on your own hardware — with real statistics, not vibes.
