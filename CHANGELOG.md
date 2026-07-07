@@ -8,6 +8,9 @@ Pre-1.0: expect breaking changes between minor versions.
 
 ## [Unreleased]
 
+### Added
+- Python 3.14 support: CI tests 3.11–3.14 (the Windows job now runs 3.14); trove classifier and README badge updated.
+
 ### Changed
 - Packaging: the sdist now excludes `docs/assets/` (README-page imagery added after 0.1.0; installed package contents are unchanged).
 
