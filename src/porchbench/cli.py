@@ -7,6 +7,7 @@ Loads .env from the working directory for persistent configuration.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -1093,9 +1094,22 @@ def evaluate(
         bool,
         typer.Option("--skip-scored", help="Skip result files that already have a scorecard in output-dir (matched by run_id prefix)."),
     ] = False,
+    judge_samples: Annotated[
+        int | None,
+        typer.Option("--judge-samples", envvar="PORCHBENCH_JUDGE_SAMPLES", help="Judge samples per response; the score is the mean. Defaults: ollama=5, api/claude-code=1 (single pass)."),
+    ] = None,
+    judge_temp: Annotated[
+        float,
+        typer.Option("--judge-temp", envvar="PORCHBENCH_JUDGE_TEMP", help="Judge sampling temperature when --judge-samples > 1 (single-pass scoring always uses temperature 0)."),
+    ] = 0.3,
+    judge_seed: Annotated[
+        int,
+        typer.Option("--judge-seed", envvar="PORCHBENCH_JUDGE_SEED", help="Base judge seed; sample i uses seed+i."),
+    ] = 42,
 ) -> None:
     """Score one or more model responses for quality using an LLM-as-judge evaluator."""
     from porchbench.evaluator import (
+        JUDGE_SAMPLES_DEFAULTS,
         AnthropicEvalBackend,
         ClaudeCodeEvalBackend,
         OllamaEvalBackend,
@@ -1123,6 +1137,18 @@ def evaluate(
     console.print(
         "  [dim](override with --evaluator <name> or set PORCHBENCH_EVAL_MODEL)[/dim]"
     )
+
+    resolved_samples = (
+        judge_samples if judge_samples is not None
+        else JUDGE_SAMPLES_DEFAULTS.get(backend, 1)
+    )
+    if resolved_samples > 1:
+        console.print(
+            f"Judge sampling: [cyan]mean of {resolved_samples}[/cyan] "
+            f"@ temp {judge_temp}, seeds {judge_seed}..{judge_seed + resolved_samples - 1}"
+        )
+    else:
+        console.print("Judge sampling: [cyan]single pass[/cyan] @ temp 0")
 
     # Interactive selection when args omitted
     if not merged_paths:
@@ -1239,6 +1265,9 @@ def evaluate(
                     evaluator_label=backend_label,
                     rubrics_by_category=rubrics_by_category,
                     calibration_data=calibration_data or None,
+                    judge_samples=resolved_samples,
+                    judge_temp=judge_temp,
+                    judge_seed=judge_seed,
                 )
             )
             written = write_scorecard(scorecard, output_dir)
@@ -1283,6 +1312,101 @@ def evaluate(
         console.print(f"\n[bold]{scored} scored, {skipped} skipped, {failed} failed[/bold]")
         if failed > 0:
             raise typer.Exit(code=1)
+
+
+@app.command()
+def reliability(
+    scorecard_paths: Annotated[
+        list[Path],
+        typer.Argument(
+            help=(
+                "Scorecard JSON file(s). One scorecard with per-sample data "
+                "(from evaluate --judge-samples k) analyzes the samples; "
+                "several scorecards of the SAME run treat each file as one "
+                "judge pass, matched by prompt_id."
+            )
+        ),
+    ],
+    per_criterion: Annotated[
+        bool,
+        typer.Option("--per-criterion", help="Also report ICC per rubric criterion (per-sample scorecards only)."),
+    ] = False,
+    tolerance: Annotated[
+        float,
+        typer.Option("--within", help="Agreement tolerance for the %-within companion metric (score points)."),
+    ] = 1.0,
+) -> None:
+    """Judge-reliability report: ICC with CI, agreement companions, and the >0.75 gate.
+
+    ICC alone can't tell a noisy judge from a saturated suite — the report
+    pairs it with variance-independent companions so the two failure modes
+    are distinguishable.
+    """
+    from porchbench.reliability import (
+        analyze_matrix,
+        matrix_from_samples,
+        matrix_from_scorecards,
+        print_reliability_report,
+    )
+
+    scorecards = []
+    for sp in scorecard_paths:
+        scorecards.append(load_json_model(sp, Scorecard, "scorecard"))
+
+    if len(scorecards) == 1:
+        sc = scorecards[0]
+        matrix, _, excluded = matrix_from_samples(sc)
+        if not matrix:
+            console.print(
+                "[red]This scorecard has no per-sample data. Re-evaluate with "
+                "--judge-samples > 1 (ollama default is 5), or pass several "
+                "scorecards of the same run to treat each as one judge pass.[/red]"
+            )
+            raise typer.Exit(code=1)
+        label = f"{sc.evaluation.model_name or sc.evaluation.run_id[:8]} / {sc.evaluation.evaluator}"
+        report = analyze_matrix(matrix, excluded, tolerance)
+        print_reliability_report(report, f"Judge Reliability: {label}")
+
+        if per_criterion:
+            criteria = sorted(
+                {
+                    name
+                    for score in sc.scores
+                    if score.samples
+                    for name in score.samples[0].criteria_scores
+                }
+            )
+            for crit in criteria:
+                cmatrix, _, cexcluded = matrix_from_samples(sc, criterion=crit)
+                if cmatrix:
+                    creport = analyze_matrix(cmatrix, cexcluded, tolerance)
+                    print_reliability_report(creport, f"Criterion: {crit}")
+    else:
+        run_ids = {sc.evaluation.run_id for sc in scorecards}
+        if len(run_ids) > 1:
+            console.print(
+                "[red]Cross-scorecard reliability requires scorecards of the "
+                f"same run; got {len(run_ids)} distinct run ids. Comparing "
+                "different runs measures model variance, not judge "
+                "reliability.[/red]"
+            )
+            raise typer.Exit(code=1)
+        if per_criterion:
+            console.print(
+                "[yellow]--per-criterion is only available for per-sample "
+                "scorecards; ignoring.[/yellow]"
+            )
+        matrix, _, excluded = matrix_from_scorecards(scorecards)
+        if len(matrix) < 2:
+            console.print(
+                "[red]Fewer than 2 prompts appear in every scorecard — "
+                "cannot compute reliability.[/red]"
+            )
+            raise typer.Exit(code=1)
+        sc = scorecards[0]
+        label = f"{sc.evaluation.model_name or sc.evaluation.run_id[:8]} / {len(scorecards)} passes"
+        report = analyze_matrix(matrix, excluded, tolerance)
+        print_reliability_report(report, f"Judge Reliability: {label}")
 
 
 @app.command()
@@ -1740,6 +1864,8 @@ def _run_post_phase_evaluation(
     via `resolve_eval_model_or_exit` before invoking this function.
     """
     from porchbench.evaluator import (
+        JUDGE_SAMPLES_DEFAULTS,
+        JUDGE_TEMP_DEFAULT,
         AnthropicEvalBackend,
         ClaudeCodeEvalBackend,
         OllamaEvalBackend,
@@ -1773,6 +1899,16 @@ def _run_post_phase_evaluation(
             warn_if_same_family_judge(target, eval_model)
             seen_targets.add(target)
 
+    # Judge sampling: backend-appropriate default, env-var overridable
+    # (the run command doesn't expose --judge-* flags; evaluate does).
+    judge_samples = int(
+        os.getenv("PORCHBENCH_JUDGE_SAMPLES", JUDGE_SAMPLES_DEFAULTS.get(eval_backend_name, 1))
+    )
+    judge_temp = float(os.getenv("PORCHBENCH_JUDGE_TEMP", JUDGE_TEMP_DEFAULT))
+    judge_seed = int(os.getenv("PORCHBENCH_JUDGE_SEED", 42))
+    if judge_samples > 1:
+        console.print(f"Judge sampling: mean of {judge_samples} @ temp {judge_temp}")
+
     summary = asyncio.run(batch_evaluate_results(
         result_paths=eval_paths,
         eval_backend=eval_be,
@@ -1780,6 +1916,9 @@ def _run_post_phase_evaluation(
         output_dir=Path("scorecards"),
         explicit_rubric_path=rubric_path,
         rubrics_by_category=eval_rubrics_by_cat,
+        judge_samples=judge_samples,
+        judge_temp=judge_temp,
+        judge_seed=judge_seed,
     ))
 
     # Feed scores back into OvernightResults so print_summary can show them

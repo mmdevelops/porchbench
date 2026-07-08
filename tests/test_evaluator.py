@@ -863,3 +863,102 @@ class TestNoEligibleHarnessRun:
         # silent 0/0 anymore.
         out = capsys.readouterr().out
         assert "No prompts eligible" in out
+
+
+# ---------------------------------------------------------------------------
+# Mean-of-k judge sampling
+# ---------------------------------------------------------------------------
+
+
+class RecordingBackend:
+    """Fake backend that records (temperature, seed) per call and returns
+    scripted responses (cycled)."""
+
+    def __init__(self, responses: list[str]):
+        self.responses = responses
+        self.calls: list[tuple[float | None, int | None]] = []
+
+    async def generate(self, prompt, *, temperature=None, seed=None):
+        self.calls.append((temperature, seed))
+        return self.responses[(len(self.calls) - 1) % len(self.responses)]
+
+
+def _judge_json(correctness: int, clarity: int, audit: list | None = None) -> str:
+    payload = {
+        "criteria": {
+            "correctness": {"score": correctness, "rationale": "r1"},
+            "clarity": {"score": clarity, "rationale": "r2"},
+        },
+        "summary": "ok",
+    }
+    if audit is not None:
+        payload["audit"] = audit
+    return json.dumps(payload)
+
+
+class TestJudgeSampling:
+    @pytest.mark.asyncio
+    async def test_single_pass_is_deterministic_default(self):
+        backend = RecordingBackend([_judge_json(4, 5)])
+        score = await score_prompt(
+            _make_prompt_result(), _make_rubric(), backend, judge_samples=1
+        )
+        assert backend.calls == [(0, 42)]
+        assert score.samples is None
+        assert score.weighted_score == pytest.approx(4.4)  # 4*0.6 + 5*0.4
+
+    @pytest.mark.asyncio
+    async def test_mean_of_k_calls_k_times_with_varied_seeds(self):
+        backend = RecordingBackend([_judge_json(4, 4), _judge_json(5, 5)])
+        score = await score_prompt(
+            _make_prompt_result(),
+            _make_rubric(),
+            backend,
+            judge_samples=4,
+            judge_temp=0.3,
+            judge_seed=42,
+        )
+        assert backend.calls == [(0.3, 42), (0.3, 43), (0.3, 44), (0.3, 45)]
+        assert score.samples is not None
+        assert len(score.samples) == 4
+        # Scripted responses alternate 4.0 and 5.0 weighted -> mean 4.5
+        assert score.weighted_score == pytest.approx(4.5)
+        # Per-criterion mean: correctness (4+5+4+5)/4 = 4.5
+        assert score.criteria["correctness"].score == pytest.approx(4.5)
+        # Sample metadata preserved
+        assert score.samples[1].seed == 43
+        assert score.samples[1].temperature == 0.3
+        assert score.samples[0].criteria_scores["clarity"] == 4.0
+
+    @pytest.mark.asyncio
+    async def test_audit_parsed_from_first_sample(self):
+        audit = [
+            {"obligation": "use a task queue", "met": True},
+            {"obligation": "avoid concurrent.futures", "met": False},
+        ]
+        backend = RecordingBackend([_judge_json(4, 4, audit=audit)])
+        score = await score_prompt(
+            _make_prompt_result(), _make_rubric(), backend, judge_samples=2
+        )
+        assert score.audit is not None
+        assert len(score.audit) == 2
+        assert score.audit[1].met is False
+
+    @pytest.mark.asyncio
+    async def test_malformed_audit_is_none(self):
+        backend = RecordingBackend([_judge_json(4, 4, audit=[{"bogus": 1}])])
+        score = await score_prompt(
+            _make_prompt_result(), _make_rubric(), backend, judge_samples=1
+        )
+        assert score.audit is None
+
+    @pytest.mark.asyncio
+    async def test_scorecard_roundtrip_with_samples(self):
+        backend = RecordingBackend([_judge_json(4, 4), _judge_json(5, 5)])
+        score = await score_prompt(
+            _make_prompt_result(), _make_rubric(), backend, judge_samples=2
+        )
+        dumped = score.model_dump_json()
+        restored = PromptScore.model_validate_json(dumped)
+        assert restored.samples is not None
+        assert restored.samples[0].weighted_score == pytest.approx(4.0)

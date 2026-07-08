@@ -379,3 +379,108 @@ class TestPairedComparison:
 
     def test_returns_none_for_insufficient_data(self):
         assert paired_comparison([1.0], [2.0]) is None
+
+
+# ---------------------------------------------------------------------------
+# Judge reliability: ICC
+# ---------------------------------------------------------------------------
+
+SHROUT_FLEISS = [
+    [9.0, 2.0, 5.0, 8.0],
+    [6.0, 1.0, 3.0, 2.0],
+    [8.0, 4.0, 6.0, 8.0],
+    [7.0, 1.0, 2.0, 6.0],
+    [10.0, 5.0, 6.0, 9.0],
+    [6.0, 2.0, 4.0, 7.0],
+]
+
+
+class TestICC:
+    def test_shrout_fleiss_known_answers(self):
+        # Classic Shrout & Fleiss (1979) 6x4 dataset. Published values
+        # (pingouin, SPSS): ICC(A,1)=0.29, ICC(A,k)=0.62, CI95 ~[0.02, 0.76].
+        from porchbench.statistics import icc_absolute_agreement
+
+        result = icc_absolute_agreement(SHROUT_FLEISS)
+        assert result is not None
+        assert not result.degenerate
+        assert result.icc_single == pytest.approx(0.29, abs=0.005)
+        assert result.icc_mean_of_k == pytest.approx(0.62, abs=0.005)
+        assert result.ci_lower == pytest.approx(0.02, abs=0.02)
+        assert result.ci_upper == pytest.approx(0.76, abs=0.02)
+        assert result.n_targets == 6
+        assert result.k_raters == 4
+
+    def test_perfect_agreement_with_spread(self):
+        from porchbench.statistics import icc_absolute_agreement
+
+        ratings = [[1.0, 1.0, 1.0], [3.0, 3.0, 3.0], [5.0, 5.0, 5.0]]
+        result = icc_absolute_agreement(ratings)
+        assert result is not None
+        assert not result.degenerate
+        assert result.icc_single == pytest.approx(1.0)
+        assert result.icc_mean_of_k == pytest.approx(1.0)
+
+    def test_identical_everything_is_degenerate(self):
+        # Deterministic judge on a saturated suite: all 5s. Agreement is
+        # perfect but ICC is 0/0 — must flag, not report 1.0 or crash.
+        from porchbench.statistics import icc_absolute_agreement
+
+        result = icc_absolute_agreement([[5.0, 5.0], [5.0, 5.0], [5.0, 5.0]])
+        assert result is not None
+        assert result.degenerate
+        assert result.icc_single is None
+
+    def test_restricted_range_not_degenerate(self):
+        # Saturated-but-noisy: tiny between-target variance, real error.
+        # ICC should come out LOW (a valid finding), not degenerate.
+        from porchbench.statistics import icc_absolute_agreement
+
+        ratings = [[4.8, 5.0], [5.0, 4.9], [4.9, 5.0], [5.0, 4.8]]
+        result = icc_absolute_agreement(ratings)
+        assert result is not None
+        assert not result.degenerate
+        assert result.icc_single is not None
+        assert result.icc_single < 0.5
+
+    def test_requires_two_targets_and_two_raters(self):
+        from porchbench.statistics import icc_absolute_agreement
+
+        assert icc_absolute_agreement([[1.0, 2.0]]) is None
+        assert icc_absolute_agreement([[1.0], [2.0]]) is None
+
+    def test_ragged_matrix_returns_none(self):
+        from porchbench.statistics import icc_absolute_agreement
+
+        assert icc_absolute_agreement([[1.0, 2.0], [3.0]]) is None
+
+    def test_as_dict(self):
+        from porchbench.statistics import icc_absolute_agreement
+
+        d = icc_absolute_agreement(SHROUT_FLEISS).as_dict()
+        assert "icc_single" in d
+        assert "ci_lower" in d
+        assert d["n_targets"] == 6
+
+
+class TestPctWithin:
+    def test_all_within(self):
+        from porchbench.statistics import pct_within
+
+        assert pct_within([[4.0, 4.5], [3.0, 3.9]], tolerance=1.0) == 1.0
+
+    def test_none_within(self):
+        from porchbench.statistics import pct_within
+
+        assert pct_within([[1.0, 5.0]], tolerance=1.0) == 0.0
+
+    def test_mixed(self):
+        from porchbench.statistics import pct_within
+
+        # pairs: |4-4.5|=0.5 ok, |4-2|=2 no, |4.5-2|=2.5 no -> 1/3
+        assert pct_within([[4.0, 4.5, 2.0]], tolerance=1.0) == pytest.approx(1 / 3)
+
+    def test_empty_returns_none(self):
+        from porchbench.statistics import pct_within
+
+        assert pct_within([]) is None

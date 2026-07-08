@@ -324,8 +324,32 @@ class Rubric(BaseModel):
 
 
 class CriterionScore(BaseModel):
-    score: int
+    # float since mean-of-k judge sampling: the aggregated criterion score is
+    # the mean across samples (4.6), not a single integer draw. Old integer
+    # scorecards validate unchanged.
+    score: float
     rationale: str
+
+
+class JudgeSample(BaseModel):
+    """One judge sample's scores within a mean-of-k evaluation pass.
+
+    Compact by design (no per-criterion rationales): the per-sample matrix
+    is what `porchbench reliability` computes ICC from, so k samples x N
+    prompts must stay cheap to store.
+    """
+
+    seed: int
+    temperature: float
+    weighted_score: float
+    criteria_scores: dict[str, float]
+
+
+class AuditItem(BaseModel):
+    """One obligation from the two-phase judge audit (extract, then check)."""
+
+    obligation: str
+    met: bool
 
 
 class PromptScore(BaseModel):
@@ -333,6 +357,11 @@ class PromptScore(BaseModel):
     criteria: dict[str, CriterionScore]
     weighted_score: float
     summary: str
+    # Per-sample scores when judged with --judge-samples k > 1 (absent on
+    # single-pass scorecards, including all pre-v0.2 files).
+    samples: list[JudgeSample] | None = None
+    # Obligations audit from the two-phase judge protocol, first sample.
+    audit: list[AuditItem] | None = None
 
 
 class AggregateScores(BaseModel):
