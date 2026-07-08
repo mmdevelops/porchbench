@@ -1,0 +1,93 @@
+<!doctype html>
+<!-- Source for the GitHub social preview card (Settings > General > Social preview).
+     Stat values come from the examples/ coding-basics comparison shown in the README hero.
+     Render to PNG (1280x640, GitHub's recommended size):
+       msedge --headless=new --disable-gpu --hide-scrollbars --window-size=1280,640 ^
+         --virtual-time-budget=8000 --screenshot=social-card.png social-card.html
+     Upload is manual; GitHub keeps no history of the previous image. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: "Fira Code";
+    src: local("FiraCode-Regular"),
+         url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Regular.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 400;
+  }
+  @font-face {
+    font-family: "Fira Code";
+    src: local("FiraCode-Bold"),
+         url("https://cdnjs.cloudflare.com/ajax/libs/firacode/6.2.0/woff2/FiraCode-Bold.woff2") format("woff2");
+    font-style: normal;
+    font-weight: 700;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    background: #292929;
+    font-family: "Fira Code", "Cascadia Code", Consolas, monospace;
+    color: #c5c8c6;
+    display: flex;
+    flex-direction: column;
+  }
+  .titlebar {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    padding-left: 36px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .dot { width: 22px; height: 22px; border-radius: 50%; }
+  .content {
+    flex: 1;
+    padding: 26px 90px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .prompt-line {
+    display: flex;
+    align-items: baseline;
+    gap: 28px;
+  }
+  .chevron { color: #28c840; font-size: 84px; font-weight: 700; }
+  .wordmark { color: #ffffff; font-size: 108px; font-weight: 700; letter-spacing: -2px; }
+  .tagline {
+    margin-top: 30px;
+    font-size: 37px;
+    color: #c5c8c6;
+  }
+  .stats {
+    margin-top: 72px;
+    font-size: 40px;
+    line-height: 1.62;
+  }
+  .stats .label {
+    color: #868887;
+    display: inline-block;
+    width: 560px;
+  }
+  .stats .value { color: #d0b344; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <div class="dot" style="background:#ff5f57"></div>
+    <div class="dot" style="background:#febc2e"></div>
+    <div class="dot" style="background:#28c840"></div>
+  </div>
+  <div class="content">
+    <div class="prompt-line">
+      <span class="chevron">&#10095;</span><span class="wordmark">porchbench</span>
+    </div>
+    <div class="tagline">Statistical quality benchmarking for local LLMs</div>
+    <div class="stats">
+      <div><span class="label">Wilcoxon signed-rank</span><span class="value">p = 0.0734</span></div>
+      <div><span class="label">Cohen&rsquo;s d<sub>z</sub></span><span class="value">0.363 (small)</span></div>
+      <div><span class="label">95% CI</span><span class="value">[0.0125, 0.1839]</span></div>
+    </div>
+  </div>
+</body>
+</html>
