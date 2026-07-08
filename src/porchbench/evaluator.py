@@ -40,11 +40,13 @@ from rich.progress import (
 from porchbench._console import ensure_unicode_stdout
 from porchbench.schemas import (
     AggregateScores,
+    AuditItem,
     CriterionScore,
     EvalData,
     EvalPromptSummary,
     EvalRunHeader,
     EvaluationMetadata,
+    JudgeSample,
     ModelOptions,
     PromptResult,
     PromptScore,
@@ -69,6 +71,21 @@ EVAL_BACKEND_DEFAULTS: dict[str, str] = {
 # KV cache.
 EVALUATOR_NUM_CTX = 32768
 
+# Mean-of-k judge sampling defaults per backend. Sampling k judge scores at
+# temperature JUDGE_TEMP_DEFAULT and averaging beats greedy single-pass
+# scoring on human alignment (G-Eval; arXiv:2506.13639) and gives the
+# per-sample matrix `porchbench reliability` computes ICC from. Local
+# inference is free, so ollama defaults to k=5; remote backends stay at
+# k=1 single-pass (temperature 0) to avoid 5x paid-inference cost.
+JUDGE_SAMPLES_DEFAULTS: dict[str, int] = {
+    "ollama": 5,
+    "api": 1,
+    "anthropic": 1,
+    "claude-code": 1,
+}
+JUDGE_TEMP_DEFAULT = 0.3
+JUDGE_SEED_DEFAULT = 42
+
 
 # ---------------------------------------------------------------------------
 # Backend protocol — any callable that takes a prompt string and returns text
@@ -76,7 +93,13 @@ EVALUATOR_NUM_CTX = 32768
 
 
 class EvalBackend(Protocol):
-    async def generate(self, prompt: str) -> str: ...
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str: ...
 
 
 class OllamaEvalBackend:
@@ -93,9 +116,18 @@ class OllamaEvalBackend:
         # leaking sockets to TIME_WAIT.
         self._backend = OllamaBackend(host=host)
 
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str:
         options = ModelOptions(
-            temperature=0, seed=42, num_predict=2048, num_ctx=EVALUATOR_NUM_CTX,
+            temperature=temperature if temperature is not None else 0,
+            seed=seed if seed is not None else JUDGE_SEED_DEFAULT,
+            num_predict=2048,
+            num_ctx=EVALUATOR_NUM_CTX,
         )
         result = await self._backend.chat(
             messages=[{"role": "user", "content": prompt}],
@@ -119,11 +151,23 @@ class AnthropicEvalBackend:
         self.model = model
         self._client = anthropic.AsyncAnthropic(api_key=api_key) if api_key else anthropic.AsyncAnthropic()
 
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str:
+        # `seed` is accepted for protocol compatibility but the Anthropic
+        # API has no sampling-seed parameter; temperature is honored.
+        kwargs: dict = {}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         response = await self._client.messages.create(
             model=self.model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
+            **kwargs,
         )
         return response.content[0].text
 
@@ -139,7 +183,15 @@ class ClaudeCodeEvalBackend:
         self.model = model
         self.timeout_s = timeout_s
 
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        seed: int | None = None,
+    ) -> str:
+        # temperature/seed accepted for protocol compatibility; the claude
+        # CLI exposes neither, so both are ignored.
         cmd = [
             "claude", "-p",
             "--model", self.model,
@@ -399,7 +451,16 @@ Score the response on each criterion using the specified scale. Be rigorous and 
 
 ## Instructions
 
-For each criterion, provide:
+Evaluate in two phases:
+
+**Phase 1 — extract obligations.** List every specific obligation the prompt
+(and the reference, if present) places on the response: required approaches,
+forbidden approaches, named edge cases, structural requirements. Be literal —
+extract what is stated, not what a good response would generically include.
+
+**Phase 2 — audit, then score.** Check the response against each obligation
+individually and record whether it is met. Only after completing the audit,
+score each criterion:
 1. A numeric score on the specified scale
 2. A brief rationale (1-2 sentences) justifying the score
 
@@ -407,7 +468,9 @@ Then provide a one-sentence overall summary.
 
 You MUST respond with valid JSON and nothing else. No markdown fencing, no extra text.
 
-{{"criteria": {{{criteria_json}}}, "summary": "<one sentence overall assessment>"}}"""
+{{"audit": [{{"obligation": "<obligation stated in the prompt or reference>", \
+"met": <true|false>}}], "criteria": {{{criteria_json}}}, \
+"summary": "<one sentence overall assessment>"}}"""
 
 
 def build_scoring_prompt(
@@ -438,24 +501,84 @@ async def score_prompt(
     rubric: Rubric,
     backend: EvalBackend,
     calibration_preamble: str = "",
+    judge_samples: int = 1,
+    judge_temp: float = JUDGE_TEMP_DEFAULT,
+    judge_seed: int = JUDGE_SEED_DEFAULT,
 ) -> PromptScore:
-    """Score a single prompt result against a rubric via the evaluator backend."""
+    """Score a single prompt result against a rubric via the evaluator backend.
+
+    With judge_samples == 1 (remote-backend default) this is a single
+    deterministic pass at temperature 0, seed `judge_seed` — the pre-v0.2
+    behavior. With judge_samples > 1 (ollama default: 5) the judge is
+    sampled k times at `judge_temp` with seeds judge_seed..judge_seed+k-1
+    and the shipped score is the mean — better human alignment than greedy
+    single-pass, and the per-sample matrix feeds `porchbench reliability`.
+    """
     scoring_prompt = build_scoring_prompt(prompt_result, rubric, calibration_preamble)
-    response_text = await backend.generate(scoring_prompt)
-
-    parsed = _parse_scoring_response(response_text, rubric)
-
     weight_map = {c.name: c.weight for c in rubric.criteria}
-    weighted = sum(
-        parsed[name].score * weight_map.get(name, 0)
-        for name in parsed
-    )
+
+    if judge_samples <= 1:
+        response_text = await backend.generate(
+            scoring_prompt, temperature=0, seed=judge_seed
+        )
+        parsed = _parse_scoring_response(response_text, rubric)
+        weighted = sum(
+            parsed[name].score * weight_map.get(name, 0) for name in parsed
+        )
+        return PromptScore(
+            prompt_id=prompt_result.prompt_id,
+            criteria=parsed,
+            weighted_score=round(weighted, 2),
+            summary=_extract_summary(response_text),
+            audit=_parse_audit(response_text),
+        )
+
+    samples: list[JudgeSample] = []
+    first_parsed: dict[str, CriterionScore] | None = None
+    first_response: str | None = None
+    for i in range(judge_samples):
+        seed_i = judge_seed + i
+        response_text = await backend.generate(
+            scoring_prompt, temperature=judge_temp, seed=seed_i
+        )
+        parsed = _parse_scoring_response(response_text, rubric)
+        if first_parsed is None:
+            first_parsed = parsed
+            first_response = response_text
+        criteria_scores = {name: float(cs.score) for name, cs in parsed.items()}
+        weighted = sum(
+            criteria_scores[name] * weight_map.get(name, 0)
+            for name in criteria_scores
+        )
+        samples.append(
+            JudgeSample(
+                seed=seed_i,
+                temperature=judge_temp,
+                weighted_score=round(weighted, 4),
+                criteria_scores=criteria_scores,
+            )
+        )
+
+    # Aggregate: mean per criterion across samples; rationale from the first
+    # sample (per-sample rationales would bloat scorecards k-fold).
+    mean_criteria: dict[str, CriterionScore] = {}
+    for criterion in rubric.criteria:
+        name = criterion.name
+        mean_score = _mean([s.criteria_scores.get(name, 0.0) for s in samples])
+        rationale = first_parsed[name].rationale if name in first_parsed else ""
+        mean_criteria[name] = CriterionScore(
+            score=round(mean_score, 4),
+            rationale=f"[sample 1/{judge_samples}] {rationale}".strip(),
+        )
+    mean_weighted = _mean([s.weighted_score for s in samples])
 
     return PromptScore(
         prompt_id=prompt_result.prompt_id,
-        criteria=parsed,
-        weighted_score=round(weighted, 2),
-        summary=_extract_summary(response_text),
+        criteria=mean_criteria,
+        weighted_score=round(mean_weighted, 2),
+        summary=_extract_summary(first_response or ""),
+        samples=samples,
+        audit=_parse_audit(first_response or ""),
     )
 
 
@@ -632,6 +755,31 @@ def _extract_summary(text: str) -> str:
         return ""
 
 
+def _parse_audit(text: str) -> list[AuditItem] | None:
+    """Parse the two-phase obligations audit from the judge response.
+
+    Tolerant by design: judges that omit the audit field, emit it malformed,
+    or predate the two-phase prompt simply yield None — the audit is
+    supporting evidence, never load-bearing for the score itself.
+    """
+    try:
+        parsed = json.loads(_extract_json(text))
+    except json.JSONDecodeError:
+        return None
+    raw = parsed.get("audit")
+    if not isinstance(raw, list):
+        return None
+    items: list[AuditItem] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        obligation = entry.get("obligation")
+        met = entry.get("met")
+        if isinstance(obligation, str) and isinstance(met, bool):
+            items.append(AuditItem(obligation=obligation, met=met))
+    return items or None
+
+
 # ---------------------------------------------------------------------------
 # Aggregation
 # ---------------------------------------------------------------------------
@@ -707,6 +855,9 @@ async def evaluate_run(
     evaluator_label: str = "",
     rubrics_by_category: dict[str, Rubric] | None = None,
     calibration_data: dict[str, list[dict]] | None = None,
+    judge_samples: int = 1,
+    judge_temp: float = JUDGE_TEMP_DEFAULT,
+    judge_seed: int = JUDGE_SEED_DEFAULT,
 ) -> Scorecard:
     """Score all prompts in a run result. Returns a complete Scorecard.
 
@@ -714,6 +865,10 @@ async def evaluate_run(
     rubric matching its category. Falls back to the rubric parameter for
     unmatched categories. When calibration_data is provided, few-shot
     calibration examples are prepended to each scoring prompt.
+
+    judge_samples > 1 enables mean-of-k judge sampling (see score_prompt);
+    resolve the backend-appropriate default via JUDGE_SAMPLES_DEFAULTS at
+    the call site — this function takes the resolved value.
     """
     ensure_unicode_stdout()
 
@@ -807,7 +962,15 @@ async def evaluate_run(
 
             try:
                 preamble = _get_preamble(prompt_rubric)
-                score = await score_prompt(prompt_result, prompt_rubric, backend, preamble)
+                score = await score_prompt(
+                    prompt_result,
+                    prompt_rubric,
+                    backend,
+                    preamble,
+                    judge_samples=judge_samples,
+                    judge_temp=judge_temp,
+                    judge_seed=judge_seed,
+                )
                 scores.append(score)
                 progress.console.print(
                     f"  {prompt_result.prompt_id}: "
@@ -860,6 +1023,9 @@ async def batch_evaluate_results(
     explicit_rubric_path: Path | None = None,
     rubrics_by_category: dict[str, Rubric] | None = None,
     skip_scored: bool = False,
+    judge_samples: int = 1,
+    judge_temp: float = JUDGE_TEMP_DEFAULT,
+    judge_seed: int = JUDGE_SEED_DEFAULT,
 ) -> list[tuple[str, str, float | None]]:
     """Score N result files sequentially with one evaluator backend instance.
 
@@ -947,6 +1113,9 @@ async def batch_evaluate_results(
                 evaluator_label=backend_label,
                 rubrics_by_category=rubrics_by_category,
                 calibration_data=calibration_data or None,
+                judge_samples=judge_samples,
+                judge_temp=judge_temp,
+                judge_seed=judge_seed,
             )
             written = write_scorecard(scorecard, output_dir)
         except Exception as exc:

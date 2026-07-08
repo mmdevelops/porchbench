@@ -157,6 +157,35 @@ def _normal_tail_p(abs_stat: float) -> float:
     return min(1.0, max(0.0, p))
 
 
+def _f_cdf(f: float, df1: float, df2: float) -> float:
+    """CDF of the F distribution: P(F <= f) = I_x(df1/2, df2/2), x = df1*f/(df1*f + df2).
+
+    Accepts non-integer df (needed for Satterthwaite approximations).
+    """
+    if f <= 0:
+        return 0.0
+    x = df1 * f / (df1 * f + df2)
+    return _regularized_incomplete_beta(df1 / 2.0, df2 / 2.0, x)
+
+
+def _f_quantile(p: float, df1: float, df2: float) -> float:
+    """F value with CDF = p, by bisection (monotone in f)."""
+    lo, hi = 0.0, 1.0
+    while _f_cdf(hi, df1, df2) < p:
+        hi *= 2.0
+        if hi > 1e12:  # pragma: no cover - pathological df/p combinations
+            break
+    for _ in range(200):
+        mid = (lo + hi) / 2.0
+        if _f_cdf(mid, df1, df2) < p:
+            lo = mid
+        else:
+            hi = mid
+        if hi - lo < 1e-10 * max(1.0, hi):
+            break
+    return (lo + hi) / 2.0
+
+
 # ---------------------------------------------------------------------------
 # Confidence intervals
 # ---------------------------------------------------------------------------
@@ -546,6 +575,182 @@ def wilcoxon_signed_rank(
         effect_magnitude=magnitude,
         ci=auto_ci(differences, seed=seed),
     )
+
+
+# ---------------------------------------------------------------------------
+# Judge reliability: intraclass correlation (two-way, absolute agreement)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ICCResult:
+    """Intraclass correlation for an n-targets x k-raters ratings matrix.
+
+    Computed as ICC(A,1) / ICC(A,k) in McGraw-Wong terms: two-way model,
+    absolute agreement. For judge reliability the "raters" are repeated
+    judge samples (varied seeds), treated as random draws from the seed
+    population; targets are prompts. Interpret per Koo & Li (2016) against
+    the 95% CI, not the point estimate: <0.5 poor, 0.5-0.75 moderate,
+    0.75-0.9 good, >0.9 excellent.
+
+    `degenerate` is True when the matrix has ~zero total variance (e.g. a
+    deterministic judge repeating identical scores): agreement is perfect
+    but ICC is undefined, so icc fields are None. A LOW icc with real
+    error variance on a compressed scale is NOT degenerate — that pattern
+    means "the suite isn't discriminating", which companions like
+    `pct_within` disambiguate from a noisy judge.
+    """
+
+    icc_single: float | None  # ICC(A,1): reliability of one judge sample
+    icc_mean_of_k: float | None  # ICC(A,k): reliability of the shipped mean-of-k
+    ci_lower: float | None  # 95% CI on ICC(A,1) (McGraw-Wong F-based)
+    ci_upper: float | None
+    confidence: float
+    n_targets: int
+    k_raters: int
+    degenerate: bool
+
+    def as_dict(self) -> dict:
+        return {
+            "icc_single": round(self.icc_single, 4) if self.icc_single is not None else None,
+            "icc_mean_of_k": (
+                round(self.icc_mean_of_k, 4) if self.icc_mean_of_k is not None else None
+            ),
+            "ci_lower": round(self.ci_lower, 4) if self.ci_lower is not None else None,
+            "ci_upper": round(self.ci_upper, 4) if self.ci_upper is not None else None,
+            "confidence": self.confidence,
+            "n_targets": self.n_targets,
+            "k_raters": self.k_raters,
+            "degenerate": self.degenerate,
+        }
+
+
+def icc_absolute_agreement(
+    ratings: list[list[float]],
+    confidence: float = 0.95,
+) -> ICCResult | None:
+    """ICC(A,1) and ICC(A,k) with an F-based CI, from an n x k ratings matrix.
+
+    `ratings[i][j]` is rater j's score for target i. Requires n >= 2 targets
+    and k >= 2 raters with a complete (rectangular) matrix; returns None
+    otherwise. Mean-squares decomposition per McGraw & Wong (1996); the CI
+    uses their Satterthwaite-approximated F bounds (the same construction
+    Koo & Li 2016 prescribe interpreting against).
+    """
+    n = len(ratings)
+    if n < 2:
+        return None
+    k = len(ratings[0])
+    if k < 2 or any(len(row) != k for row in ratings):
+        return None
+
+    grand = statistics.mean(v for row in ratings for v in row)
+    row_means = [statistics.mean(row) for row in ratings]
+    col_means = [statistics.mean(row[j] for row in ratings) for j in range(k)]
+
+    ss_total = sum((v - grand) ** 2 for row in ratings for v in row)
+    ss_rows = k * sum((m - grand) ** 2 for m in row_means)
+    ss_cols = n * sum((m - grand) ** 2 for m in col_means)
+    ss_err = max(0.0, ss_total - ss_rows - ss_cols)
+
+    msr = ss_rows / (n - 1)
+    msc = ss_cols / (k - 1)
+    mse = ss_err / ((n - 1) * (k - 1))
+
+    # Zero total variance: identical scores everywhere. Perfect agreement,
+    # but between-target variance is zero so ICC is 0/0 — undefined.
+    if ss_total < 1e-12:
+        return ICCResult(
+            icc_single=None,
+            icc_mean_of_k=None,
+            ci_lower=None,
+            ci_upper=None,
+            confidence=confidence,
+            n_targets=n,
+            k_raters=k,
+            degenerate=True,
+        )
+
+    denom_single = msr + (k - 1) * mse + (k / n) * (msc - mse)
+    denom_mean = msr + (msc - mse) / n
+    if abs(denom_single) < 1e-12 or abs(denom_mean) < 1e-12:
+        return ICCResult(
+            icc_single=None,
+            icc_mean_of_k=None,
+            ci_lower=None,
+            ci_upper=None,
+            confidence=confidence,
+            n_targets=n,
+            k_raters=k,
+            degenerate=True,
+        )
+
+    icc_a1 = (msr - mse) / denom_single
+    icc_ak = (msr - mse) / denom_mean
+
+    # McGraw-Wong F-based CI on ICC(A,1), Satterthwaite df for the
+    # denominator. Degenerates (mse == 0 with real row variance -> perfect
+    # agreement) get a point CI at the estimate.
+    ci_lower: float | None
+    ci_upper: float | None
+    if mse < 1e-12:
+        ci_lower, ci_upper = icc_a1, icc_a1
+    else:
+        alpha = 1.0 - confidence
+        a = (k * icc_a1) / (n * (1.0 - icc_a1)) if icc_a1 < 1.0 else float("inf")
+        if math.isinf(a):
+            ci_lower, ci_upper = icc_a1, icc_a1
+        else:
+            b = 1.0 + (k * icc_a1 * (n - 1)) / (n * (1.0 - icc_a1))
+            num = (a * msc + b * mse) ** 2
+            den = (a * msc) ** 2 / (k - 1) + (b * mse) ** 2 / ((n - 1) * (k - 1))
+            v = num / den if den > 0 else float(n - 1)
+            f_lower = _f_quantile(1.0 - alpha / 2.0, n - 1, v)
+            f_upper = _f_quantile(1.0 - alpha / 2.0, v, n - 1)
+            ci_lower = (
+                n * (msr - f_lower * mse)
+                / (f_lower * (k * msc + (k * n - k - n) * mse) + n * msr)
+            )
+            ci_upper = (
+                n * (f_upper * msr - mse)
+                / (k * msc + (k * n - k - n) * mse + n * f_upper * msr)
+            )
+
+    return ICCResult(
+        icc_single=icc_a1,
+        icc_mean_of_k=icc_ak,
+        ci_lower=ci_lower,
+        ci_upper=ci_upper,
+        confidence=confidence,
+        n_targets=n,
+        k_raters=k,
+        degenerate=False,
+    )
+
+
+def pct_within(ratings: list[list[float]], tolerance: float = 1.0) -> float | None:
+    """Fraction of rating pairs (per target) within `tolerance` of each other.
+
+    Variance-independent agreement companion to ICC: restricted range
+    (a saturated suite) crashes ICC even when repeated scores agree within
+    rounding, so report both — high pct_within with low ICC reads
+    "compressed scale", low pct_within reads "noisy judge".
+    """
+    n = len(ratings)
+    if n == 0:
+        return None
+    total_pairs = 0
+    within = 0
+    for row in ratings:
+        k = len(row)
+        for i in range(k):
+            for j in range(i + 1, k):
+                total_pairs += 1
+                if abs(row[i] - row[j]) <= tolerance:
+                    within += 1
+    if total_pairs == 0:
+        return None
+    return within / total_pairs
 
 
 def paired_comparison(
