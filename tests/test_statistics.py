@@ -1,15 +1,62 @@
-"""Tests for statistical inference: confidence intervals and bootstrap."""
+"""Tests for statistical inference: t-distribution, CIs, paired tests, power."""
 
 import pytest
 
 from porchbench.statistics import (
+    _t_critical,
     auto_ci,
+    average_score_repeats,
     bootstrap_ci,
+    minimum_detectable_dz,
     paired_comparison,
     paired_t_test,
     parametric_ci,
+    permutation_test_paired,
+    t_two_tailed_p,
     wilcoxon_signed_rank,
 )
+
+
+class TestTDistribution:
+    """Known-answer tests against published t-tables."""
+
+    @pytest.mark.parametrize(
+        ("t_stat", "df", "expected_p"),
+        [
+            # Two-tailed p at published 95% critical values -> 0.05
+            (12.706, 1, 0.05),
+            (2.776, 4, 0.05),
+            (2.228, 10, 0.05),
+            (2.086, 20, 0.05),
+            (2.042, 30, 0.05),
+            # Published 90% critical values -> 0.10
+            (1.812, 10, 0.10),
+            (1.725, 20, 0.10),
+            # t=1, df=10 -> 0.3409 (published)
+            (1.0, 10, 0.3409),
+        ],
+    )
+    def test_two_tailed_p_matches_tables(self, t_stat, df, expected_p):
+        assert t_two_tailed_p(t_stat, df) == pytest.approx(expected_p, abs=5e-4)
+
+    def test_p_at_zero_is_one(self):
+        assert t_two_tailed_p(0.0, 5) == pytest.approx(1.0)
+
+    def test_p_at_infinity_is_zero(self):
+        assert t_two_tailed_p(float("inf"), 5) == 0.0
+
+    def test_negative_t_same_as_positive(self):
+        assert t_two_tailed_p(-2.0, 8) == pytest.approx(t_two_tailed_p(2.0, 8))
+
+    @pytest.mark.parametrize(
+        ("df", "expected"),
+        [(1, 12.706), (4, 2.776), (10, 2.228), (20, 2.086), (30, 2.042)],
+    )
+    def test_critical_values_match_tables(self, df, expected):
+        assert _t_critical(df, 0.95) == pytest.approx(expected, abs=2e-3)
+
+    def test_critical_approaches_z_at_large_df(self):
+        assert _t_critical(100_000, 0.95) == pytest.approx(1.96, abs=1e-2)
 
 
 class TestParametricCI:
@@ -23,6 +70,13 @@ class TestParametricCI:
         assert ci.method == "t"
         assert ci.n == 5
         assert ci.confidence == 0.95
+
+    def test_known_answer_interval(self):
+        # mean=30, sd=15.811, se=7.071, t_crit(df=4)=2.776 -> margin 19.63
+        values = [10.0, 20.0, 30.0, 40.0, 50.0]
+        ci = parametric_ci(values)
+        assert ci.ci_lower == pytest.approx(30.0 - 19.63, abs=0.02)
+        assert ci.ci_upper == pytest.approx(30.0 + 19.63, abs=0.02)
 
     def test_tight_ci_for_identical_values(self):
         values = [42.0] * 10
@@ -72,7 +126,6 @@ class TestBootstrapCI:
         ci = bootstrap_ci([42.0], seed=42)
         assert ci is not None
         assert ci.mean == pytest.approx(42.0)
-        # With one value, all resamples are the same
         assert ci.ci_lower == pytest.approx(42.0)
         assert ci.ci_upper == pytest.approx(42.0)
 
@@ -81,19 +134,19 @@ class TestBootstrapCI:
 
 
 class TestAutoCI:
-    def test_small_sample_uses_bootstrap(self):
-        values = [1.0, 2.0, 3.0]
-        ci = auto_ci(values, bootstrap_threshold=30)
-        assert ci is not None
-        assert ci.method == "bootstrap"
-
-    def test_large_sample_uses_parametric(self):
-        values = list(range(50))
-        ci = auto_ci([float(v) for v in values], bootstrap_threshold=30)
+    def test_small_sample_uses_t(self):
+        # t-CI at every n >= 2 — the percentile bootstrap undercovers at
+        # small n, so it is no longer the small-sample default.
+        ci = auto_ci([1.0, 2.0, 3.0])
         assert ci is not None
         assert ci.method == "t"
 
-    def test_single_value_returns_bootstrap(self):
+    def test_large_sample_uses_t(self):
+        ci = auto_ci([float(v) for v in range(50)])
+        assert ci is not None
+        assert ci.method == "t"
+
+    def test_single_value_falls_back_to_bootstrap(self):
         ci = auto_ci([42.0])
         assert ci is not None
         assert ci.method == "bootstrap"
@@ -103,14 +156,62 @@ class TestAutoCI:
 
 
 # ---------------------------------------------------------------------------
+# Repeat handling
+# ---------------------------------------------------------------------------
+
+
+class TestAverageScoreRepeats:
+    def test_averages_across_repeats(self):
+        repeats = [
+            {"p1": 4.0, "p2": 3.0},
+            {"p1": 5.0, "p2": 4.0},
+            {"p1": 4.5, "p2": 3.5},
+        ]
+        avg = average_score_repeats(repeats)
+        assert avg["p1"] == pytest.approx(4.5)
+        assert avg["p2"] == pytest.approx(3.5)
+
+    def test_prompt_missing_from_one_repeat(self):
+        repeats = [{"p1": 4.0, "p2": 2.0}, {"p1": 5.0}]
+        avg = average_score_repeats(repeats)
+        assert avg["p1"] == pytest.approx(4.5)
+        assert avg["p2"] == pytest.approx(2.0)  # averaged over the repeats that scored it
+
+    def test_single_map_is_identity(self):
+        assert average_score_repeats([{"p1": 3.0}]) == {"p1": 3.0}
+
+    def test_empty(self):
+        assert average_score_repeats([]) == {}
+
+
+# ---------------------------------------------------------------------------
+# Power
+# ---------------------------------------------------------------------------
+
+
+class TestMinimumDetectableDz:
+    def test_known_value_n20(self):
+        # (t_{.025,19} + t_{.20,19}) / sqrt(20) = (2.093 + 0.861) / 4.472
+        assert minimum_detectable_dz(20) == pytest.approx(0.6606, abs=2e-3)
+
+    def test_approaches_z_formula_at_large_n(self):
+        # (1.960 + 0.842) / sqrt(n) as df -> inf
+        assert minimum_detectable_dz(5000) == pytest.approx(2.802 / 5000**0.5, abs=1e-3)
+
+    def test_monotone_decreasing_in_n(self):
+        assert minimum_detectable_dz(10) > minimum_detectable_dz(30) > minimum_detectable_dz(100)
+
+    def test_none_below_two(self):
+        assert minimum_detectable_dz(1) is None
+
+
+# ---------------------------------------------------------------------------
 # Paired tests
 # ---------------------------------------------------------------------------
 
 
 class TestPairedTTest:
     def test_identical_values(self):
-        # Degenerate case (SD=0) yields p=1.0 by definition — not an
-        # approximation, so it's reported regardless of sample size.
         a = [1.0, 2.0, 3.0, 4.0, 5.0]
         result = paired_t_test(a, a)
         assert result is not None
@@ -118,20 +219,20 @@ class TestPairedTTest:
         assert result.p_value == pytest.approx(1.0)
         assert not result.significant
 
-    def test_clearly_different_large_effect(self):
-        # n=5 (df=4) is below the p-value gate; we still get the statistic,
-        # CI, and effect-size — the effect size should clearly be large.
+    def test_exact_p_at_small_n(self):
+        # diffs [9,18,27,36,45]: mean 27, sd 14.23, t = 4.243, df=4
+        # -> two-tailed p = 0.0132 (published t-table interpolation)
         a = [10.0, 20.0, 30.0, 40.0, 50.0]
         b = [1.0, 2.0, 3.0, 4.0, 5.0]
         result = paired_t_test(a, b)
         assert result is not None
         assert result.mean_difference > 0
-        assert result.p_value is None
-        assert result.significant is None
+        assert result.statistic == pytest.approx(4.243, abs=1e-3)
+        assert result.p_value == pytest.approx(0.0132, abs=5e-4)
+        assert result.significant
         assert result.effect_magnitude == "large"
 
-    def test_pvalue_available_for_large_df(self):
-        # n=40 (df=39) clears the gate — p-value should be a real float.
+    def test_pvalue_available_at_any_n(self):
         a = [float(i) for i in range(40)]
         b = [float(i) + 2.0 for i in range(40)]
         result = paired_t_test(a, b)
@@ -139,6 +240,17 @@ class TestPairedTTest:
         assert result.p_value is not None
         assert 0.0 <= result.p_value <= 1.0
         assert result.significant is not None
+
+    def test_ci_estimand_matches_test(self):
+        # The CI is a t-interval on the mean difference: p < 0.05 iff the
+        # 95% CI excludes zero (same estimand, same procedure).
+        a = [10.0, 20.0, 30.0, 40.0, 50.0]
+        b = [1.0, 2.0, 3.0, 4.0, 5.0]
+        result = paired_t_test(a, b)
+        assert result.significant
+        assert result.ci is not None
+        assert result.ci.method == "t"
+        assert result.ci.ci_lower > 0  # excludes zero, agreeing with p<0.05
 
     def test_returns_none_for_single_pair(self):
         assert paired_t_test([1.0], [2.0]) is None
@@ -154,11 +266,55 @@ class TestPairedTTest:
         assert "test_name" in d
         assert "p_value" in d
         assert "effect_size" in d
-        # Small n → p_value is None, serialized as JSON null
-        assert d["p_value"] is None
+        assert d["p_value"] is not None  # exact t p-value at any df >= 1
+
+
+class TestPermutationTest:
+    def test_exact_all_positive_equal(self):
+        # n=8 identical positive diffs: only the all-plus and all-minus
+        # assignments reach |sum| = 8 -> p = 2/256 exactly.
+        a = [2.0] * 8
+        b = [1.0] * 8
+        result = permutation_test_paired(a, b)
+        assert result is not None
+        assert result.method == "exact"
+        assert result.p_value == pytest.approx(2 / 256)
+
+    def test_exact_hand_enumerable_n3(self):
+        # diffs [1,2,3]: sign assignments give |sum| in {6,4,2,0,0,2,4,6};
+        # |sum| >= 6 in 2 of 8 -> p = 0.25.
+        result = permutation_test_paired([2.0, 3.0, 4.0], [1.0, 1.0, 1.0])
+        assert result is not None
+        assert result.method == "exact"
+        assert result.p_value == pytest.approx(0.25)
+
+    def test_identical_values_p_one(self):
+        a = [1.0, 2.0, 3.0, 4.0]
+        result = permutation_test_paired(a, a)
+        assert result is not None
+        assert result.p_value == pytest.approx(1.0)
+
+    def test_monte_carlo_above_threshold(self):
+        a = [float(i) for i in range(20)]
+        b = [float(i) + 1.0 for i in range(20)]
+        result = permutation_test_paired(a, b, seed=42)
+        assert result is not None
+        assert result.method == "monte_carlo"
+        assert 0.0 < result.p_value < 0.05
+
+    def test_monte_carlo_reproducible(self):
+        a = [float(i) for i in range(20)]
+        b = [float(i) + 0.5 for i in range(20)]
+        r1 = permutation_test_paired(a, b, seed=42)
+        r2 = permutation_test_paired(a, b, seed=42)
+        assert r1.p_value == r2.p_value
+
+    def test_returns_none_for_single_pair(self):
+        assert permutation_test_paired([1.0], [2.0]) is None
 
 
 class TestWilcoxon:
+    # Legacy path: retained but no longer routed by paired_comparison.
     def test_identical_values(self):
         a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
         result = wilcoxon_signed_rank(a, a)
@@ -183,19 +339,43 @@ class TestWilcoxon:
 
 
 class TestPairedComparison:
-    def test_small_n_uses_t_test(self):
+    def test_paired_t_is_primary_at_small_n(self):
         a = [1.0, 2.0, 3.0, 4.0, 5.0]
         b = [0.5, 1.5, 2.5, 3.5, 4.5]
         result = paired_comparison(a, b)
         assert result is not None
         assert result.test_name == "paired_t"
+        assert result.p_value is not None
 
-    def test_large_n_uses_wilcoxon(self):
+    def test_paired_t_is_primary_at_larger_n(self):
         a = [float(i) for i in range(10)]
         b = [float(i) + 0.1 for i in range(10)]
         result = paired_comparison(a, b)
         assert result is not None
-        assert result.test_name == "wilcoxon"
+        assert result.test_name == "paired_t"
+
+    def test_permutation_cross_check_attached(self):
+        a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+        b = [0.5, 1.8, 2.4, 4.2, 4.5, 6.1, 6.5]
+        result = paired_comparison(a, b)
+        assert result is not None
+        assert result.permutation_p is not None
+        assert result.permutation_method == "exact"
+        assert 0.0 <= result.permutation_p <= 1.0
+
+    def test_monte_carlo_cross_check_at_large_n(self):
+        a = [float(i) for i in range(20)]
+        b = [float(i) + 0.5 for i in range(20)]
+        result = paired_comparison(a, b, seed=42)
+        assert result is not None
+        assert result.permutation_method == "monte_carlo"
+
+    def test_as_dict_includes_permutation(self):
+        a = [1.0, 2.0, 3.0, 4.0, 5.0]
+        b = [0.5, 1.5, 2.5, 3.5, 4.5]
+        d = paired_comparison(a, b).as_dict()
+        assert "permutation_p" in d
+        assert d["permutation_method"] == "exact"
 
     def test_returns_none_for_insufficient_data(self):
         assert paired_comparison([1.0], [2.0]) is None

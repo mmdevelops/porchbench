@@ -14,7 +14,12 @@ from rich.table import Table
 
 from porchbench.metrics import describe, extract_tokens_per_second
 from porchbench.schemas import ModelOptions, PromptResult, RunResult, Scorecard
-from porchbench.statistics import PairedTestResult, paired_comparison
+from porchbench.statistics import (
+    PairedTestResult,
+    average_score_repeats,
+    minimum_detectable_dz,
+    paired_comparison,
+)
 
 console = Console()
 
@@ -291,6 +296,30 @@ def print_comparison_table(
         )
         if result:
             _print_paired_result(model_names[0], model_names[1], result)
+    elif has_scores and len(runs) > 2 and len(score_lookups) == len(runs):
+        # More than two runs but exactly two distinct models = repeats.
+        # Average each model's repeats within prompt before the paired test
+        # (pooling repeats as independent observations is pseudoreplication).
+        distinct = list(dict.fromkeys(r.run.model.name for r in runs))
+        if len(distinct) == 2:
+            maps_by_model: dict[str, list[dict[str, float]]] = {m: [] for m in distinct}
+            for run, lookup in zip(runs, score_lookups):
+                maps_by_model[run.run.model.name].append(lookup)
+            avg_a = average_score_repeats(maps_by_model[distinct[0]])
+            avg_b = average_score_repeats(maps_by_model[distinct[1]])
+            common = [pid for pid in aligned if pid in avg_a and pid in avg_b]
+            if len(common) >= 2:
+                result = paired_comparison(
+                    [avg_a[p] for p in common], [avg_b[p] for p in common], seed=seed
+                )
+                if result:
+                    repeats_note = (
+                        f"{len(maps_by_model[distinct[0]])} + "
+                        f"{len(maps_by_model[distinct[1]])} runs averaged per prompt"
+                    )
+                    _print_paired_result(
+                        distinct[0], distinct[1], result, repeats_note=repeats_note
+                    )
 
 
 def compare_models_paired(
@@ -316,7 +345,12 @@ def compare_models_paired(
     return paired_comparison(vals_a, vals_b, seed=seed)
 
 
-def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> None:
+def _print_paired_result(
+    name_a: str,
+    name_b: str,
+    result: PairedTestResult,
+    repeats_note: str | None = None,
+) -> None:
     """Print a paired comparison result."""
     console.print()
     table = Table(title=f"Paired Comparison: {name_a} vs {name_b}", title_style="bold")
@@ -325,6 +359,8 @@ def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> 
 
     table.add_row("Test", result.test_name)
     table.add_row("Paired prompts", str(result.n_pairs))
+    if repeats_note:
+        table.add_row("Repeats", repeats_note)
 
     direction = name_a if result.mean_difference > 0 else name_b
     table.add_row("Mean difference", f"{result.mean_difference:+.4f} (favors {direction})")
@@ -335,9 +371,24 @@ def _print_paired_result(name_a: str, name_b: str, result: PairedTestResult) -> 
         table.add_row("p-value", f"{result.p_value:.4f}")
         sig_str = "[green]Yes[/green]" if result.significant else "[yellow]No[/yellow]"
         table.add_row("Significant (p<0.05)", sig_str)
+    if result.permutation_p is not None:
+        table.add_row(
+            "Permutation p (cross-check)",
+            f"{result.permutation_p:.4f} ({result.permutation_method})",
+        )
     table.add_row("Effect size (Cohen's dz)", f"{result.effect_size:.3f} ({result.effect_magnitude})")
 
     if result.ci:
-        table.add_row("95% CI on difference", f"[{result.ci.ci_lower:.4f}, {result.ci.ci_upper:.4f}]")
+        table.add_row(
+            "95% t-CI on difference",
+            f"[{result.ci.ci_lower:.4f}, {result.ci.ci_upper:.4f}]",
+        )
+
+    mde = minimum_detectable_dz(result.n_pairs)
+    if mde is not None:
+        mde_str = f"dz ≥ {mde:.2f}"
+        if result.effect_size < mde and not result.significant:
+            mde_str += " [dim](observed effect below MDE — underpowered, not evidence of no difference)[/dim]"
+        table.add_row("Detectable at 80% power", mde_str)
 
     console.print(table)
