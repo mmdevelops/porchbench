@@ -30,41 +30,52 @@ OpenLLM Leaderboard v2), and Anthropic's agent evaluation guide.
   and is far more statistically efficient.
 - For correlated question groups (e.g., multi-part problems), use cluster-adjusted
   standard errors (can increase uncertainty by 3x vs. naive estimates).
-- CLT-based confidence intervals are unreliable when n < 100. Use bootstrap
-  confidence intervals for smaller samples.
+- At small n, prefer **t-intervals on the paired differences** over the percentile
+  bootstrap: simulation studies find percentile intervals run short (undercover)
+  for n <= ~34, exactly the suite sizes local benchmarking uses.
 
 **How porchbench implements this**
 
-- `porchbench compare` runs a paired test on per-prompt quality score differences
-  between two runs — Wilcoxon signed-rank for n >= 6, paired t for 2 <= n <= 5 —
-  and reports a bootstrap CI on the mean difference and a Cohen's dz effect size.
+- `porchbench compare` runs a **paired t-test on per-prompt quality score
+  differences** (exact t-distribution p-value via the regularized incomplete
+  beta — no scipy needed, valid at any df >= 1) with a **t-CI on the mean
+  difference**, so the p-value and the CI answer the same question about the
+  same estimand. An **exact sign-flip permutation test** (full enumeration for
+  n <= 15, seeded Monte Carlo above) rides along as the assumption-light
+  cross-check — it needs no normality or symmetry and handles the ties and
+  zeros that discrete 1-5 judge scores produce. Cohen's dz is reported as the
+  effect size.
+- **Repeats are averaged within prompt before testing.** Passing K repeats x N
+  prompts into a paired test as K*N independent observations is
+  pseudoreplication — it inflates n and manufactures significance. When
+  `compare` receives multiple runs of the same two models, it collapses each
+  model's repeats to one mean score per prompt first.
+- **Power honesty:** every paired comparison reports the minimum detectable
+  effect (MDE) at 80% power, MDE = (t_crit + t_power)/sqrt(n) — dz ≈ 0.55 at
+  n=28. When the observed effect sits below the MDE, "not significant" means
+  *underpowered*, not "no difference", and the output says so.
 - `porchbench leaderboard` is a **descriptive ranking of weighted means**; it does not
   run a significance test or attach CIs to the ranking itself. To judge whether a
   leaderboard gap reflects a real quality difference, run `porchbench compare` on the
   two underlying runs.
 
-**p-value caveat.** Without a scipy dependency, porchbench approximates the t-tail
-with a standard-normal tail. The normal has lighter tails than the t-distribution,
-so this approximation *understates* p (anti-conservative) when applied at small df.
-porchbench therefore gates paired-t p-values to df >= 30 (n >= 31); below that threshold
-`p_value` and `significant` are reported as `null` and the bootstrap CI on the mean
-difference plus the Cohen's dz effect size carry the inference. The Wilcoxon
-signed-rank path uses its own asymptotic normal approximation of the W statistic,
-which is textbook-standard for n >= 10 and reasonable for n >= 6.
+**Interpreting a marginal disagreement.** The paired-t p and the permutation p
+occasionally straddle 0.05 (they are different procedures). Read the permutation
+p for existence (it is exact and assumption-light) and the t-CI for magnitude;
+a straddle is itself information — the evidence is marginal at this n.
 
-**Bootstrap reproducibility.** The bootstrap resampler is seeded at `42` by default,
-so `porchbench compare` on identical inputs produces byte-identical `p_value`, CI
-bounds, and effect size across invocations. Override with `porchbench compare --seed N`
-or the `PORCHBENCH_SEED` environment variable to probe sensitivity: re-running with
-a handful of different seeds and confirming the CI bounds and Cohen's dz don't swing
-materially is a cheap check that the 10,000-resample bootstrap has converged for
-your data. At the default resample count the percentile CI is typically stable to
-four decimals across seeds; if it isn't, that's a signal the sample is too small
-or too skewed for percentile bootstrap and the effect size should carry more of
-the inference than the CI edges.
+**Reproducibility.** The Monte-Carlo permutation path (n > 15) is seeded at `42`
+by default, so `porchbench compare` on identical inputs produces byte-identical
+output across invocations. Override with `porchbench compare --seed N` or the
+`PORCHBENCH_SEED` environment variable. The paired-t p-value and t-CI are
+deterministic (no resampling). A Wilcoxon signed-rank implementation remains
+available in `porchbench.statistics` for comparison against older results but is
+no longer routed: its normal approximation is a large-sample tool, discouraged
+at n < 25 with tie-heavy discrete scores.
 
-*References: Wolfe (2025), "Applying Statistics to LLM Evaluations"; Artificial
-Analysis Intelligence Index v4.0 methodology*
+*References: Wolfe (2025), "Applying Statistics to LLM Evaluations"; Miller (2024),
+"Adding Error Bars to Evals" (arXiv 2411.00640); Artificial Analysis Intelligence
+Index v4.0 methodology*
 
 ### Repeated runs
 
